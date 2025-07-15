@@ -1,0 +1,24 @@
+name: pdbe_sifts
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python
+  - gemmi
+  - pip
+  - ipython
+  - setuptools
+  - mmseqs2
+  - blast
+  - pip:
+    - tqdm
+    - biopython
+    - funcy
+    - lxml
+    - requests
+    - pandas
+    - pymmseqs
+    - coloredlogs
+    - pyyaml
+    - scikit-learn
+    - ete4
