@@ -1,0 +1,386 @@
+#!/usr/bin/env python3
+from itertools import groupby
+from multiprocessing.dummy import Pool
+from operator import itemgetter
+
+import tqdm
+from Bio.Seq import Seq
+
+from pdbe_sifts.mmcif import mmcif_helper
+
+from ..taxonomy_fix_pkl import TaxonomyFix
+from .residue import Residue
+
+N_PROC = 64
+STEP_SIZE = 2000
+
+
+class Chain:
+    """Docstring for Chain."""
+
+    def __init__(
+        self,
+        mmcif: mmcif_helper.mmCIF,
+        pdbid: str,
+        auth_asym_id: str,
+        entity_id: str,
+        struct_asym_id: str,
+        sequence: str,
+        parent: object | None,
+    ):
+        """TODO: to be defined1.
+
+        @param pdbid TODO
+        @param entity_id TODO
+        @param auth_asym_id TODO
+
+        """
+        self.mmcif = mmcif
+        self.pdbid = pdbid
+        self.auth_asym_id = auth_asym_id
+        self.entity_id = entity_id
+        self.struct_asym_id = struct_asym_id
+        self.sequence = sequence
+        self.parent = parent
+        self.ec = None
+        self.mappings = {}
+        self.best = {}
+        self.residues: list[Residue] = []
+        self.alignment_sequence = []
+        self.is_chimera = False
+        self.residue_maps = {}
+        self.segments = {}
+        self.canonicals = []
+        self.scores = {}
+        self.seg_scores = {}
+
+        self.ec = mmcif.get_ec(self.entity_id)
+
+        self.tax_fix = TaxonomyFix()
+        # skips the chain
+        # (e.g. MODE_NF90 and the chain is a chimera,
+        # coverage < NF90_coverage, etc.)
+        self.skip = False
+
+        for k, v in mmcif.get_residues(self.auth_asym_id):
+            if isinstance(v, tuple):
+                tmp = Residue(k, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8])
+            else:
+                tmp = []
+                for v_sub in v:
+                    tmp.append(
+                        Residue(
+                            k,
+                            v_sub[0],
+                            v_sub[1],
+                            v_sub[2],
+                            v_sub[3],
+                            v_sub[4],
+                            v_sub[5],
+                            v_sub[6],
+                            v_sub[7],
+                            v_sub[8],
+                        )
+                    )
+
+            self.residues.append(tmp)
+
+        # Use the UniProt if chimera
+        if self.is_chimera:
+            self.tax_id = None
+        # Use the mmCIF otherwise
+        else:
+            self.tax_id = mmcif.get_tax(self.auth_asym_id)
+
+            # if mmCIF is None then get from taxonomy_fix
+            if self.tax_id is None:
+                xx = self.tax_fix.get(self.pdbid, self.entity_id)
+                if xx is not None:
+                    self.tax_id = xx
+
+        self.__gen_alignment_sequence()
+
+    # Generate the "alignment sequence": an alternative version
+    # of the original sequence where several modifications are made
+    # in order to simplify the alignment
+    def __gen_alignment_sequence(self):
+        if self.alignment_sequence != []:
+            return
+
+        for r in self.residues:
+            if isinstance(r, list):
+                r = r[0]
+
+            # Remove:
+            #   initial M
+
+            # if self.alignment_sequence == [] and r.oneL == 'M':
+            #    self.alignment_sequence.append('Z')
+
+            # "Remove":
+            #   Insertion
+            #   Linker
+            #   Expression Tag
+
+            if r.rtype in ("Insertion", "Linker", "Expression tag"):
+                self.alignment_sequence.append("J")
+
+            # "Ignore":
+            #   Engineered mutations
+            #   Conflict
+            #   Cloning artifact
+
+            elif r.rtype in ("Engineered mutation", "Conflict", "Cloning artifact"):
+                self.alignment_sequence.append(
+                    r.oneL_original if r.oneL_original else "X"
+                )
+
+            # unfold the chromophores
+            elif r.is_chromophore:
+                self.alignment_sequence.extend(list(r.oneL))
+
+            else:
+                self.alignment_sequence.append(r.oneL)
+
+    # Compensate for index deviations due to one letter codes
+    # with more than one character
+    def mod_after_alignment(self, al):
+        seq = al[1].seq
+        out = ""
+
+        i = 0
+
+        while i < (al[1]._al_start - 1):
+            r = self.residues[i]
+
+            if isinstance(r, list):
+                r = r[0]
+
+            if len(r.oneL) > 1:
+                al[1]._al_start -= len(r.oneL) - 1
+                al[1]._al_stop -= len(r.oneL) - 1
+                # i -= (len(r.oneL) - 1)
+
+            i += 1
+
+        i = al[1]._al_start - 1
+        j = 0
+
+        while j < len(seq):
+            s = seq[j]
+
+            if s == "-":
+                out += s
+                j += 1
+                continue
+
+            if isinstance(self.residues[i], list):
+                r = self.residues[i][0]
+            else:
+                r = self.residues[i]
+
+            out += r.oneL
+
+            i += 1
+            j += len(r.oneL)
+
+        al[1].seq = Seq(out)
+        return out
+
+    # generate the residue_maps between the chain and each isoform
+    def get_each_resmap(self, row):
+        iso, mappings = row
+        residue_map = {}
+        # Process in reverse so the best mappings is
+        # overriding the rest
+        for m in mappings[::-1]:
+            al = m[2]
+            pdb_seq = al[1]._seq
+            pdb_start = al[1]._al_start
+            pdb_stop = al[1]._al_stop
+            unp_seq = al[0]._seq
+            unp_start = al[0]._al_start
+            unp_stop = al[0]._al_stop
+            pdb_i = 0
+            unp_i = 0
+            pdb_shift = 0
+            unp_shift = 0
+            while pdb_i + pdb_start <= pdb_stop and unp_i + unp_start <= unp_stop:
+                pdb_r = pdb_seq[pdb_i + pdb_shift]
+                unp_r = unp_seq[unp_i + unp_shift]
+                r = self.residues[pdb_i + pdb_start - 1]
+                if isinstance(r, list):
+                    r = r[0]
+                # Remove undesired mappings just in case they were included
+                if (
+                    unp_r != "-"
+                    and pdb_r != "-"
+                    and r.rtype in ("Insertion", "Linker", "Expression tag")
+                ):
+                    pdb_i += 1
+                    unp_i += 1
+                    continue
+                if len(r.oneL) > 1 and pdb_r != "-" and unp_r != "-":
+                    residue_map[pdb_i + pdb_start] = []
+                    for x in range(len(r.oneL)):
+                        residue_map[pdb_i + pdb_start].append(unp_i + unp_start + x)
+                    unp_i += 1
+                    pdb_i += 1
+                elif pdb_r != "-" and unp_r != "-":
+                    residue_map[pdb_i + pdb_start] = unp_i + unp_start
+                    pdb_i += 1
+                    unp_i += 1
+                elif pdb_r == "-":
+                    unp_i += 1
+                    pdb_shift += 1
+                elif unp_r == "-":
+                    pdb_i += 1
+                    unp_shift += 1
+                if len(r.oneL) > 1:
+                    pdb_shift += len(r.oneL) - 1
+                    unp_i += len(r.oneL) - 1
+
+        self.residue_maps[iso] = residue_map
+        return iso, residue_map
+
+    # generate the residue_map between the chain and each isoform
+    def generate_residue_maps(self):
+        # create a process pool that uses all cpus
+        with Pool(N_PROC) as pool:
+            # call the function for each item in parallel, get results as tasks complete
+            my_list = list(self.mappings.items())
+            list(
+                tqdm.tqdm(
+                    pool.imap_unordered(
+                        self.get_each_resmap, my_list, chunksize=STEP_SIZE
+                    )
+                )
+            )
+
+        # remove the residues which map to more than one accession
+        # keeping the ones that benefit continuity
+        if self.is_chimera:
+            self.__overlapping_residues()
+
+        # generate the segments once we have the residue maps
+        self.__segments_from_residues()
+
+    # remove the residues which map to more than one accession
+    # keeping the ones that benefit continuity
+    # (only for chimeras)
+    def __overlapping_residues(self):
+        iso_list = list(self.residue_maps.keys())
+
+        for idx, iso1 in enumerate(iso_list):
+            for iso2 in iso_list[idx + 1 :]:
+                maps1 = self.residue_maps[iso1]
+                maps2 = self.residue_maps[iso2]
+
+                for key in list(maps1.keys()):
+                    if key in maps2:
+                        # The mapping without conflict has preference
+                        pdb_r = self.sequence[key - 1]
+                        try:
+                            unp1_r = self.parent.accessions[iso1].seq_isoforms[iso1][
+                                maps1[key] - 1
+                            ]
+                            unp2_r = self.parent.accessions[iso2].seq_isoforms[iso2][
+                                maps2[key] - 1
+                            ]
+
+                            # If one is a conflict and the other one is not
+                            if unp1_r != unp2_r and pdb_r in (unp1_r, unp2_r):
+                                if pdb_r == unp2_r:
+                                    del maps1[key]
+                                else:
+                                    del maps2[key]
+
+                                continue
+                        except TypeError:
+                            # maps1[key] and/or maps2[key] are lists
+                            # (the residue is a chromophore)
+                            pass
+
+                        # Otherwise try to keep continuity
+                        if key - 1 in list(maps1.keys()):
+                            del maps2[key]
+                        else:
+                            del maps1[key]
+
+    def __group_elements(self, lst):
+        ranges = []
+
+        for _, g in groupby(enumerate(lst), lambda i_x: i_x[0] - i_x[1][0]):
+            group = list(map(itemgetter(1), g))
+            ranges.append(((group[0][0], group[-1][0]), (group[0][1], group[-1][1])))
+
+        # get only the min/max if there is a 1 to many mapping
+        for idx, r in enumerate(ranges):
+            if isinstance(r[1][0], list) or isinstance(r[1][1], list):
+                start = min(r[1][0]) if isinstance(r[1][0], list) else r[1][0]
+                end = max(r[1][1]) if isinstance(r[1][1], list) else r[1][1]
+
+                ranges[idx] = (r[0], (start, end))
+
+        return ranges
+
+    def __overlapping(self, r1, r2):
+        return r2[0] <= r1[0] <= r2[1] or r2[0] <= r1[1] <= r2[1]
+
+    def __segments_from_residues(self):
+        for iso, maps in list(self.residue_maps.items()):
+            self.segments[iso] = self.__group_elements(
+                (x, y) for x, y in sorted(maps.items(), key=itemgetter(0))
+            )
+
+        # remove overlapping segments for chimeras.
+        # we create a final_set of non-overlapping segments and
+        # mark all the ones overlapping with it for removal
+        # by inserting them in to_remove
+        if self.is_chimera:
+            final_set = []
+            to_remove = {}
+
+            for iso, maps in list(self.segments.items()):
+                for m, u in maps:
+                    for r in final_set:
+                        if self.__overlapping(m, r):
+                            to_remove.setdefault(iso, []).append((m, u))
+                            break
+
+                    if m not in list(to_remove.values()):
+                        final_set.append(m)
+
+            for key, val in list(to_remove.items()):
+                for seg in val:
+                    self.segments[key].remove(seg)
+
+    def get_residue_auth(self, n):
+        unk = (".", "?", None, False)
+
+        for r in self.residues:
+            if isinstance(r, list):
+                r = r[0]
+
+            if r.n == n:
+                return (
+                    r.auth_n if r.auth_n not in unk else None,
+                    r.auth_ins if r.auth_ins not in unk else " ",
+                )
+
+        return (None, None)
+
+    def __repr__(self):
+        """TODO: Docstring for __repr__.
+
+        @param f TODO
+        @return: TODO
+
+        """
+
+        return "{}_{} (E:{}|S:{})".format(
+            self.pdbid,
+            self.auth_asym_id,
+            self.entity_id,
+            self.struct_asym_id,
+        )
