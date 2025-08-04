@@ -2,31 +2,51 @@
 
 import argparse
 
-from pymmseqs.commands import search
+from typing import Union
+from pathlib import Path
+
+from pymmseqs.config.easy_search_config import EasySearchConfig
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.global_mappings.base_alignment_search import AlignmentSearch
 
 class MmSearch(AlignmentSearch):
     def __init__(
         self,
-        query_path,
-        target_path,
-        output_path,
-        outtmp_path,
+        query_path: Union[str, Path],
+        target_path: Union[str, Path],
+        output_path: Union[str, Path],
+        outtmp_path: Union[str, Path],
+        **kwargs,
     ):
         """Process the search of a query against a sequence database.
 
         Args:
-            path_fasta_file (path to file): path to the DB fasta file(s) (.gz allowed).
-            out_db (path to location): location where the output DB will be saved.
+            query_path (path to file): path to the query fasta file.
+            target_path (path to file): path to the DB file.
+            output_path (path to file): path to the result file.
+            outtmp_path (path to folder): path to the tmp folder needed by mmseqs.
+            kwargs: any possible argument allowed by mmseqs easy_search.
         """
 
         super().__init__(query_path, target_path, output_path)
         self.outtmp_path = outtmp_path
         self.search = None
+        self.format_string = 'query,target,alnlen,mismatch,qstart,qend,tstart,tend,evalue,bits,qaln,taln,qlen,taxid'
+        self.easy_search_config_kwargs = kwargs
 
     def _process(self):
-        self.search = search(self.query_path, self.target_path, self.output_path, self.outtmp_path)
+        result = EasySearchConfig(self.query_path,
+                                  self.target_path,
+                                  self.output_path,
+                                  self.outtmp_path,
+                                  format_mode=4,
+                                  a=True,
+                                  alignment_mode = 3,
+                                  format_output=self.format_string,
+                                  v=0,
+                                  **self.easy_search_config_kwargs)
+        result.run()
+
 
 def run():
     parser = argparse.ArgumentParser(
@@ -50,7 +70,7 @@ def run():
         "-o",
         "--output-path",
         required=True,
-        help="Base location of the result database.",
+        help="Base location of the result file.",
     )
 
     parser.add_argument(
