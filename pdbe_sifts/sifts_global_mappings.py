@@ -110,7 +110,6 @@ class SiftsGlobalMappings():
             self.search(id, tmp_fasta_path)
             self.mappings[id] = GlobMappingsParser(self.tool, id, self.result_file_path[id], tax_id).parse()
             ranked_mappings = get_ranked_mappings(self.mappings[id])
-            print(ranked_mappings)
             end = timer()
             logger.info(f'Total (from mmcif parsing to result parsing): {end-start} seconds.')
 
