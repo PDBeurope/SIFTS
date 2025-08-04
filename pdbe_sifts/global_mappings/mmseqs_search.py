@@ -50,7 +50,7 @@ class MmSearch(AlignmentSearch):
 
 def run():
     parser = argparse.ArgumentParser(
-        description="Run a mmseqs search against a mmseqs database."
+        description="Run a mmseqs easy_search against a mmseqs database."
     )
 
     parser.add_argument(

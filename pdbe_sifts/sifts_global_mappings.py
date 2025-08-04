@@ -8,12 +8,8 @@ from timeit import default_timer as timer
 from pathlib import Path
 import pickle
 
-from pymmseqs.config.convertalis_config import ConvertAlisConfig
-
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.mmcif.entry import Entry
-from pdbe_sifts.global_mappings.query_db import QueryDb
-from pdbe_sifts.global_mappings.alignment_db import AlignDb
 from pdbe_sifts.global_mappings.mmseqs_search import MmSearch
 from pdbe_sifts.global_mappings.blastp import BlastP
 from pdbe_sifts.global_mappings.alignment_result_parser import GlobMappingsParser
@@ -68,27 +64,17 @@ class SiftsGlobalMappings():
             "pdbx_audit_revision_history",
         ]
         self.entry = None
-        self.queries = {}
-        self.searches = {}
-        self.aligns = {}
-        self.convertalis = {}
         self.result_file_path = {}
         self.mappings = {}
 
-    def create_mmseqs_query(self, id, fake_fasta):
-        query_db_path = make_path(self.out_dir, id, 'queryDB', 'query.db')
-        query_db = QueryDb(fake_fasta, query_db_path)
-        query_db.run()
-        self.queries[id] = query_db
-
-    def mmseqs_search(self, id, query, target):
+    def mmseqs_search(self, id, fake_fasta):
         now = get_date()
-        result_db = make_path(self.out_dir, id, 'resultDB', 'result.db', now)
-        tmp_fold = Path(str(self.out_dir / f'resultDB_{id}_{now}'/ 'tmp'))
-        tmp_fold.parent.mkdir(parents=True, exist_ok=True)
-        mm_search = MmSearch(query, target, result_db, tmp_fold)
-        mm_search.run()
-        self.searches[id] = mm_search
+        output_path = make_path(self.out_dir, id, 'hits', f'hits_{id}.tsv', now)
+        tmp_fold = Path(str(self.out_dir / f'tmp_{id}'))
+        tmp_fold.mkdir(parents=True, exist_ok=True)
+        result = MmSearch(fake_fasta, self.db_file, output_path, tmp_fold)
+        result.run()
+        self.result_file_path[id] = output_path
     
     def blastp_search(self, id, fasta_path):
         output_path = make_path(self.out_dir, id, 'blastp', 'blast_result.json')
@@ -97,27 +83,10 @@ class SiftsGlobalMappings():
         self.searches[id] = blastp_search
         self.result_file_path[id] = output_path
 
-    def mmseqs_align(self, id, query, target, result):
-        align_db_path = make_path(self.out_dir, id, 'alignDB', 'align.db')
-        align_db = AlignDb(result, align_db_path, query, target, v=0)
-        align_db.run()
-        self.aligns[id] = align_db
-    
-    def mmseqs_convertalis(self, id, query, target, align):
-        convertalis_path = make_path(self.out_dir, id, 'hits', f'hits_{id}.tsv')
-        format_string = 'query,target,alnlen,mismatch,qstart,qend,tstart,tend,evalue,bits,qaln,taln,qlen,taxid'
-        convertalis_pro = ConvertAlisConfig(query, target, align, convertalis_path, format_output=format_string)
-        convertalis_pro.run()
-        self.convertalis[id] = convertalis_pro
-        self.result_file_path[id] = convertalis_path
-
     def search(self, id, tmp_fasta_path):
         match self.tool:
             case 'mmseqs':
-                self.create_mmseqs_query(id, tmp_fasta_path)
-                self.mmseqs_search(id, self.queries[id].query_path, self.db_file)
-                self.mmseqs_align(id, self.queries[id].query_path, self.db_file, self.searches[id].output_path)
-                self.mmseqs_convertalis(id, self.queries[id].query_path, self.db_file, self.aligns[id].output_path)
+                self.mmseqs_search(id, tmp_fasta_path)
             case 'blastp':
                 self.blastp_search(id, tmp_fasta_path)
             case _:
