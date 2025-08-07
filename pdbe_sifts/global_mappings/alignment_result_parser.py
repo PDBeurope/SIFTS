@@ -7,8 +7,10 @@ from pdbe_sifts.base.utils import get_mismatches, get_identity, get_coverage
 IDENTITY_CUTOFF = 0.9
 
 class GlobMappingsParser:
-    def __init__(self, format, id, result_file_path, query_tax_id):
+    def __init__(self, format, id, entry, entity, result_file_path, query_tax_id):
         self.id = id
+        self.entry = entry
+        self.entity = entity
         self.format = format
         self.result_file_path = result_file_path
         self.mappings = None
@@ -45,6 +47,8 @@ class GlobMappingsParser:
     ):
         return {
             'entry-entity': entry_entity,
+            'entry': self.entry,
+            'entity': self.entity,
             'accession': accession,
             'alignment_len': alignment_len,
             'query_len': query_len,
