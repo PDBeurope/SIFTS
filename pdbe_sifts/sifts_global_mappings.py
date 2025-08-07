@@ -66,6 +66,7 @@ class SiftsGlobalMappings():
         self.entry = None
         self.result_file_path = {}
         self.mappings = {}
+        self.ranked_mappings = {}
 
     def mmseqs_search(self, id, fake_fasta):
         now = get_date()
@@ -80,7 +81,6 @@ class SiftsGlobalMappings():
         output_path = make_path(self.out_dir, id, 'blastp', 'blast_result.json')
         blastp_search = BlastP(fasta_path, self.db_file, output_path)
         blastp_search.run()
-        self.searches[id] = blastp_search
         self.result_file_path[id] = output_path
 
     def search(self, id, tmp_fasta_path):
@@ -108,10 +108,10 @@ class SiftsGlobalMappings():
                 f.write(fake_content)
             id = f'{entry_name}-{ent}'
             self.search(id, tmp_fasta_path)
-            self.mappings[id] = GlobMappingsParser(self.tool, id, self.result_file_path[id], tax_id).parse()
-            ranked_mappings = get_ranked_mappings(self.mappings[id])
-            end = timer()
-            logger.info(f'Total (from mmcif parsing to result parsing): {end-start} seconds.')
+            self.mappings[id] = GlobMappingsParser(self.tool, id, entry_name, ent, self.result_file_path[id], tax_id).parse()
+            self.ranked_mappings[id] = get_ranked_mappings(self.mappings[id])
+        end = timer()
+        logger.info(f'Total (from mmcif parsing to result parsing): {end-start} seconds.')
 
 def run():
     parser = argparse.ArgumentParser(
