@@ -6,15 +6,8 @@ from timeit import default_timer as timer
 from pathlib import Path
 
 from ete4 import NCBITaxa
-from pymmseqs.config.convertalis_config import ConvertAlisConfig
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.mmcif.entry import Entry
-from pdbe_sifts.global_mappings.query_db import QueryDb
-from pdbe_sifts.global_mappings.alignment_db import AlignDb
-from pdbe_sifts.global_mappings.mmseqs_search import MmSearch
-from pdbe_sifts.global_mappings.blastp import BlastP
-from pdbe_sifts.global_mappings.alignment_result_parser import GlobMappingsParser
 from pdbe_sifts.base.utils import get_date, make_path
 from pdbe_sifts.unp.unp import UNP
 
@@ -26,9 +19,9 @@ def mismatch_penalty(nb_mismatches, seq_len):
 
 def adjusted_score(identity, coverage, nb_mismatches, seq_len):
     if coverage>0.7:
-        return 1.5 * ((identity*coverage)*(1-mismatch_penalty(nb_mismatches, seq_len)))
+        return 1.5 * ((identity*coverage)*(1-mismatch_penalty(nb_mismatches, seq_len))) * 1000
     else:
-        return (identity*coverage)*(1-mismatch_penalty(nb_mismatches, seq_len))
+        return (identity*coverage)*(1-mismatch_penalty(nb_mismatches, seq_len)) * 1000
 
 def get_tax_weight(query_taxid: int, target_tax_id: int) -> int:
     if query_taxid == target_tax_id:
@@ -60,7 +53,7 @@ def get_unp_info(accession):
     unp_obj = UNP(accession)
     dataset_score = 10 if unp_obj.dataset=='Swiss-Prot' else -10
     ref_prot_score = 100 if 'REFERENCE PROTEOME' in unp_obj.keywords else 0
-    pdb_references_number_score = len(unp_obj.dbreferences.get('PDB', [])) * 10
+    pdb_references_number_score = len(unp_obj.dbreferences.get('PDB', [])) * 0.1
     return {'dataset_score': dataset_score,
             'ref_prot_score': ref_prot_score, 
             'n_pdb_score': pdb_references_number_score}
