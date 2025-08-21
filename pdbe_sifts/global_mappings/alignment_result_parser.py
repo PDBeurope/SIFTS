@@ -103,28 +103,31 @@ class GlobMappingsParser:
         qlen = results['query_len']
         entry_entity = results['query_title'].split('|')[1]
 
-        for hit in results['hits']:
-            hsp = hit['hsps'][0]
-            identity_crt = get_identity(hsp['qseq'], hsp['hseq'])
-            if identity_crt >= IDENTITY_CUTOFF:
-                accession = hit['description'][0]['accession']
-                target_tax_id = hit['description'][0]['taxid']
-                data.append(self._build_mapping_dict(
-                    entry_entity=entry_entity,
-                    accession=accession,
-                    alignment_len=hsp['align_len'],
-                    query_len=qlen,
-                    mismatch=get_mismatches(hsp['qseq'], hsp['hseq']),
-                    identity=identity_crt,
-                    coverage=get_coverage(hsp['query_from'], hsp['query_to'], qlen),
-                    query_start=hsp['query_from'],
-                    query_end=hsp['query_to'],
-                    target_start=hsp['hit_from'],
-                    target_end=hsp['hit_to'],
-                    evalue=hsp['evalue'],
-                    bit_score=hsp['bit_score'],
-                    query_aligned=hsp['qseq'],
-                    target_aligned=hsp['hseq'],
-                    target_tax_id=target_tax_id,
-                ))
-        self.mappings = data
+        if 'hits' in results:
+            for hit in results['hits']:
+                hsp = hit['hsps'][0]
+                identity_crt = get_identity(hsp['qseq'], hsp['hseq'])
+                if identity_crt >= IDENTITY_CUTOFF:
+                    accession = hit['description'][0]['accession']
+                    target_tax_id = hit['description'][0]['taxid']
+                    data.append(self._build_mapping_dict(
+                        entry_entity=entry_entity,
+                        accession=accession,
+                        alignment_len=hsp['align_len'],
+                        query_len=qlen,
+                        mismatch=get_mismatches(hsp['qseq'], hsp['hseq']),
+                        identity=identity_crt,
+                        coverage=get_coverage(hsp['query_from'], hsp['query_to'], qlen),
+                        query_start=hsp['query_from'],
+                        query_end=hsp['query_to'],
+                        target_start=hsp['hit_from'],
+                        target_end=hsp['hit_to'],
+                        evalue=hsp['evalue'],
+                        bit_score=hsp['bit_score'],
+                        query_aligned=hsp['qseq'],
+                        target_aligned=hsp['hseq'],
+                        target_tax_id=target_tax_id,
+                    ))
+            self.mappings = data
+        else:
+            self.mappings = []
