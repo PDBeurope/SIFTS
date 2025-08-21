@@ -52,7 +52,7 @@ def get_tax_weight(query_taxid: int, target_tax_id: int) -> int:
 def get_unp_info(accession):
     unp_obj = UNP(accession)
     dataset_score = 10 if unp_obj.dataset=='Swiss-Prot' else -10
-    ref_prot_score = 100 if 'REFERENCE PROTEOME' in unp_obj.keywords else 0
+    ref_prot_score = 100 if unp_obj.keywords and 'REFERENCE PROTEOME' in unp_obj.keywords else 0
     pdb_references_number_score = len(unp_obj.dbreferences.get('PDB', [])) * 0.1
     return {'dataset_score': dataset_score,
             'ref_prot_score': ref_prot_score, 
