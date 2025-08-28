@@ -74,6 +74,7 @@ def get_item(item):
 
 class UNP:
     accession: str
+    unp_dir: str
     ad_dbref_auto_acc: str
     sequence: str
     keywords: str
@@ -154,7 +155,7 @@ class UNP:
         return ElementTree.parse(xml_file).getroot()
 
     def _load_from_uniprot_api(self, accession) -> dict:
-        xml_file = fetch_uniprot_file(accession, "xml")
+        xml_file = fetch_uniprot_file(accession, "xml", unp_dir=self.unp_dir)
         doc = self.parse_xml(xml_file)
 
         accessions = list(map(str, doc[0].xpath(".//*[name()='accession']/text()")))
@@ -169,11 +170,12 @@ class UNP:
         self.accession = accession
         self._populate_fields(doc)
 
-    def __init__(self, accession):
+    def __init__(self, accession, unp_dir):
         self.seq_isoforms: Mapping[str, Any] = {}
         self.isoforms: Mapping[str, Any] = {}
         self.features: Mapping[str, str] = {}
         self.accession = None
+        self.unp_dir = unp_dir
         self.ad_dbref_auto_acc = accession
         if "-" in accession:
             accession = accession.split("-")[0]
