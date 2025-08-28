@@ -13,12 +13,12 @@ from pdbe_sifts.base.log import logger
 UNIPROT_REGEX = r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}"
 UNIPROT_API_BASE_URL = "https://www.uniprot.org/uniprot"
 
-# def get_uniprot_cache_dir(unp_accession, base_dir=conf.cache.uniprot):
-#     """Path to UNP cache directory for specified UNP accession."""
-#     return str(Path(base_dir, unp_accession[0], unp_accession))
+def get_uniprot_cache_dir(unp_accession, base_dir):
+    """Path to UNP cache directory for specified UNP accession."""
+    return str(Path(base_dir, unp_accession[0], unp_accession))
 
 
-def fetch_uniprot_file(uniprot_id: str, file_type: str, fail_silently=False) -> str:
+def fetch_uniprot_file(uniprot_id: str, file_type: str, unp_dir, fail_silently=False) -> str:
     """Fetches Uniprot file for a given Uniprot ID.
 
     First checks cache directory for the file. If not found, fetches from Uniprot.
@@ -35,19 +35,19 @@ def fetch_uniprot_file(uniprot_id: str, file_type: str, fail_silently=False) -> 
         AccessionNotFound: If the Uniprot entry is not found (404 from Uniprot API)
     """
     try:
-        unp_dir = '/hps/software/users/pdbe/user/adamb/pdbe_sifts/outputs'#get_uniprot_cache_dir(uniprot_id)
-        # if file_type not in ["xml", "json", "fasta"]:
-        #     raise ValueError(
-        #         f"Invalid file type {file_type}. Must be one of xml, json, fasta"
-        #     )
+
+        if file_type not in ["xml", "json", "fasta"]:
+            raise ValueError(
+                f"Invalid file type {file_type}. Must be one of xml, json, fasta"
+            )
         filename = f"{uniprot_id}.{file_type}"
         unp_file = Path(unp_dir, filename)
 
-        # unp_file.parent.mkdir(parents=True, exist_ok=True)
+        unp_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # if Path.exists(unp_file):
-        #     logger.info(f"Fetched from cache: {unp_file}")
-        #     return unp_file
+        if Path.exists(unp_file):
+            logger.info(f"Fetched from cache: {unp_file}")
+            return unp_file
 
         _unp_file_checks(file_type, filename, unp_file)
 
@@ -145,13 +145,6 @@ def make_path(base_dir: Path, id: str, sub_dir: str, filename: str, now: str = N
     """
     if now is None:
         now = get_date()
-    
-    # full_path = base_dir / f'{sub_dir}_{id}_{now}' / filename
-    # full_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # if full_path.exists():
-    #     if full_path.is_file():
-    #         full_path.unlink()
 
     dir_path = base_dir / f'{sub_dir}_{id}_{now}'
     full_path = dir_path / filename
