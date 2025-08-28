@@ -24,6 +24,7 @@ class SiftsGlobalMappings():
         db_file,
         tool = 'mmseqs',
         out_global_mappings = None,
+        threads = 1,
     ):
         """Generate structure - sequence mappings.
 
@@ -41,7 +42,9 @@ class SiftsGlobalMappings():
         self.cif_file = cif_file
         self.out_dir = Path(out_dir)
         self.fasta_files_path = self.out_dir / 'fasta_files'
+        self.unp_dir = self.out_dir / 'unp_files'
         self.fasta_files_path.mkdir(parents=True, exist_ok=True)
+        self.unp_dir.mkdir(parents=True, exist_ok=True)
         if not out_global_mappings:
             entry_name = Path(cif_file).stem
             standard_name = f'global_mappings_{entry_name}.csv'
@@ -67,19 +70,33 @@ class SiftsGlobalMappings():
         self.result_file_path = {}
         self.mappings = {}
         self.ranked_mappings = {}
+        self.threads = threads
+    
+    def generate_fasta(self, entity_seq_tax_dict, entry_name):
+        merged_fasta = []
+        for ent, seq_tax in entity_seq_tax_dict.items():
+            seq = seq_tax[0]
+            tax_id = seq_tax[1]
+            header = f'>pdb|{entry_name}-{ent}|{tax_id}'
+            content = f'{header}\n{seq}\n'
+            merged_fasta.append(content)
+        tmp_fasta_path = self.fasta_files_path / f'tmp_{entry_name}.fasta'
+        with open(tmp_fasta_path, 'w') as f:
+            f.write("".join(merged_fasta))
+        return tmp_fasta_path
 
     def mmseqs_search(self, id, fake_fasta):
         now = get_date()
-        output_path = make_path(self.out_dir, id, 'hits', f'hits_{id}.tsv', now)
-        tmp_fold = Path(str(self.out_dir / f'tmp_{id}'))
+        output_path = make_path(self.out_dir, id, 'mmseqs', f'hits_{id}.tsv', now)
+        tmp_fold = Path(output_path).parent / f'tmp_{id}'
         tmp_fold.mkdir(parents=True, exist_ok=True)
-        result = MmSearch(fake_fasta, self.db_file, output_path, tmp_fold)
+        result = MmSearch(fake_fasta, self.db_file, output_path, tmp_fold, self.threads)
         result.run()
         self.result_file_path[id] = output_path
     
     def blastp_search(self, id, fasta_path):
-        output_path = make_path(self.out_dir, id, 'blastp', 'blast_result.json')
-        blastp_search = BlastP(fasta_path, self.db_file, output_path)
+        output_path = make_path(self.out_dir, id, 'blastp', f'hits_{id}.json')
+        blastp_search = BlastP(fasta_path, self.db_file, output_path, threads = self.threads)
         blastp_search.run()
         self.result_file_path[id] = output_path
 
@@ -94,24 +111,15 @@ class SiftsGlobalMappings():
 
     def process(self):
         logger.info("Processing [%s]" % self.cif_file)
-        start = timer()
+        start_cif = timer()
         entry_name = Path(self.cif_file).stem
         self.entry = Entry(entry_name, self.cif_file)
         entity_seq_tax = self.entry.get_entity_seq_tax()
-        for ent, seq_tax in entity_seq_tax.items():
-            fake_header = f'>pdb|{entry_name}-{ent}|None'
-            fake_seq = seq_tax[0]
-            tax_id = seq_tax[1]
-            fake_content = f'{fake_header}\n{fake_seq}'
-            tmp_fasta_path = self.fasta_files_path / f'tmp_{entry_name}_{ent}.fasta'
-            with open(tmp_fasta_path, 'w') as f:
-                f.write(fake_content)
-            id = f'{entry_name}-{ent}'
-            self.search(id, tmp_fasta_path)
-            self.mappings[id] = GlobMappingsParser(self.tool, id, entry_name, ent, self.result_file_path[id], tax_id).parse()
-            self.ranked_mappings[id] = get_ranked_mappings(self.mappings[id])
-        end = timer()
-        logger.info(f'Total (from mmcif parsing to result parsing): {end-start} seconds.')
+        tmp_fasta_path = self.generate_fasta(entity_seq_tax, entry_name)
+        self.search(entry_name, tmp_fasta_path)
+        self.mappings[entry_name] = GlobMappingsParser(self.tool, self.result_file_path[entry_name]).parse()
+        end_cif = timer()
+        logger.info(f'Total (from mmcif parsing to result parsing): {end_cif - start_cif} seconds.')
 
 def run():
     parser = argparse.ArgumentParser(
@@ -148,7 +156,13 @@ def run():
         required=False,
         help="Location of the csv file to save global mappings.",
     )
-
+    parser.add_argument(
+        "-threads",
+        "--threads",
+        type=int,
+        default=1,
+        help="Number of threads to use.",
+    )    
     args = parser.parse_args()
 
     logger.info(vars(args))
@@ -157,6 +171,7 @@ def run():
         args.output_dir,
         args.db_file,
         args.tool,
+        threads=args.threads,
     )
     sifts_global_mappings.process()
 

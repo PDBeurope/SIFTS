@@ -49,8 +49,8 @@ def get_tax_weight(query_taxid: int, target_tax_id: int) -> int:
         else:
             return 0
 
-def get_unp_info(accession):
-    unp_obj = UNP(accession)
+def get_unp_info(accession, unp_dir):
+    unp_obj = UNP(accession, unp_dir=unp_dir)
     dataset_score = 10 if unp_obj.dataset=='Swiss-Prot' else -10
     ref_prot_score = 100 if unp_obj.keywords and 'REFERENCE PROTEOME' in unp_obj.keywords else 0
     pdb_references_number_score = len(unp_obj.dbreferences.get('PDB', [])) * 0.1
@@ -58,7 +58,7 @@ def get_unp_info(accession):
             'ref_prot_score': ref_prot_score, 
             'n_pdb_score': pdb_references_number_score}
 
-def get_final_score(mapping):
+def get_final_score(mapping, unp_dir):
     accession = mapping['accession']
     query_tax_id = mapping['query_tax_id']
     target_tax_id = mapping['target_tax_id']
@@ -69,7 +69,7 @@ def get_final_score(mapping):
     adj_score = adjusted_score(identity, coverage, mismatch, qlen)
     tax_weight = get_tax_weight(query_tax_id, int(target_tax_id))
     try:
-        unp_data = get_unp_info(accession)
+        unp_data = get_unp_info(accession, unp_dir)
         dataset_score = unp_data['dataset_score']
         ref_prot_score = unp_data['ref_prot_score']
         n_pdb_score = unp_data['n_pdb_score']
@@ -81,11 +81,11 @@ def get_final_score(mapping):
     return adj_score + tax_weight + dataset_score + ref_prot_score + n_pdb_score
 
 
-def get_ranked_mappings(mappings):
+def get_ranked_mappings(mappings, unp_dir):
     ranked_mappings = []
     scored_mappings = [0]*len(mappings)
     for i, mapping in enumerate(mappings):
-        score = get_final_score(mapping)
+        score = get_final_score(mapping, unp_dir)
         ind = i
         scored_mappings[i] = (i, score)
     sorted_list = sorted(scored_mappings, key=lambda x: x[1], reverse=True)
