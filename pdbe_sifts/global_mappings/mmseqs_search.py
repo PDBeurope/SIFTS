@@ -16,6 +16,7 @@ class MmSearch(AlignmentSearch):
         target_path: Union[str, Path],
         output_path: Union[str, Path],
         outtmp_path: Union[str, Path],
+        threads: int,
         **kwargs,
     ):
         """Process the search of a query against a sequence database.
@@ -31,7 +32,8 @@ class MmSearch(AlignmentSearch):
         super().__init__(query_path, target_path, output_path)
         self.outtmp_path = outtmp_path
         self.search = None
-        self.format_string = 'query,target,alnlen,mismatch,qstart,qend,tstart,tend,evalue,bits,qaln,taln,qlen,taxid'
+        self.format_string = 'query,target,alnlen,mismatch,qstart,qend,tstart,tend,evalue,bits,qaln,taln,qlen,taxid,qheader'
+        self.threads = threads
         self.easy_search_config_kwargs = kwargs
 
     def _process(self):
@@ -43,8 +45,9 @@ class MmSearch(AlignmentSearch):
                                   a=True,
                                   alignment_mode = 3,
                                   format_output=self.format_string,
-                                  v=0,
-                                  **self.easy_search_config_kwargs)
+                                  v=3,
+                                  threads = self.threads,)
+                                #   **self.easy_search_config_kwargs)
         result.run()
 
 
@@ -79,6 +82,14 @@ def run():
         required=True,
         help="Base location of the tmp folder.",
     )
+    parser.add_argument(
+        "-threads",
+        "--threads",
+        type=int,
+        required=True,
+        help="Number of threads to use for the search.",
+    )
+
     args = parser.parse_args()
 
     logger.info(vars(args))
@@ -87,6 +98,7 @@ def run():
         args.target_path,
         args.output_path,
         args.outtmp_path,
+        threads=args.threads
     )
     mm_search.run()
 
