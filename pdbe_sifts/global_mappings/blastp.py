@@ -2,6 +2,7 @@
 
 import argparse
 import subprocess
+import shutil
 from typing import Union, Optional, List
 from pathlib import Path
 
@@ -15,31 +16,38 @@ class BlastP(AlignmentSearch):
         target_path: Union[str, Path],
         output_path: Union[str, Path],
         outfmt: int = 15,
-        evalue: float = 10,
-        num_threads: int = 1,
+        evalue: float = 10.0,
+        threads: int = 1,
         extra_args: Optional[List[str]] = None,
     ):
         super().__init__(query_path, target_path, output_path)
         self.outfmt = outfmt
         self.evalue = evalue
-        self.num_threads = num_threads
+        self.threads = threads
         self.extra_args = extra_args or []
 
     def _process(self, extra_args: list = None):
+        if shutil.which("blastp") is None:
+            raise FileNotFoundError("blastp command not found. Please install BLAST+.")
+
         cmd = [
             "blastp",
             "-query", str(self.query_path),
-            "-db", self.target_path,
-            "-out", self.output_path,
+            "-db", str(self.target_path),
+            "-out", str(self.output_path),
             "-outfmt", str(self.outfmt),
             "-evalue", str(self.evalue),
-            "-num_threads", str(self.num_threads),
-        ] 
+            "-num_threads", str(self.threads),
+        ]
 
         if self.extra_args:
             cmd += self.extra_args
 
-        subprocess.run(cmd, check=True)
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"blastp execution failed with exit code {e.returncode}")
+            raise
 
 def run():
     parser = argparse.ArgumentParser(
@@ -47,36 +55,37 @@ def run():
     )
 
     parser.add_argument(
-        "-query",
-        "--query-path",
+        "-query", "--query-path",
         required=True,
         help="Path to the input fasta file.",
     )
     parser.add_argument(
-        "-target",
-        "--target-path",
+        "-target", "--target-path",
         required=True,
         help="Path to the location of the target blast database.",
     )
     parser.add_argument(
-        "-o",
-        "--output-path",
+        "-o", "--output-path",
         required=True,
         help="Path to the file where to save the results.",
     )
     parser.add_argument(
-        "-outfmt",
-        "--outfmt",
-        required=False,
-        default='15',
-        help="Format of the results. Default: 15 (Json). See blastp -help to know all the options.",
+        "-outfmt", "--outfmt",
+        type=int,
+        default=15,
+        help="Format of the results. Default: 15 (JSON). See blastp -help for options.",
     )
     parser.add_argument(
-        "-eval",
-        "--e-value",
-        required=False,
-        default='10',
-        help="Expectation value threshold for saving hits. Default = 10",
+        "-eval", "--e-value",
+        type=float,
+        default=10.0,
+        help="Expectation value threshold for saving hits. Default = 10.0",
+    )
+    parser.add_argument(
+        "-threads", "--threads",
+        type=int,
+        default=1,
+        help="Number of threads to use.",
     )
     parser.add_argument(
         "--extra-args",
@@ -85,17 +94,19 @@ def run():
     )
 
     args = parser.parse_args()
-
     logger.info(vars(args))
+
     blast_p = BlastP(
-        args.query_path,
-        args.target_path,
-        args.output_path,
-        args.outfmt,
-        args.e_value,
+        query_path=args.query_path,
+        target_path=args.target_path,
+        output_path=args.output_path,
+        outfmt=args.outfmt,
+        evalue=args.e_value,
+        threads=args.threads,
         extra_args=args.extra_args,
     )
     blast_p.run()
+
 
 if __name__ == "__main__":
     run()
