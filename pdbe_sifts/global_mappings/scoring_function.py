@@ -82,18 +82,22 @@ def get_final_score(mapping, unp_dir):
 
 
 def get_ranked_mappings(mappings, unp_dir):
-    ranked_mappings = []
-    scored_mappings = [0]*len(mappings)
-    for i, mapping in enumerate(mappings):
-        score = get_final_score(mapping, unp_dir)
-        ind = i
-        scored_mappings[i] = (i, score)
-    sorted_list = sorted(scored_mappings, key=lambda x: x[1], reverse=True)
-    for tpl in sorted_list:
-        ind = tpl[0]
-        score = tpl[1]
-        mapping = mappings[ind]
-        mapping['sifts_score'] = score
-        ranked_mappings.append(mapping)
+    ranked_mappings = {}
+    for entry in mappings:
+        ranked_mappings[entry] = {}
+        for entity in mappings[entry]:
+            ranked_mappings[entry][entity] = []
+            scored_mappings = []
+            for i, mapping in enumerate(mappings[entry][entity]):
+                score = get_final_score(mapping, unp_dir)
+                ind = i
+                scored_mappings.append((i, score))
+            sorted_list = sorted(scored_mappings, key=lambda x: x[1], reverse=True)
+            for tpl in sorted_list:
+                ind = tpl[0]
+                score = tpl[1]
+                mapping = mappings[entry][entity][ind]
+                mapping['sifts_score'] = score
+                ranked_mappings[entry][entity].append(mapping)
     return ranked_mappings
     
