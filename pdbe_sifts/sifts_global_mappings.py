@@ -12,7 +12,7 @@ from pdbe_sifts.base.log import logger
 from pdbe_sifts.mmcif.entry import Entry
 from pdbe_sifts.global_mappings.mmseqs_search import MmSearch
 from pdbe_sifts.global_mappings.blastp import BlastP
-from pdbe_sifts.global_mappings.alignment_result_parser import GlobMappingsParser
+from pdbe_sifts.global_mappings.global_mappings_parser import GlobMappingsParser
 from pdbe_sifts.base.utils import get_date, make_path
 from pdbe_sifts.global_mappings.scoring_function import get_ranked_mappings
 
@@ -117,7 +117,8 @@ class SiftsGlobalMappings():
         entity_seq_tax = self.entry.get_entity_seq_tax()
         tmp_fasta_path = self.generate_fasta(entity_seq_tax, entry_name)
         self.search(entry_name, tmp_fasta_path)
-        self.mappings[entry_name] = GlobMappingsParser(self.tool, self.result_file_path[entry_name]).parse()
+        self.mappings = GlobMappingsParser(self.tool, self.result_file_path[entry_name]).parse()
+        self.ranked_mappings = get_ranked_mappings(self.mappings, self.unp_dir)
         end_cif = timer()
         logger.info(f'Total (from mmcif parsing to result parsing): {end_cif - start_cif} seconds.')
 
