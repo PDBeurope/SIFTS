@@ -46,7 +46,8 @@ class MmSearch(AlignmentSearch):
                                   alignment_mode = 3,
                                   format_output=self.format_string,
                                   v=3,
-                                  threads = self.threads,)
+                                  threads = self.threads,
+                                  db_load_mode=2,)
                                 #   **self.easy_search_config_kwargs)
         result.run()
 
