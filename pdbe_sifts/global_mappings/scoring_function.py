@@ -9,6 +9,7 @@ from ete4 import NCBITaxa
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.utils import get_date, make_path
+from pdbe_sifts.base.exceptions import AccessionNotFound
 from pdbe_sifts.unp.unp import UNP
 
 # def base_score(identity, coverage):
@@ -50,15 +51,38 @@ def get_tax_weight(query_taxid: int, target_tax_id: int) -> int:
             return 0
 
 def get_unp_info(accession, unp_dir):
-    unp_obj = UNP(accession, unp_dir=unp_dir)
-    dataset_score = 10 if unp_obj.dataset=='Swiss-Prot' else -10
+    try:
+        unp_obj = UNP(accession, unp_dir=unp_dir)
+    except Exception as e:
+        logger.warning({e})
+        return {'dataset_score': 0,
+                'ref_prot_score': 0,
+                'n_pdb_score': 0}
+
+    dataset_score = 10 if unp_obj.dataset == 'Swiss-Prot' else -10
     ref_prot_score = 100 if unp_obj.keywords and 'REFERENCE PROTEOME' in unp_obj.keywords else 0
     pdb_references_number_score = len(unp_obj.dbreferences.get('PDB', [])) * 0.1
     return {'dataset_score': dataset_score,
-            'ref_prot_score': ref_prot_score, 
+            'ref_prot_score': ref_prot_score,
             'n_pdb_score': pdb_references_number_score}
 
-def get_final_score(mapping, unp_dir):
+def get_final_score(mapping: dict, unp_dir: str) -> float:
+    """
+    Calculate the sifts score by combining multiple metrics:
+    - Adjusted score (adj_score)
+    - Taxonomic weight (tax_weight)
+    - UNP scores (dataset_score, ref_prot_score, n_pdb_score)
+
+    Args:
+        mapping (dict): Dictionary containing alignment data.
+            Must include keys: 'accession', 'query_tax_id', 'target_tax_id',
+            'identity', 'coverage', 'mismatch', 'query_len'.
+        unp_dir (str): Directory containing UNP data.
+
+    Returns:
+        float: Calculated sifts score.
+    """
+   # Extract data from mapping
     accession = mapping['accession']
     query_tax_id = mapping['query_tax_id']
     target_tax_id = mapping['target_tax_id']
@@ -66,19 +90,34 @@ def get_final_score(mapping, unp_dir):
     coverage = mapping['coverage']
     mismatch = mapping['mismatch']
     qlen = mapping['query_len']
+    # Calculate base scores
     adj_score = adjusted_score(identity, coverage, mismatch, qlen)
     tax_weight = get_tax_weight(query_tax_id, int(target_tax_id))
+    # Initialize default UNP scores
+    unp_scores = {
+        'dataset_score': 0,
+        'ref_prot_score': 0,
+        'n_pdb_score': 0
+    }
+    # Retrieve UNP scores if available
     try:
         unp_data = get_unp_info(accession, unp_dir)
-        dataset_score = unp_data['dataset_score']
-        ref_prot_score = unp_data['ref_prot_score']
-        n_pdb_score = unp_data['n_pdb_score']
-    except ValueError as e:
-        dataset_score = 0
-        ref_prot_score = 0
-        n_pdb_score = 0
-        logger.warning(f'{e}')
-    return adj_score + tax_weight + dataset_score + ref_prot_score + n_pdb_score
+        unp_scores.update({
+            'dataset_score': unp_data.get('dataset_score', 0),
+            'ref_prot_score': unp_data.get('ref_prot_score', 0),
+            'n_pdb_score': unp_data.get('n_pdb_score', 0)
+        })
+    except Exception as e:
+        logger.warning(f"Failed to retrieve UNP data for {accession}: {e}")
+    # Calculate sifts score
+    sifts_score = (
+        adj_score +
+        tax_weight +
+        unp_scores['dataset_score'] +
+        unp_scores['ref_prot_score'] +
+        unp_scores['n_pdb_score']
+    )
+    return sifts_score
 
 
 def get_ranked_mappings(mappings, unp_dir):
