@@ -90,7 +90,7 @@ class SiftsGlobalMappings():
         output_path = make_path(self.out_dir, id, 'mmseqs', f'hits_{id}.tsv', now)
         tmp_fold = Path(output_path).parent / f'tmp_{id}'
         tmp_fold.mkdir(parents=True, exist_ok=True)
-        result = MmSearch(fake_fasta, self.db_file, output_path, tmp_fold, self.threads)
+        result = MmSearch(fake_fasta, self.db_file, output_path, tmp_fold, self.threads, db_load_mode=2)
         result.run()
         self.result_file_path[id] = output_path
     
@@ -108,6 +108,17 @@ class SiftsGlobalMappings():
                 self.blastp_search(id, tmp_fasta_path)
             case _:
                 raise ValueError(f"Unsupported tool: {self.tool}")
+    
+    def write_mappings(self, entry_name):
+        global_mappings_folder = Path(self.out_dir) / f'{self.tool}_global_mappings_{entry_name}'
+        global_mappings_folder.mkdir(parents=True, exist_ok=True)
+        global_mappings_not_ranked = global_mappings_folder / f'not_ranked_{entry_name}.pkl'
+        global_mappings_ranked = global_mappings_folder / f'ranked_{entry_name}.pkl'
+        with open(global_mappings_not_ranked, 'wb') as f_not_ranked:
+            pickle.dump(self.mappings, f_not_ranked)
+        with open(global_mappings_ranked, 'wb') as f_ranked:
+            pickle.dump(self.ranked_mappings, f_ranked)
+
 
     def process(self):
         logger.info("Processing [%s]" % self.cif_file)
@@ -119,6 +130,7 @@ class SiftsGlobalMappings():
         self.search(entry_name, tmp_fasta_path)
         self.mappings = GlobMappingsParser(self.tool, self.result_file_path[entry_name]).parse()
         self.ranked_mappings = get_ranked_mappings(self.mappings, self.unp_dir)
+        self.write_mappings(entry_name)
         end_cif = timer()
         logger.info(f'Total (from mmcif parsing to result parsing): {end_cif - start_cif} seconds.')
 
