@@ -72,18 +72,57 @@ class SiftsGlobalMappings():
         self.ranked_mappings = {}
         self.threads = threads
     
-    def generate_fasta(self, entity_seq_tax_dict, entry_name):
+    def generate_fasta(self, entity_seq_tax_dict, entry_name, file_name, mode='w'):
+        # >db|UniqueIdentifier|EntryName ProteinName OS=OrganismName OX=OrganismIdentifier[ GN=GeneName] PE=ProteinExistence SV=SequenceVersion
         merged_fasta = []
         for ent, seq_tax in entity_seq_tax_dict.items():
             seq = seq_tax[0]
             tax_id = seq_tax[1]
-            header = f'>pdb|{entry_name}-{ent}|{tax_id}'
+            header = f'>pdb|{entry_name}-{ent}|OX={tax_id}'
             content = f'{header}\n{seq}\n'
             merged_fasta.append(content)
-        tmp_fasta_path = self.fasta_files_path / f'tmp_{entry_name}.fasta'
-        with open(tmp_fasta_path, 'w') as f:
+        tmp_fasta_path = self.fasta_files_path / f'tmp_{file_name}.fasta'
+        with open(tmp_fasta_path, mode) as f:
             f.write("".join(merged_fasta))
         return tmp_fasta_path
+
+    def process_input_file(self):
+        """
+        Check the format of the input file (txt or cif) and process.
+        """
+        path = Path(self.cif_file)
+        if not path.exists():
+            raise ValueError(f"Input path does not exist: {path}")
+        
+        ext = path.suffix.lower()
+
+        if ext == ".cif":
+            entry_name = Path(self.cif_file).stem
+            self.entry = Entry(entry_name, self.cif_file)
+            entity_seq_tax = self.entry.get_entity_seq_tax()
+            tmp_fasta_path = self.generate_fasta(entity_seq_tax, entry_name, entry_name)
+            return tmp_fasta_path, entry_name
+        
+        elif ext == ".txt":
+            entries = []
+            list_file_name = str(Path(self.cif_file).stem)
+            tmp_fasta_path = self.fasta_files_path / f'tmp_{list_file_name}.fasta'
+            tmp_fasta_path.unlink(missing_ok=True)
+            for line in path.read_text().splitlines():
+                file_path = Path(line.strip())
+                if file_path:
+                    if not file_path.exists():
+                        raise ValueError(f"Listed CIF file does not exist: {file_path}")
+                    entry_name = Path(file_path).stem
+                    tmp_entry = Entry(entry_name, str(file_path))
+                    entity_seq_tax = tmp_entry.get_entity_seq_tax()
+                    tmp_fasta_path = self.generate_fasta(entity_seq_tax, entry_name, list_file_name, mode='a')
+                    entries.append(tmp_entry)
+            return tmp_fasta_path, list_file_name
+        
+        else:
+            raise ValueError(f"Unsupported input format: {ext}. Must be .cif or .txt")
+
 
     def mmseqs_search(self, id, fake_fasta):
         now = get_date()
@@ -95,7 +134,7 @@ class SiftsGlobalMappings():
         self.result_file_path[id] = output_path
     
     def blastp_search(self, id, fasta_path):
-        output_path = make_path(self.out_dir, id, 'blastp', f'hits_{id}.json')
+        output_path = make_path(self.out_dir, id, 'blastp', f'hits_{id}.tsv')
         blastp_search = BlastP(fasta_path, self.db_file, output_path, threads = self.threads)
         blastp_search.run()
         self.result_file_path[id] = output_path
@@ -110,8 +149,10 @@ class SiftsGlobalMappings():
                 raise ValueError(f"Unsupported tool: {self.tool}")
     
     def write_mappings(self, entry_name):
-        global_mappings_folder = Path(self.out_dir) / f'{self.tool}_global_mappings_{entry_name}'
+        hits_folder = Path(self.result_file_path[entry_name]).parent
+        global_mappings_folder = Path(hits_folder) / f'{self.tool}_global_mappings_{entry_name}'
         global_mappings_folder.mkdir(parents=True, exist_ok=True)
+        logger.info(f'Writing mappings into {global_mappings_folder}.')
         global_mappings_not_ranked = global_mappings_folder / f'not_ranked_{entry_name}.pkl'
         global_mappings_ranked = global_mappings_folder / f'ranked_{entry_name}.pkl'
         with open(global_mappings_not_ranked, 'wb') as f_not_ranked:
@@ -123,16 +164,15 @@ class SiftsGlobalMappings():
     def process(self):
         logger.info("Processing [%s]" % self.cif_file)
         start_cif = timer()
-        entry_name = Path(self.cif_file).stem
-        self.entry = Entry(entry_name, self.cif_file)
-        entity_seq_tax = self.entry.get_entity_seq_tax()
-        tmp_fasta_path = self.generate_fasta(entity_seq_tax, entry_name)
+        tmp_fasta_path, entry_name = self.process_input_file()
         self.search(entry_name, tmp_fasta_path)
+        logger.info(f'Parsing hits from {self.tool}.')
         self.mappings = GlobMappingsParser(self.tool, self.result_file_path[entry_name]).parse()
+        logger.info('Applying SIFTS scoring function.')
         self.ranked_mappings = get_ranked_mappings(self.mappings, self.unp_dir)
         self.write_mappings(entry_name)
         end_cif = timer()
-        logger.info(f'Total (from mmcif parsing to result parsing): {end_cif - start_cif} seconds.')
+        logger.info(f'Total (from mmcif parsing to writing ranked mappings): {end_cif - start_cif} seconds.')
 
 def run():
     parser = argparse.ArgumentParser(
@@ -143,7 +183,7 @@ def run():
         "-i",
         "--cif-file",
         required=True,
-        help="Base location for the PDBx/mmCIF file.",
+        help="Base location for the PDBx/mmCIF file. It can also be a txt file containing a list of path to cif files. One row, one path.",
     )
     parser.add_argument(
         "-od",
