@@ -32,7 +32,7 @@ class MmSearch(AlignmentSearch):
         super().__init__(query_path, target_path, output_path)
         self.outtmp_path = outtmp_path
         self.search = None
-        self.format_string = 'query,target,alnlen,mismatch,qstart,qend,tstart,tend,evalue,bits,qaln,taln,qlen,taxid,qheader'
+        self.format_string = 'query,target,alnlen,mismatch,qstart,qend,tstart,tend,evalue,bits,qaln,taln,qlen,taxid,qheader,fident,qcov'
         self.threads = threads
         self.easy_search_config_kwargs = kwargs
 
@@ -47,7 +47,9 @@ class MmSearch(AlignmentSearch):
                                   format_output=self.format_string,
                                   v=3,
                                   threads = self.threads,
-                                  db_load_mode=2,)
+                                  db_load_mode=2,
+                                  s=7.5,
+                                  max_seqs = 500,)
                                 #   **self.easy_search_config_kwargs)
         result.run()
 

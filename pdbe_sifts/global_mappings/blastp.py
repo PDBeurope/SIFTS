@@ -15,7 +15,7 @@ class BlastP(AlignmentSearch):
         query_path: Union[str, Path],
         target_path: Union[str, Path],
         output_path: Union[str, Path],
-        outfmt: int = 15,
+        outfmt: str = "6 qseqid sseqid length mismatch qstart qend sstart send evalue bitscore qseq sseq qlen staxid pident qcovs",
         evalue: float = 10.0,
         threads: int = 1,
         extra_args: Optional[List[str]] = None,
