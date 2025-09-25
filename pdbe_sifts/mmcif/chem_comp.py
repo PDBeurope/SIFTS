@@ -48,7 +48,7 @@ class ChemCompMapping:
     def hydrate(self, cc_file):
         logger.debug(f"CC_DICT: {cc_file}")
 
-        logger.info(f"Loading chem_comp from mapping file {cc_file}")
+        logger.debug(f"Loading chem_comp from mapping file {cc_file}")
         with open(cc_file) as f:
             for line in f:
                 three, one_letter = line.strip().split(",")
