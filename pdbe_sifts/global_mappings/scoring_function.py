@@ -34,18 +34,18 @@ def get_tax_weight(query_taxid: int, target_tax_id: int) -> int:
         lineage1 = ncbi.get_lineage(query_taxid)[::-1] # taxid --> root
         lineage2 = ncbi.get_lineage(target_tax_id)[::-1] # taxid --> root
     except ValueError as e:
-        logger.warning(f'Taxonomy ID is not valid. Error: {e}')
+        logger.debug(f'Taxonomy ID is not valid. Error: {e}')
         return 0
 
     common_ancestors = [tax for tax in lineage1 if tax in lineage2]
 
     for val in common_ancestors:
         dist1 = lineage1.index(val)
-        if dist1==1:
+        if dist1==0:
             return 100
-        elif dist1==2:
+        elif dist1==1:
             return 50
-        elif dist1==3:
+        elif dist1==2:
             return 25
         else:
             return 0
@@ -54,14 +54,19 @@ def get_unp_info(accession, unp_dir):
     try:
         unp_obj = UNP(accession, unp_dir=unp_dir)
     except Exception as e:
-        logger.warning({e})
+        logger.debug({e})
         return {'dataset_score': 0,
                 'ref_prot_score': 0,
                 'n_pdb_score': 0}
 
-    dataset_score = 10 if unp_obj.dataset == 'Swiss-Prot' else -10
+    dataset_score = (
+    (50 if unp_obj.annotation_score == 0 else 50 * unp_obj.annotation_score)
+    if unp_obj.dataset == "Swiss-Prot"
+    else 0
+    )
     ref_prot_score = 100 if unp_obj.keywords and 'REFERENCE PROTEOME' in unp_obj.keywords else 0
-    pdb_references_number_score = len(unp_obj.dbreferences.get('PDB', [])) * 0.1
+    # pdb_references_number_score = len(unp_obj.dbreferences.get('PDB', [])) * 0.1
+    pdb_references_number_score = 0
     return {'dataset_score': dataset_score,
             'ref_prot_score': ref_prot_score,
             'n_pdb_score': pdb_references_number_score}
@@ -105,10 +110,10 @@ def get_final_score(mapping: dict, unp_dir: str) -> float:
         unp_scores.update({
             'dataset_score': unp_data.get('dataset_score', 0),
             'ref_prot_score': unp_data.get('ref_prot_score', 0),
-            'n_pdb_score': unp_data.get('n_pdb_score', 0)
+            'n_pdb_score': unp_data.get('n_pdb_score', 0),
         })
     except Exception as e:
-        logger.warning(f"Failed to retrieve UNP data for {accession}: {e}")
+        logger.debug(f"Failed to retrieve UNP data for {accession}: {e}")
     # Calculate sifts score
     sifts_score = (
         adj_score +
