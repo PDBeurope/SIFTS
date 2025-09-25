@@ -1,9 +1,6 @@
 import csv
 import json
 
-from pdbe_sifts.base.utils import get_mismatches
-
-
 IDENTITY_CUTOFF = 0.9
 
 class GlobMappingsParser:
@@ -73,11 +70,12 @@ class GlobMappingsParser:
                 # 'query,target,alnlen,mismatch,qstart,qend,tstart,tend,evalue,bits,qaln,taln,qlen,taxid,qheader,fident,qcov'
                 header_list = row[14].split('|')
                 entry, entity = header_list[1].split('-')
+                taxid = header_list[-1].split('=')[-1]
                 if entry not in data:
                     data[entry]= {}
                 if entity not in data[entry]:
                     data[entry][entity] = []
-                taxid = int(header_list[-1].split('=')[-1])
+                taxid = int(taxid) if taxid not in (None, "None", "") else -1
                 identity_crt = float(row[15])
                 if identity_crt >= IDENTITY_CUTOFF:
                     data[entry][entity].append(self._build_mapping_dict(
