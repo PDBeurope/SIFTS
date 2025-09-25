@@ -9,6 +9,7 @@ from a large XML file.
 import os
 import pickle
 import random
+import requests
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -31,7 +32,31 @@ COLORS = {
 }
 
 # conf = Config()
+UNP_URL_SCORE = "https://rest.uniprot.org/uniprotkb/{uniprot_id}?fields=accession,annotation_score"
 
+def get_annotation_score(uniprot_id: str) -> int | None:
+    """
+    Retrieve the annotation score of a UniProt entry.
+    
+    Args:
+        uniprot_id (str): UniProt accession (e.g., "P05067")
+    
+    Returns:
+        int | None: annotationScore if available, otherwise None
+    """
+    url = UNP_URL_SCORE.format(uniprot_id=uniprot_id)
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        data = response.json()
+        score = data.get("annotationScore")
+        if score:
+            return score
+        else:
+            return 0
+    else:
+        print(f"Error {response.status_code} for {uniprot_id}")
+        return None
 
 def colored(string, color="green", bold=False):
     if bold:
@@ -98,6 +123,7 @@ class UNP:
     dataset: str
     evidences: list[str] = []
     secondary_accessions: list[str] = []
+    annotation_score: int
 
     def _load_uniprot_data(self, accession):
         """Load the data for the accession from the uniprot XML file
@@ -180,6 +206,7 @@ class UNP:
         if "-" in accession:
             accession = accession.split("-")[0]
         self._load_uniprot_data(accession)
+        self.annotation_score = get_annotation_score(accession)
 
     def _populate_fields(self, doc):
         uniprot = doc[0]
