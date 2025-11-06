@@ -67,7 +67,7 @@ class MmSearch(AlignmentSearch):
                                   self.target_path,
                                   self.output_path,
                                   self.outtmp_path,
-                                  format_mode=4,
+                                  format_mode=0,
                                   a=True,
                                   alignment_mode = 3,
                                   format_output=self.format_string,

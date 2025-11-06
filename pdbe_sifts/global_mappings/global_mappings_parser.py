@@ -1,139 +1,177 @@
 import csv
-import json
+import multiprocessing as mp
+import pickle
+from pathlib import Path
+from pdbe_sifts.global_mappings.scoring_function import get_ranked_mappings
 
 IDENTITY_CUTOFF = 0.9
 
+def write_mapping(loc, data):
+    """Serialize parsed or ranked mapping to a pickle file."""
+    with open(str(loc), 'wb') as f:
+        pickle.dump(data, f)
+
+
+def _parse_blastp_rows(rows, entry):
+    """Parse BLASTP tabular rows (16 columns) into the unified data structure."""
+    data = {}
+    for row in rows:
+        qseqid = row[0]
+        header_list = qseqid.split('|')
+        _, entity = header_list[1].split('-')
+
+        taxid = header_list[-1].split('=')[-1]
+        taxid = int(taxid) if taxid.isdigit() else -1
+
+        identity_crt = float(row[14]) / 100.0  # pident (% → fraction)
+        coverage = float(row[15]) / 100.0      # qcovs (% → fraction)
+        if entry not in data:
+            data[entry] = {}
+        if entity not in data[entry]:
+            data[entry][entity] = []
+        if identity_crt >= IDENTITY_CUTOFF:
+            data[entry][entity].append({
+                'entry': entry,
+                'entity': entity,
+                'accession': row[1].split('|')[1],# unp|acc|name
+                'alignment_len': int(row[2]),
+                'query_len': int(row[12]),
+                'mismatch': int(row[3]),
+                'query_start': int(row[4]),
+                'query_end': int(row[5]),
+                'target_start': int(row[6]),
+                'target_end': int(row[7]),
+                'evalue': float(row[8]),
+                'bit_score': float(row[9]),
+                'identity': identity_crt,
+                'coverage': coverage,
+                'query_aligned': row[10],
+                'target_aligned': row[11],
+                'target_tax_id': int(row[13]),
+                'query_tax_id': taxid,
+            })
+    return data
+
+
+def _parse_mmseqs_rows(rows, entry):
+    """Parse MMseqs2 tabular rows (17 columns) into the unified data structure."""
+    data = {}
+    for row in rows:
+        header_list = row[14].split('|')
+        _, entity = header_list[1].split('-')
+        taxid = header_list[-1].split('=')[-1]
+        taxid = int(taxid) if taxid.isdigit() else -1
+        identity_crt = float(row[15])
+        coverage = float(row[16])
+        if entry not in data:
+            data[entry] = {}
+        if entity not in data[entry]:
+            data[entry][entity] = []
+        if identity_crt >= IDENTITY_CUTOFF:
+            data[entry][entity].append({
+                'entry': entry,
+                'entity': entity,
+                'accession': row[1],
+                'alignment_len': int(row[2]),
+                'query_len': int(row[12]),
+                'mismatch': int(row[3]),
+                'query_start': int(row[4]),
+                'query_end': int(row[5]),
+                'target_start': int(row[6]),
+                'target_end': int(row[7]),
+                'evalue': float(row[8]),
+                'bit_score': float(row[9]),
+                'identity': identity_crt,
+                'coverage': coverage,
+                'query_aligned': row[10],
+                'target_aligned': row[11],
+                'target_tax_id': int(row[13]),
+                'query_tax_id': taxid,
+            })
+    return data
+
+def _process_entry(entry, rows, unp_dir, out_dir_parsed, out_dir_ranked):
+    """Worker function to process all rows for one entry (BLASTP or MMseqs)."""
+    if not rows:
+        return
+
+    n_cols = len(rows[0])
+    if n_cols == 16:
+        data = _parse_blastp_rows(rows, entry)
+    elif n_cols == 17:
+        data = _parse_mmseqs_rows(rows, entry)
+    else:
+        return  # Unsupported format
+
+    # Write parsed pickle
+    mapping_file_path = out_dir_parsed / f'{entry}.pkl'
+    write_mapping(mapping_file_path, data)
+
+    # Write ranked pickle
+    ranked_mappings = get_ranked_mappings(data, unp_dir)
+    if ranked_mappings:
+        ranked_mapping_file_path = out_dir_ranked / f'{entry}.pkl'
+        write_mapping(ranked_mapping_file_path, ranked_mappings)
+
+
+def _process_entry_wrapper(args):
+    """Unpack tuple args for pool.imap_unordered."""
+    return _process_entry(*args)
+
+
+def _entry_generator(result_file_path):
+    """Stream the file line by line and yield (entry, [rows]) for each entry."""
+    with open(result_file_path) as csvfile:
+        reader = csv.reader(csvfile, delimiter='\t')
+
+        current_entry, buffer = None, []
+        for row in reader:
+            # Both MMseqs and BLASTP have the header in qseqid (col 0 for BLAST, 14 for MMseqs)
+            header = row[14] if len(row) == 17 else row[0]
+            entry, _ = header.split('|')[1].split('-')
+
+            if current_entry is None:
+                current_entry = entry
+
+            if entry != current_entry:
+                yield current_entry, buffer
+                buffer = []
+                current_entry = entry
+
+            buffer.append(row)
+
+        if buffer:
+            yield current_entry, buffer
+
+
 class GlobMappingsParser:
-    def __init__(self, format, result_file_path):
+    def __init__(self, format, result_file_path, out_dir, max_workers=None):
         self.format = format
         self.result_file_path = result_file_path
         self.mappings = None
+        self.out_dir = Path(out_dir)
+        self.unp_dir = self.out_dir / 'unp_files'
+        self.out_dir_parsed = self.out_dir / 'parsed_hits'
+        self.out_dir_ranked = self.out_dir / 'ranked_hits'
+        self.out_dir_parsed.mkdir(parents=True, exist_ok=True)
+        self.out_dir_ranked.mkdir(parents=True, exist_ok=True)
+        self.max_workers = max_workers or mp.cpu_count()
 
     def parse(self):
-        if self.format == 'mmseqs':
-            self._parse_mmseqs()
-        elif self.format == 'blastp':
-            self._parse_blastp()
+        """Dispatch to the correct parsing method based on file format."""
+        if self.format in ('mmseqs', 'blastp'):
+            self._parse_generic()
         else:
-            raise ValueError(f"Unsupported format: {format}")
+            raise ValueError(f"Unsupported format: {self.format}")
         return self.mappings
 
-    def _build_mapping_dict(
-        self,
-        entry,
-        entity,
-        accession,
-        alignment_len,
-        query_len,
-        mismatch,
-        identity,
-        coverage,
-        query_start,
-        query_end,
-        target_start,
-        target_end,
-        evalue,
-        bit_score,
-        query_aligned,
-        target_aligned,
-        query_tax_id,
-        target_tax_id,
-    ):
-        return {
-            'entry': entry,
-            'entity': entity,
-            'accession': accession,
-            'alignment_len': alignment_len,
-            'query_len': query_len,
-            'mismatch': mismatch,
-            'identity': identity,
-            'coverage': coverage,
-            'query_start': query_start,
-            'query_end': query_end,
-            'target_start': target_start,
-            'target_end': target_end,
-            'evalue': evalue,
-            'bit_score': bit_score,
-            'query_aligned': query_aligned,
-            'target_aligned': target_aligned,
-            'target_tax_id': target_tax_id,
-            'query_tax_id': query_tax_id,
-        }
+    def _parse_generic(self):
+        """Generic parser for MMseqs2 and BLASTP outputs (same structure)."""
+        tasks = (
+            (entry, rows, self.unp_dir, self.out_dir_parsed, self.out_dir_ranked)
+            for entry, rows in _entry_generator(self.result_file_path)
+        )
 
-    def _parse_mmseqs(self):
-        data = {}
-        with open(self.result_file_path) as csvfile:
-            reader = csv.reader(csvfile, delimiter='\t')
-            next(reader)
-            for row in reader:
-                # >pdb|entry-entity|OX=taxid
-                # 'query,target,alnlen,mismatch,qstart,qend,tstart,tend,evalue,bits,qaln,taln,qlen,taxid,qheader,fident,qcov'
-                header_list = row[14].split('|')
-                entry, entity = header_list[1].split('-')
-                taxid = header_list[-1].split('=')[-1]
-                if entry not in data:
-                    data[entry]= {}
-                if entity not in data[entry]:
-                    data[entry][entity] = []
-                taxid = int(taxid) if taxid not in (None, "None", "") else -1
-                identity_crt = float(row[15])
-                if identity_crt >= IDENTITY_CUTOFF:
-                    data[entry][entity].append(self._build_mapping_dict(
-                        entry=entry,
-                        entity=entity,
-                        accession=row[1],
-                        alignment_len=int(row[2]),
-                        query_len=int(row[12]),
-                        mismatch=int(row[3]),
-                        query_start=int(row[4]),
-                        query_end=int(row[5]),
-                        target_start=int(row[6]),
-                        target_end=int(row[7]),
-                        evalue=float(row[8]),
-                        bit_score=float(row[9]),
-                        identity=identity_crt,
-                        coverage=float(row[16]),
-                        query_aligned=row[10],
-                        target_aligned=row[11],
-                        target_tax_id= int(row[13]),
-                        query_tax_id=taxid
-                    ))
-        self.mappings = data
-
-    def _parse_blastp(self):
-        data = {}
-        with open(self.result_file_path) as csvfile:
-            reader = csv.reader(csvfile, delimiter='\t')
-            for row in reader:
-                # >pdb|entry-entity|OX=taxid
-                #  qseqid sseqid length mismatch qstart qend sstart send evalue bitscore qseq sseq qlen staxid pident qcovs
-                header_list = row[0].split('|')
-                entry, entity = header_list[1].split('-')
-                if entry not in data:
-                    data[entry]= {}
-                if entity not in data[entry]:
-                    data[entry][entity] = []
-                taxid = int(header_list[-1].split('=')[-1])
-                identity_crt = float(row[14])/100
-                if identity_crt >= IDENTITY_CUTOFF:
-                    data[entry][entity].append(self._build_mapping_dict(
-                        entry=entry,
-                        entity=entity,
-                        accession=row[1].split('|')[1],# unp|acc|name
-                        alignment_len=int(row[2]),
-                        query_len=int(row[12]),
-                        mismatch=int(row[3]),
-                        query_start=int(row[4]),
-                        query_end=int(row[5]),
-                        target_start=int(row[6]),
-                        target_end=int(row[7]),
-                        evalue=float(row[8]),
-                        bit_score=float(row[9]),
-                        identity=identity_crt,
-                        coverage=float(row[15])/100,
-                        query_aligned=row[10],
-                        target_aligned=row[11],
-                        target_tax_id= int(row[13]),
-                        query_tax_id=taxid
-                    ))
-        self.mappings = data
+        with mp.Pool(processes=self.max_workers) as pool:
+            for _ in pool.imap_unordered(_process_entry_wrapper, tasks):
+                pass
