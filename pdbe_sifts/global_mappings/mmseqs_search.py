@@ -1,7 +1,18 @@
 #!/usr/bin/env python3
+"""
+Module for running MMseqs2 easy_search.
+
+This module defines the `MmSearch` class, a concrete implementation of `AlignmentSearch`
+for performing MMseqs2 sequence-to-database searches. It wraps the `EasySearchConfig`
+interface to configure and execute MMseqs2 with controlled parameters.
+
+Classes:
+    MmSearch: Concrete subclass of AlignmentSearch implementing MMseqs2 easy_search.
+Functions:
+    run(): Command-line interface for running an MMseqs2 search.
+"""
 
 import argparse
-
 from typing import Union
 from pathlib import Path
 
@@ -10,6 +21,25 @@ from pdbe_sifts.base.log import logger
 from pdbe_sifts.global_mappings.base_alignment_search import AlignmentSearch
 
 class MmSearch(AlignmentSearch):
+    """
+    Concrete implementation of AlignmentSearch using MMseqs2 easy_search.
+
+    This class runs an MMseqs2 search comparing a query FASTA file against
+    a pre-built MMseqs2 target database. The results are saved in a tabular format.
+
+    Args:
+        query_path (str | Path): Path to the query FASTA file.
+        target_path (str | Path): Path to the MMseqs2 target database.
+        output_path (str | Path): Path to the output results file.
+        outtmp_path (str | Path): Path to the temporary directory required by MMseqs2.
+        threads (int): Number of CPU threads to use for the search.
+
+    Attributes:
+        outtmp_path (Path): Temporary folder for intermediate MMseqs2 files.
+        search: EasySearchConfig instance used to configure the search.
+        format_string (str): Output format for MMseqs2 results.
+        threads (int): Number of threads used.
+    """
     def __init__(
         self,
         query_path: Union[str, Path],
@@ -19,24 +49,20 @@ class MmSearch(AlignmentSearch):
         threads: int,
         **kwargs,
     ):
-        """Process the search of a query against a sequence database.
-
-        Args:
-            query_path (path to file): path to the query fasta file.
-            target_path (path to file): path to the DB file.
-            output_path (path to file): path to the result file.
-            outtmp_path (path to folder): path to the tmp folder needed by mmseqs.
-            kwargs: any possible argument allowed by mmseqs easy_search.
-        """
+        """Initialize the MmSearch instance with query, target, and output paths."""
 
         super().__init__(query_path, target_path, output_path)
         self.outtmp_path = outtmp_path
         self.search = None
-        self.format_string = 'query,target,alnlen,mismatch,qstart,qend,tstart,tend,evalue,bits,qaln,taln,qlen,taxid,qheader,fident,qcov'
+        self.format_string = (
+            "query,target,alnlen,mismatch,qstart,qend,tstart,tend,evalue,bits,"
+            "qaln,taln,qlen,taxid,qheader,fident,qcov"
+        )
         self.threads = threads
         self.easy_search_config_kwargs = kwargs
 
     def _process(self):
+        """Run the MMseqs2 easy_search process."""
         result = EasySearchConfig(self.query_path,
                                   self.target_path,
                                   self.output_path,
@@ -55,6 +81,7 @@ class MmSearch(AlignmentSearch):
 
 
 def run():
+    """Command-line interface for running MMseqs2 easy_search."""
     parser = argparse.ArgumentParser(
         description="Run a mmseqs easy_search against a mmseqs database."
     )
@@ -63,34 +90,34 @@ def run():
         "-query",
         "--query-path",
         required=True,
-        help="Base location for the query file.",
+        help="Path to the query FASTA file.",
     )
     parser.add_argument(
         "-target",
         "--target-path",
         required=True,
-        help="Base location of the targeted database.",
+        help="Path to the MMseqs2 target database.",
     )
 
     parser.add_argument(
         "-o",
         "--output-path",
         required=True,
-        help="Base location of the result file.",
+        help="Path to save the search result file.",
     )
 
     parser.add_argument(
         "-tmp",
         "--outtmp-path",
         required=True,
-        help="Base location of the tmp folder.",
+        help="Path to the temporary directory required by MMseqs2.",
     )
     parser.add_argument(
         "-threads",
         "--threads",
         type=int,
         required=True,
-        help="Number of threads to use for the search.",
+        help="Number of CPU threads to use for the search.",
     )
 
     args = parser.parse_args()

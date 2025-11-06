@@ -1,4 +1,17 @@
 #!/usr/bin/env python3
+"""
+Module for running BLASTP searches.
+
+This module defines the `BlastP` class, a concrete implementation of `AlignmentSearch`
+that wraps the NCBI BLAST+ `blastp` command-line tool. It provides a consistent
+interface and CLI entry point for performing protein sequence alignments against
+a pre-built BLAST database.
+
+Classes:
+    BlastP: Concrete subclass of AlignmentSearch for running NCBI blastp.
+Functions:
+    run(): Command-line entry point for performing a BLASTP search.
+"""
 
 import argparse
 import subprocess
@@ -10,6 +23,26 @@ from pdbe_sifts.base.log import logger
 from pdbe_sifts.global_mappings.base_alignment_search import AlignmentSearch
 
 class BlastP(AlignmentSearch):
+    """
+    Concrete implementation of AlignmentSearch using NCBI BLASTP.
+
+    This class runs a `blastp` search comparing a query FASTA file against
+    a pre-built BLAST database. It executes the BLAST+ command-line tool
+    via `subprocess` and captures logs for reproducibility.
+
+    Args:
+        query_path (str | Path): Path to the input FASTA query file.
+        target_path (str | Path): Path to the target BLAST database.
+        output_path (str | Path): Path to the file where results will be saved.
+        outfmt (str, optional): BLAST output format string or integer code. Defaults to a tabular format (6).
+        evalue (float, optional): E-value threshold. Defaults to 10.0.
+        threads (int, optional): Number of CPU threads to use. Defaults to 1.
+
+    Attributes:
+        outfmt (str): Output format setting for BLAST.
+        evalue (float): E-value threshold.
+        threads (int): Number of threads used for the search.
+    """
     def __init__(
         self,
         query_path: Union[str, Path],
@@ -18,15 +51,15 @@ class BlastP(AlignmentSearch):
         outfmt: str = "6 qseqid sseqid length mismatch qstart qend sstart send evalue bitscore qseq sseq qlen staxid pident qcovs",
         evalue: float = 10.0,
         threads: int = 1,
-        extra_args: Optional[List[str]] = None,
     ):
+        """Initialize the BlastP instance with search configuration."""
         super().__init__(query_path, target_path, output_path)
         self.outfmt = outfmt
         self.evalue = evalue
         self.threads = threads
-        self.extra_args = extra_args or []
 
     def _process(self, extra_args: list = None):
+        """Run the BLASTP search using subprocess."""
         if shutil.which("blastp") is None:
             raise FileNotFoundError("blastp command not found. Please install BLAST+.")
 
@@ -40,9 +73,7 @@ class BlastP(AlignmentSearch):
             "-num_threads", str(self.threads),
         ]
 
-        if self.extra_args:
-            cmd += self.extra_args
-
+        logger.info(f"Running BLASTP: {' '.join(cmd)}")
         try:
             subprocess.run(cmd, check=True)
         except subprocess.CalledProcessError as e:
@@ -50,47 +81,42 @@ class BlastP(AlignmentSearch):
             raise
 
 def run():
+    """Command-line interface for running BLASTP searches."""
     parser = argparse.ArgumentParser(
-        description="Run a blastp search against a blast database."
+        description="Run a BLASTP search against a BLAST-formatted database."
     )
 
     parser.add_argument(
         "-query", "--query-path",
         required=True,
-        help="Path to the input fasta file.",
+        help="Path to the input FASTA file containing protein sequences.",
     )
     parser.add_argument(
         "-target", "--target-path",
         required=True,
-        help="Path to the location of the target blast database.",
+        help="Path to the BLAST database to search against.",
     )
     parser.add_argument(
         "-o", "--output-path",
         required=True,
-        help="Path to the file where to save the results.",
+        help="Path to save the BLASTP results.",
     )
     parser.add_argument(
         "-outfmt", "--outfmt",
-        type=int,
-        default=15,
-        help="Format of the results. Default: 15 (JSON). See blastp -help for options.",
+        default="6 qseqid sseqid length mismatch qstart qend sstart send evalue bitscore qseq sseq qlen staxid pident qcovs",
+        help="BLAST output format (string or integer). Default: tabular format 6.",
     )
     parser.add_argument(
         "-eval", "--e-value",
         type=float,
         default=10.0,
-        help="Expectation value threshold for saving hits. Default = 10.0",
+        help="E-value threshold for saving hits (default = 10.0).",
     )
     parser.add_argument(
         "-threads", "--threads",
         type=int,
         default=1,
-        help="Number of threads to use.",
-    )
-    parser.add_argument(
-        "--extra-args",
-        nargs=argparse.REMAINDER,
-        help="Extra arguments to pass to blastp (e.g., --max_target_seqs 5).",
+        help="Number of CPU threads to use.",
     )
 
     args = parser.parse_args()
@@ -103,7 +129,6 @@ def run():
         outfmt=args.outfmt,
         evalue=args.e_value,
         threads=args.threads,
-        extra_args=args.extra_args,
     )
     blast_p.run()
 
