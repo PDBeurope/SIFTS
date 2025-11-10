@@ -7,8 +7,6 @@ from pdbe_sifts.base.log import logger
 
 from pdbe_sifts.config.config import Config
 
-# from orc.base.log import logger
-# from release.config import Config
 
 conf = Config()
 
@@ -40,8 +38,7 @@ class ChemCompMapping:
     _dictionary: Mapping[str, str] = {}
 
     def __init__(self):
-        # cc_file = '/hps/software/users/pdbe/user/adamb/opensifts/opensifts/input_files/three_to_one_letter_mapping.csv' #hardcode to delete
-        cc_file = conf.utils.three_to_one
+        cc_file = conf.sifts.three_to_one
 
         self.hydrate(cc_file)
 
