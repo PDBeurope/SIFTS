@@ -1,0 +1,3 @@
+[sifts]
+tax_fix_pkl = "input_files/nf90_taxid.pkl"
+three_to_one = "input_files/three_to_one_letter_mapping.csv"
