@@ -4,19 +4,19 @@ import os
 import pickle as pickle
 from collections.abc import Mapping
 
-# from release.config import Config
+from pdbe_sifts.config.config import Config
 
-# conf = Config()
+conf = Config()
 
 
 class TaxonomyFix:
     _dictionary: Mapping[str, Mapping[str, str]] = {}
 
     def __init__(self, conn=None, pkl_file=None):
-        conf = '/hps/software/users/pdbe/user/adamb/opensifts/opensifts/input_files/nf90_taxid.pkl'#pkl_file or conf.sifts.tax_fix_pkl
+        pkl_file = conf.sifts.tax_fix_pkl
 
-        if os.path.isfile(conf):
-            with open(conf, "rb") as f:
+        if os.path.isfile(pkl_file):
+            with open(pkl_file, "rb") as f:
                 self._dictionary = pickle.load(f)
         elif conn:
             cursor = conn.cursor()
@@ -29,7 +29,7 @@ class TaxonomyFix:
 
             cursor.close()
 
-            with open(conf, "wb") as f:
+            with open(pkl_file, "wb") as f:
                 pickle.dump(self._dictionary, f, pickle.HIGHEST_PROTOCOL)
         self.__dict__ = self._dictionary
 
