@@ -52,7 +52,6 @@ def _parse_blastp_rows(rows, entry):
             })
     return data
 
-
 def _parse_mmseqs_rows(rows, entry):
     """Parse MMseqs2 tabular rows (17 columns) into the unified data structure."""
     data = {}
@@ -90,8 +89,8 @@ def _parse_mmseqs_rows(rows, entry):
             })
     return data
 
-def _process_entry(entry, rows, unp_dir, out_dir_parsed, out_dir_ranked):
-    """Worker function to process all rows for one entry (BLASTP or MMseqs)."""
+def _process_entry(entry, entity, rows, unp_dir, out_dir_parsed, out_dir_ranked):
+    """Worker function to process all rows for one (entry, entity) pair."""
     if not rows:
         return
 
@@ -101,17 +100,17 @@ def _process_entry(entry, rows, unp_dir, out_dir_parsed, out_dir_ranked):
     elif n_cols == 17:
         data = _parse_mmseqs_rows(rows, entry)
     else:
-        return  # Unsupported format
+        return  # unsupported format
 
     # Write parsed pickle
-    mapping_file_path = out_dir_parsed / f'{entry}.pkl'
-    write_mapping(mapping_file_path, data)
+    parsed_path = out_dir_parsed / f"{entry}_{entity}.pkl"
+    write_mapping(parsed_path, data)
 
     # Write ranked pickle
-    ranked_mappings = get_ranked_mappings(data, unp_dir)
-    if ranked_mappings:
-        ranked_mapping_file_path = out_dir_ranked / f'{entry}.pkl'
-        write_mapping(ranked_mapping_file_path, ranked_mappings)
+    ranked = get_ranked_mappings(data, unp_dir)
+    if ranked:
+        ranked_path = out_dir_ranked / f"{entry}_{entity}.pkl"
+        write_mapping(ranked_path, ranked)
 
 
 def _process_entry_wrapper(args):
@@ -120,37 +119,49 @@ def _process_entry_wrapper(args):
 
 
 def _entry_generator(result_file_path):
-    """Stream the file line by line and yield (entry, [rows]) for each entry."""
+    """
+    Stream the TSV file and yield (entry, entity, [rows]) for each unique (entry, entity) pair.
+
+    The output files from MMseqs2/BLASTP may not be globally ordered by entry
+    when run with multiple threads, but all rows for a given (entry, entity)
+    are guaranteed to be contiguous.
+    """
     with open(result_file_path) as csvfile:
         reader = csv.reader(csvfile, delimiter='\t')
 
-        current_entry, buffer = None, []
+        current_entry, current_entity = None, None
+        buffer = []
+
         for row in reader:
-            # Both MMseqs and BLASTP have the header in qseqid (col 0 for BLAST, 14 for MMseqs)
+            # header is in column 0 for BLASTP, column 14 for MMseqs2
             header = row[14] if len(row) == 17 else row[0]
-            entry, _ = header.split('|')[1].split('-')
+            entry, entity = header.split('|')[1].split('-')
 
-            if current_entry is None:
-                current_entry = entry
+            # Initialize on first line
+            if current_entry is None and current_entity is None:
+                current_entry, current_entity = entry, entity
 
-            if entry != current_entry:
-                yield current_entry, buffer
+            # When we encounter a new (entry, entity) pair → yield the previous buffer
+            if (entry != current_entry) or (entity != current_entity):
+                yield current_entry, current_entity, buffer
                 buffer = []
-                current_entry = entry
+                current_entry, current_entity = entry, entity
 
             buffer.append(row)
 
+        # yield the last group
         if buffer:
-            yield current_entry, buffer
+            yield current_entry, current_entity, buffer
+
 
 
 class GlobMappingsParser:
-    def __init__(self, format, result_file_path, out_dir, max_workers=None):
+    def __init__(self, format, result_file_path, out_dir, unp_dir, max_workers=None):
         self.format = format
         self.result_file_path = result_file_path
         self.mappings = None
         self.out_dir = Path(out_dir)
-        self.unp_dir = self.out_dir / 'unp_files'
+        self.unp_dir = unp_dir
         self.out_dir_parsed = self.out_dir / 'parsed_hits'
         self.out_dir_ranked = self.out_dir / 'ranked_hits'
         self.out_dir_parsed.mkdir(parents=True, exist_ok=True)
@@ -166,10 +177,10 @@ class GlobMappingsParser:
         return self.mappings
 
     def _parse_generic(self):
-        """Generic parser for MMseqs2 and BLASTP outputs (same structure)."""
+        """Generic parser for MMseqs2 and BLASTP outputs (grouped by entry + entity)."""
         tasks = (
-            (entry, rows, self.unp_dir, self.out_dir_parsed, self.out_dir_ranked)
-            for entry, rows in _entry_generator(self.result_file_path)
+            (entry, entity, rows, self.unp_dir, self.out_dir_parsed, self.out_dir_ranked)
+            for entry, entity, rows in _entry_generator(self.result_file_path)
         )
 
         with mp.Pool(processes=self.max_workers) as pool:
