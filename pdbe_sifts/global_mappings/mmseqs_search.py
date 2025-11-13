@@ -75,9 +75,7 @@ class MmSearch(AlignmentSearch):
                                   threads = self.threads,
                                   db_load_mode=2,
                                   s=7.5,
-                                  max_seqs = 500,
                                   min_seq_id = 0.9)
-                                #   **self.easy_search_config_kwargs)
         result.run()
 
 
