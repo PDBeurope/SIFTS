@@ -17,11 +17,14 @@ from typing import Any
 import funcy
 from lxml import etree as ElementTree
 from lxml.etree import XMLSyntaxError
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pdbe_sifts.base.log import logger
-# from opensifts.base.pdbe_path import get_uniprot_cache_dir
 from pdbe_sifts.base.utils import fetch_uniprot_file
-# from release.config import Config
+from pdbe_sifts.config.config import Config
+
+conf = Config()
+UNP_CACHE = conf.sifts.unp_cache
 
 COLORS = {
     "white": 0,
@@ -31,32 +34,63 @@ COLORS = {
     "blue": 34,
 }
 
-# conf = Config()
-UNP_URL_SCORE = "https://rest.uniprot.org/uniprotkb/{uniprot_id}?fields=accession,annotation_score"
-
-def get_annotation_score(uniprot_id: str) -> int | None:
+def fetch_uniprot_batch(accessions: list[str]) -> list[dict]:
     """
-    Retrieve the annotation score of a UniProt entry.
-    
-    Args:
-        uniprot_id (str): UniProt accession (e.g., "P05067")
-    
-    Returns:
-        int | None: annotationScore if available, otherwise None
+    Fetch UniProt info for up to 100 accessions.
+    Returns list of dicts.
     """
-    url = UNP_URL_SCORE.format(uniprot_id=uniprot_id)
-    response = requests.get(url)
+    if not accessions:
+        return []
 
-    if response.status_code == 200:
-        data = response.json()
-        score = data.get("annotationScore")
-        if score:
-            return score
-        else:
-            return 0
-    else:
-        print(f"Error {response.status_code} for {uniprot_id}")
-        return None
+    query = "+OR+".join(f"accession:{acc}" for acc in accessions)
+    url = (
+        "https://rest.uniprot.org/uniprotkb/stream"
+        f"?query=({query})"
+        "&fields=annotation_score,xref_pdb"
+    )
+
+    r = requests.get(url, timeout=30)
+    r.raise_for_status()
+    data = r.json()
+
+    rows = []
+
+    for e in data.get("results", []):
+        accession = e.get("primaryAccession")
+
+        entry_type = e.get("entryType", "")
+        provenance = "Swiss-Prot" if "Swiss-Prot" in entry_type else "TrEMBL"
+
+        xrefs = e.get("uniProtKBCrossReferences", [])
+        pdb_xref = sum(1 for x in xrefs if x.get("database") == "PDB")
+
+        annotation_score = e.get("annotationScore")
+
+        rows.append({
+            "accession": accession,
+            "provenance": provenance,
+            "pdb_xref": pdb_xref,
+            "annotation_score": annotation_score,
+        })
+
+    return rows
+
+
+def fetch_accessions(all_accessions, max_workers=4, batch_size=100):
+    batches = [
+        all_accessions[i:i+batch_size]
+        for i in range(0, len(all_accessions), batch_size)
+    ]
+
+    results = []
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [pool.submit(fetch_uniprot_batch, b) for b in batches]
+        for f in as_completed(futures):
+            results.extend(f.result())
+
+    return results
+
 
 def colored(string, color="green", bold=False):
     if bold:
@@ -135,38 +169,14 @@ class UNP:
             accession (str): The accession to load
 
         """
-        # cache = bool(os.getenv("ORC_NO_CACHE_ALL", True))
+        pickle_file_path = None
+        xml_file_path = Path(conf.sifts.unp_cache) / f'{accession[0]}/{accession[0:2]}/{accession}.xml'
 
-        # pickle_file_path = os.path.join(
-        #     get_uniprot_cache_dir(accession), f"{accession}.pkl"
-        # )
+        if Path(xml_file_path).exists():
+            self._load_from_uniprot_xml(accession, xml_file_path)
+            return
 
-        # loaded = False
-        # if cache and Path(pickle_file_path).exists():
-        #     loaded = self._load_from_pickle(accession, pickle_file_path)
-        #     if loaded:
-        #         return
-
-        self._load_from_uniprot_api(accession)
-
-        # if cache:
-        #     Path(pickle_file_path).parent.mkdir(parents=True, exist_ok=True)
-        #     with open(pickle_file_path, "wb") as f:
-        #         pickle.dump(self.__dict__, f, pickle.HIGHEST_PROTOCOL)
-
-    # def _load_from_pickle(self, accession: str, pickle_file_path: str) -> bool:
-    #     with open(pickle_file_path, "rb") as f:
-    #         try:
-    #             self.__dict__ = pickle.load(f)
-    #             logger.info(f"Loaded UNP pickle from {pickle_file_path}")
-    #             return True
-
-    #         except Exception:
-    #             logger.warning(
-    #                 f"Could not load pickle file for {accession}. Will delete it and fetch from uniprot"
-    #             )
-    #             os.unlink(pickle_file_path)
-    #     return False
+        self._load_from_uniprot_xml(accession)
 
     @funcy.retry(3, errors=XMLSyntaxError, timeout=0.2)
     def parse_xml(self, xml_file):
@@ -180,8 +190,11 @@ class UNP:
         """
         return ElementTree.parse(xml_file).getroot()
 
-    def _load_from_uniprot_api(self, accession) -> dict:
-        xml_file = fetch_uniprot_file(accession, "xml", unp_dir=self.unp_dir)
+    def _load_from_uniprot_xml(self, accession, xml_file_path = None) -> dict:
+        if xml_file_path is not None:
+            xml_file = xml_file_path
+        else:
+            xml_file = fetch_uniprot_file(accession, "xml", unp_dir=self.unp_dir)
         doc = self.parse_xml(xml_file)
 
         accessions = list(map(str, doc[0].xpath(".//*[name()='accession']/text()")))
