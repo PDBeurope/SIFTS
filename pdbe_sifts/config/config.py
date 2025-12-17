@@ -26,16 +26,14 @@ class Config:
         data = self._config_data.get("sifts", {})
 
         def resolve_path(value: str, default: str) -> Path:
-            """Resolve a path: absolute paths are kept, relative ones are made relative to self.root."""
             p = Path(os.getenv(value, data.get(value.lower(), default)))
             return p if p.is_absolute() else (self.root / p)
 
         return type("SiftsConfig", (), {
             "tax_fix_pkl": resolve_path("SIFTS_TAX_FIX", "input_files/nf90_taxid.pkl"),
-            "three_to_one": resolve_path(
-                "SIFTS_THREE_TO_ONE",
-                "input_files/three_to_one_letter_mapping.csv"
-            ),
+            "three_to_one": resolve_path("SIFTS_THREE_TO_ONE", "input_files/three_to_one_letter_mapping.csv"),
+            "unp_cache": resolve_path("SIFTS_UNP_CACHE", "/hps/nobackup/pdbe/users/adamb/datasets/uniprot_xml/accessions/"),
+            "unp_score_file": resolve_path("SIFTS_UNP_SCORE_FILE", "/hps/software/users/pdbe/user/adamb/save/scores.pkl"),
         })()
 
 
