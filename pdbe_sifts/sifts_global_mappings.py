@@ -12,6 +12,7 @@ import argparse
 from timeit import default_timer as timer
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import Optional
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.mmcif.entry import Entry
@@ -29,6 +30,7 @@ class SiftsGlobalMappings:
         cif_file: str | Path,
         out_dir: str | Path,
         db_file: str | Path,
+        unp_csv: Optional[str | Path],
         tool: str = "mmseqs",
         threads: int = 1,
         batch_size: int = 100000,
@@ -47,6 +49,7 @@ class SiftsGlobalMappings:
         self.cif_file = Path(cif_file)
         self.out_dir = Path(out_dir)
         self.db_file = Path(db_file)
+        self.unp_csv = Path(unp_csv) if unp_csv is not None else None
         self.tool = tool
         self.threads = threads
         self.batch_size = batch_size
@@ -54,9 +57,7 @@ class SiftsGlobalMappings:
 
         # Output directories
         self.fasta_dir = self.out_dir / "fasta_files"
-        self.unp_dir = self.out_dir / "unp_files"
         self.fasta_dir.mkdir(parents=True, exist_ok=True)
-        self.unp_dir.mkdir(parents=True, exist_ok=True)
 
         self.result_file_path = {}
 
@@ -187,7 +188,6 @@ class SiftsGlobalMappings:
         """Run the complete mapping pipeline."""
         logger.info(f"Processing [{self.cif_file}]")
         start = timer()
-
         fasta_path, entry_name = self.process_input_file()
         self.search(entry_name, fasta_path)
         logger.info(f"Parsing {self.tool} hits.")
@@ -195,7 +195,7 @@ class SiftsGlobalMappings:
             self.tool,
             self.result_file_path[entry_name],
             Path(self.result_file_path[entry_name]).parent,
-            self.unp_dir,
+            unp_csv=self.unp_csv,
         ).parse()
 
         end = timer()
@@ -223,6 +223,10 @@ def run():
         help="Alignment tool to use ('mmseqs' or 'blastp')."
     )
     parser.add_argument(
+        "-ucsv", "--unp-csv-file", default=None,
+        help="Path to the csv file containing accession info: accession, provenance, pdb_xref, annotation_score."
+    )
+    parser.add_argument(
         "-threads", "--threads", type=int, default=1,
         help="Number of threads to use for parsing and searches."
     )
@@ -238,6 +242,7 @@ def run():
         cif_file=args.cif_file,
         out_dir=args.output_dir,
         db_file=args.db_file,
+        unp_csv=args.unp_csv_file,
         tool=args.tool,
         threads=args.threads,
         batch_size=args.batch_size,
