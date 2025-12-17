@@ -349,7 +349,7 @@ class GlobMappingsParser:
                 CASE
                     WHEN annotation_score IS NULL THEN 0
                     WHEN provenance = 'Swiss-Prot'
-                        THEN 10 * annotation_score
+                        THEN 20 * annotation_score
                     ELSE
                         -50 + 10 * annotation_score
                 END;
