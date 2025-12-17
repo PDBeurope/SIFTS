@@ -200,7 +200,7 @@ class GlobMappingsParser:
 
     Designed to handle very large TSV files efficiently.
     """
-    def __init__(self, format, result_file_path, out_dir, unp_dir,
+    def __init__(self, format, result_file_path, out_dir,
                  unp_csv=None, max_workers=None, identity_cutoff=IDENTITY_CUTOFF):
         self.format = format
         self.result_file_path = Path(result_file_path)
