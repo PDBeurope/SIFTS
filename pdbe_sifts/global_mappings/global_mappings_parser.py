@@ -384,6 +384,32 @@ class GlobMappingsParser:
 
         conn.close()
 
+
+    def compute_rank(self):
+        conn = duckdb.connect(self.db_path)
+        conn.execute("""
+            ALTER TABLE hits
+            ADD COLUMN hit_rank INTEGER;
+        """)
+        conn.execute("""
+            UPDATE hits
+            SET hit_rank = ranked.hit_rank
+            FROM (
+                SELECT
+                    rowid,
+                    DENSE_RANK() OVER (
+                        PARTITION BY entry, entity
+                        ORDER BY
+                            sifts_score DESC,
+                            pdb_cross_references DESC
+                    ) AS hit_rank
+                FROM hits
+            ) ranked
+            WHERE hits.rowid = ranked.rowid;
+        """)
+        conn.close()
+
+
     def compute_tax_score(self):
         """Compute taxonomy scores for all distinct pairs of query_tax_id, target_tax_id"""
         conn = duckdb.connect(str(self.db_path))
@@ -474,6 +500,7 @@ class GlobMappingsParser:
         self.compute_tax_score()
         self.compute_dataset_score()
         self.compute_sifts_score()
+        self.compute_rank()
         logger.info(f"Parsed results ready at: {self.db_path}")
 
 
