@@ -389,7 +389,7 @@ class GlobMappingsParser:
         conn = duckdb.connect(self.db_path)
         conn.execute("""
             ALTER TABLE hits
-            ADD COLUMN hit_rank INTEGER;
+            ADD COLUMN IF NOT EXISTS hit_rank INTEGER;
         """)
         conn.execute("""
             UPDATE hits
