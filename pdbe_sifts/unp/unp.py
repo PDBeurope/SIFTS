@@ -34,6 +34,20 @@ COLORS = {
     "blue": 34,
 }
 
+def get_annotation_score(accession):
+    """
+    Fetch UniProt annotation score one accession.
+    """
+    if not accession:
+        return []
+    url = f'https://rest.uniprot.org/uniprotkb/{accession}?fields=annotation_score'
+    r = requests.get(url, timeout=30)
+    r.raise_for_status()
+    data = r.json()
+    annotation_score = data.get("annotationScore")
+    return annotation_score
+
+
 def fetch_uniprot_batch(accessions: list[str]) -> list[dict]:
     """
     Fetch UniProt info for up to 100 accessions.

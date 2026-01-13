@@ -10,6 +10,7 @@ dependencies:
   - setuptools
   - mmseqs2
   - blast
+  - fasta3
   - pip:
     - tqdm
     - biopython

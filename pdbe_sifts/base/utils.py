@@ -177,3 +177,16 @@ def parse_extra_args(args: Optional[List[str]]) -> dict:
         else:
             i += 1
     return kwargs
+
+def get_unp_object(acc):
+    unp = None
+    try:
+        unp = UNP(acc)
+        logger.info(f"Got UniProt for {acc}")
+    except ObsoleteUniProtError:
+        logger.warning(f"Obsolete UniProt accession: {acc}. Will be ignored")
+    except Exception:
+        logger.error(f"Could not get UniProt for {acc}", exc_info=True)
+        memoize.skip()
+        raise
+    return unp

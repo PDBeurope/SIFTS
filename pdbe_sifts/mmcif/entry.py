@@ -9,8 +9,7 @@ from pdbe_sifts.unp.unp import UNP
 
 from . import mmcif_helper
 from .chain import Chain
-
-# conf = Config()
+from .entity import Entity
 
 
 class Entry:
@@ -23,6 +22,7 @@ class Entry:
         self.name = name
         self.mmcif = mmcif_helper.mmCIF(self.name, self.cif_file)
         self.chains: Mapping[str, Chain] = {}
+        self.entities: Mapping[str, Entity] = {}
 
         # map entity -> sequence
         self.sequences = {}
@@ -51,6 +51,15 @@ class Entry:
                 self.sequences[entity_id],
                 self,
             )
+            if entity_id not in self.entities:
+                self.entities[entity_id] = Entity(
+                    self.mmcif,
+                    self.name,
+                    entity_id,
+                    self,
+                )
+            self.entities[entity_id].add_chain(key, self.chains[key])
+            
 
     def get_entity_seq_tax(self):
         entity_chain_seq = {}
@@ -61,5 +70,3 @@ class Entry:
             if ent not in entity_chain_seq:
                 entity_chain_seq[ent] = (seq, tax)
         return entity_chain_seq
-
-    
