@@ -1,0 +1,13 @@
+tqdm
+biopython
+funcy
+lxml
+requests
+pandas
+pymmseqs
+coloredlogs
+pyyaml
+scikit-learn
+ete4
+omegaconf
+gemmi

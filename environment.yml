@@ -4,7 +4,6 @@ channels:
   - bioconda
 dependencies:
   - python
-  - gemmi
   - pip
   - ipython
   - setuptools
@@ -23,3 +22,5 @@ dependencies:
     - pyyaml
     - scikit-learn
     - ete4
+    - omegaconf
+    - gemmi
