@@ -4,11 +4,8 @@ from collections.abc import Iterable, Mapping
 from operator import itemgetter
 
 from pdbe_sifts.base.log import logger
-# from pdbe_sifts.config import Config
 from pdbe_sifts.segments_generation.alignment.helper import SMapping
 from pdbe_sifts.unp.unp import UNP
-
-# conf = Config()
 
 
 def get_selection_queries(entry):

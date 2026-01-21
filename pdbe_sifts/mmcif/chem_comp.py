@@ -5,7 +5,7 @@ import pickle as pickle
 from collections.abc import Mapping
 from pdbe_sifts.base.log import logger
 
-from pdbe_sifts.config.config import Config
+from pdbe_sifts.config import Config
 
 
 conf = Config()
@@ -38,7 +38,7 @@ class ChemCompMapping:
     _dictionary: Mapping[str, str] = {}
 
     def __init__(self):
-        cc_file = conf.sifts.three_to_one
+        cc_file = conf.location.work.chem_letter_mapping_file
 
         self.hydrate(cc_file)
 

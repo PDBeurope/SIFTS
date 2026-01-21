@@ -21,7 +21,6 @@ The options provided by the base parser are:
                     queues (failed, result) will be derived from this name.
                     This name is also used as the job name on the farm
                     and for log directory
---executor: Executor to be used for the application. Default: ORC_EXECUTOR env var or conf.executor.type
 """
 
 import argparse
@@ -30,7 +29,7 @@ import sys
 from pathlib import Path
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.config.config import Config
+from pdbe_sifts.config import Config
 
 conf = Config()
 

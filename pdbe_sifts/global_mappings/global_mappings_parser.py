@@ -13,7 +13,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from pdbe_sifts.global_mappings.scoring_function import get_tax_weight
+from pdbe_sifts.global_mappings.scoring_function_helper import get_tax_weight
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.unp.unp import fetch_accessions
 
@@ -520,7 +520,6 @@ def main():
         format=args.format,
         result_file_path=args.input,
         out_dir=args.output,
-        unp_dir=args.unp_dir,
         max_workers=args.workers,
         identity_cutoff=args.identity_cutoff
     )

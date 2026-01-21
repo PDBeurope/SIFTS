@@ -3,7 +3,8 @@
 import requests
 import shutil
 from pathlib import Path
-from datetime import datetime
+from datetime import date, datetime, timezone
+from dateutil.relativedelta import WE, relativedelta
 from typing import Optional, List
 from xml.etree import ElementTree
 import funcy
@@ -11,6 +12,9 @@ import funcy
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.exceptions import ObsoleteUniProtError, AccessionNotFound
 from pdbe_sifts.base.log import logger
+from pdbe_sifts.config import Config
+
+conf = Config()
 
 UNIPROT_REGEX = r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}"
 UNIPROT_API_BASE_URL = "https://www.uniprot.org/uniprot"
@@ -190,3 +194,12 @@ def get_unp_object(acc):
         memoize.skip()
         raise
     return unp
+
+
+def get_next_release_date() -> date:
+    """Returns the next PDBe release date.
+
+    This should be the next Wednesday after the today's date unless today is Wednesday
+    in which case it returns same as `date.today()`.
+    """
+    return date.today() + relativedelta(weekday=WE(+1))

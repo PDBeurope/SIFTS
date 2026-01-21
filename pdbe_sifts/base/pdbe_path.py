@@ -1,6 +1,9 @@
 """Utility methods for getting paths to various files and directories to avoid hardcoding paths."""
 
 from pathlib import Path
+from pdbe_sifts.config import Config
+
+conf = Config()
 
 
 class SubDir:
@@ -9,43 +12,12 @@ class SubDir:
     This should prevent hardcoding these in scripts.
     Can be accessed using dot notation and is mostly meant for use together with
     EntryLocation().get_entry_dir()
-
-    Examples:
-        >>> from orc.base.pdbe_path import SubDir, EntryLocation
-        >>> import os
-        >>> SubDir.IMAGES
-        'images'
-        >>> # Get images directory for an entry
-        >>> os.path.join(EntryLocation().get_entry_dir('1atp'), SubDir.IMAGES )
-        '/nfs/msd/release/data/entry/at/1atp/images'
-
     """
 
-    IMAGES = "images"
-    ASSEMBLIES = "assembly_generation"
-    ARCHIVE_ASSEMBLIES = "assemblies"
-    STRUCTURE_FACTORS = "structure_factors"
-    PDB = "pdb"
     ARCHIVE_CIF_FTP = "mmCIF"
-    ARCHIVE_CIF_COPY = "original_mmcif"
     CLEAN_CIF = "clean_mmcif"
-    INTERACTIONS = "interactions"
-    CITATION_MAPPING = "citation_mapping_and_images"
-    BINDING_SITE = "binding_site_update"
-    DOSS = "doss"
-    EDS = "eds"
-    TOPOLOGY = "topology"
-    ASSEMBLY_SYMMETRY = "assembly_symmetry"
-    PISA = "pisa"
     BCIF = "bcif"
-    CITATION_UPDATE = "citation_update"
     ARCHIVE_COPIES = "archive_copies"
-    DSSP = "dssp"
-    BOUNDMOLECULES = "bound_molecules"
-    MOLE = "mole"
-
-
-archive_divided = "data/structures/divided"
 
 
 def get_entry_dir(entry_id, base_dir, suffix=""):
@@ -53,9 +25,9 @@ def get_entry_dir(entry_id, base_dir, suffix=""):
     return str(Path(base_dir, entry_id[1:3], entry_id, suffix))
 
 
-# def get_uniprot_cache_dir(unp_accession, base_dir=conf.cache.uniprot):
-#     """Path to UNP cache directory for specified UNP accession."""
-#     return str(Path(base_dir, unp_accession[0], unp_accession))
+def get_uniprot_cache_dir(unp_accession, base_dir=conf.cache.uniprot):
+    """Path to UNP cache directory for specified UNP accession."""
+    return str(Path(base_dir, unp_accession[0], unp_accession))
 
 
 def get_entry_split_dir(entry_id, base_dir):
@@ -122,7 +94,7 @@ def get_ftp_mmcif(entry_id, base_dir):
     return str(
         Path(
             base_dir,
-            archive_divided,
+            "data/structures/divided",
             SubDir.ARCHIVE_CIF_FTP,
             entry_id[1:3],
             f"{entry_id}.cif.gz",

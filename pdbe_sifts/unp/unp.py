@@ -21,10 +21,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.utils import fetch_uniprot_file
-from pdbe_sifts.config.config import Config
+from pdbe_sifts.config import Config
 
 conf = Config()
-UNP_CACHE = conf.sifts.unp_cache
+UNP_CACHE = conf.cache.uniprot
 
 COLORS = {
     "white": 0,
@@ -184,7 +184,7 @@ class UNP:
 
         """
         pickle_file_path = None
-        xml_file_path = Path(conf.sifts.unp_cache) / f'{accession[0]}/{accession[0:2]}/{accession}.xml'
+        xml_file_path = Path(UNP_CACHE) / f'{accession[0]}/{accession[0:2]}/{accession}.xml'
 
         if Path(xml_file_path).exists():
             self._load_from_uniprot_xml(accession, xml_file_path)

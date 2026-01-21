@@ -20,9 +20,8 @@ from pdbe_sifts.unp.unp import UNP
 from .residue import Residue
 from .chain import Chain
 from .chem_comp import ChemCompMapping
-from pdbe_sifts.config.config import Config
 
-conf = Config()
+
 N_PROC = 64
 STEP_SIZE = 2000
 

@@ -122,6 +122,9 @@ class SiftsGlobalMappings:
             entity_seq_tax = entry.get_entity_seq_tax()
             fasta_path = self.generate_fasta(entity_seq_tax, entry_name, entry_name)
             return fasta_path, entry_name
+        
+        if ext == ".fasta":
+            pass
 
         # List of CIF files
         if ext == ".txt":

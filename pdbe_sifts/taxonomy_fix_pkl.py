@@ -4,7 +4,7 @@ import os
 import pickle as pickle
 from collections.abc import Mapping
 
-from pdbe_sifts.config.config import Config
+from pdbe_sifts.config import Config
 
 conf = Config()
 

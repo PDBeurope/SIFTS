@@ -191,6 +191,21 @@ class EntryMapping:
                 return False
         return True
 
+    def update_entity_chains(self):
+        for chain_id, chain_obj in self.entity_obj.chains.items():
+            chain_obj.best = self.entity_obj.best
+            chain_obj.scores = self.entity_obj.scores
+            chain_obj.seg_scores = self.entity_obj.seg_scores
+            chain_obj.canonicals = self.entity_obj.canonicals
+            chain_obj.is_chimera = self.entity_obj.is_chimera
+            chain_obj.expression_tag_start = self.entity_obj.expression_tag_start
+            chain_obj.mappings = self.entity_obj.mappings
+            chain_obj.residue_maps = self.entity_obj.residue_maps
+            chain_obj.segments = self.entity_obj.segments
+        
+        logger.info(f"{self.entry.name}: mapping data from entity {self.entity} transfered to its chains.")
+
+
     @log_durations(logger.debug)
     def process(self):
         self.seq_pdb = self.entity_obj.alignment_sequence
@@ -234,6 +249,7 @@ class EntryMapping:
                 )
 
         self.entity_obj.generate_residue_maps()
+        self.update_entity_chains()
         logger.info("Segments generated")
 
     def process_each_isoform(self, row):
