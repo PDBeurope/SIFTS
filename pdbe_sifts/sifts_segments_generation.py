@@ -21,9 +21,10 @@ from pdbe_sifts.base import pdbe_path
 from pdbe_sifts.mmcif.mmcif_helper import NotAPolyPeptide
 from pdbe_sifts.base.batchable import Batchable
 from pdbe_sifts.segments_generation.get_list_of_mappings import get_curated_db_mappings
+import pdbe_sifts.segments_generation.generate_xref_csv as generate_xref_csv
+from pdbe_sifts.database.sifts_db_wrapper import SiftsDB
 # from orc.base.exceptions import ObsoleteUniProtError
 from pdbe_sifts.segments_generation.alignment import helper
-# from orc.sifts.pdb.entry import Entry
 # from orc.sifts.uniref90_pkl import NF90Coverage, NF90TaxID
 # from orc.sifts.unp import UNP
 
@@ -36,6 +37,7 @@ class SiftsAlign(Batchable):
         unp_dir,
         nf90_mode=False,
         unp_mode=None,
+        dbmode=False,
     ):
         """Determine segments and related residues from a sequence alignment.
 
@@ -53,6 +55,7 @@ class SiftsAlign(Batchable):
         self.conn = duckdb.connect(self.file_duckdb)
         self.unp_dir = unp_dir
         self.nf90_mode = nf90_mode
+        self.dbmode = dbmode
         self.failure_threshold = 0.01
         self.unp_mode = unp_mode
         self.sifts_mapping = {}
@@ -123,8 +126,8 @@ class SiftsAlign(Batchable):
 
             if not em.set_chain_accessions():
                 logger.warning(f"Skipping {entry_id} chain {chain}")
-        #         self.remove_existing_files(entry_id)
-        #         continue
+                self.remove_existing_files(entry_id)
+                continue
 
             em.process()
 
@@ -136,26 +139,31 @@ class SiftsAlign(Batchable):
         #             # a polypeptide. It is not going into the DB anyway
         #             pass
 
-        # entry_out_dir = pdbe_path.get_entry_dir(entry_id, self.out_dir, "sifts")
+        entry_out_dir = pdbe_path.get_entry_dir(entry_id, self.out_dir, "sifts")
 
-        # Path(entry_out_dir).mkdir(parents=True, exist_ok=True)
-        # segments, residues = database.insert_mappings(
-        #     entry_out_dir, entry, self.nf90_mode, self.conn
-        # )
-        # if self.dbmode:
-        #     self.insert_into_db(entry_id, segments, residues)
-        # logger.info("Processed [%s]" % entry_id)
+        Path(entry_out_dir).mkdir(parents=True, exist_ok=True)
+        segments, residues = generate_xref_csv.insert_mappings(
+            entry_out_dir, entry, self.nf90_mode, self.conn
+        )
+        if self.dbmode:
+            logger.info(f'Inserting mappings into {self.file_duckdb}.')
+            db_wrapper = SiftsDB(self.conn)
+            db_wrapper.insert_xref_segments(segments)
+            db_wrapper.insert_xref_residues(residues)
+            logger.info(f'Mappings inserted into {self.file_duckdb}.')
+
+        logger.info("Processed [%s]" % entry_id)
 
 
-    # def remove_existing_files(self, entry_id):
-    #     """Remove existing files for entry_id"""
-    #     entry_out_dir = pdbe_path.get_entry_dir(entry_id, self.out_dir, "sifts")
-    #     for f in Path(entry_out_dir).rglob("*.csv.gz"):
-    #         f.unlink()
+    def remove_existing_files(self, entry_id):
+        """Remove existing files for entry_id"""
+        entry_out_dir = pdbe_path.get_entry_dir(entry_id, self.out_dir, "sifts")
+        for f in Path(entry_out_dir).rglob("*.csv.gz"):
+            f.unlink()
 
     def get_mappings(self, entry_id, entity_lst):
         mappings: Mapping[str, list[helper.SMapping]] = {}
-        # Initialize all chains
+        # Initialize all entities
         for entity in entity_lst:
             mappings[entity] = []
         # Replace with database mappings
@@ -235,6 +243,14 @@ def run():
     )
 
     parser.add_argument(
+        "-w",
+        "--write-to-db",
+        action="store_true",
+        default=False,
+        help="Additionally write to duckdb file (default: False)",
+    )
+
+    parser.add_argument(
         "-m",
         "--mapping",
         help=(
@@ -254,6 +270,7 @@ def run():
         args.unp_dir,
         nf90_mode=args.nf90,
         unp_mode=args.mapping,
+        dbmode=args.write_to_db,
     )
     sifts_align.before_job_start()
     sifts_align.process_entry(args.entry)
