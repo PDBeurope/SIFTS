@@ -509,7 +509,7 @@ def main():
     parser.add_argument("--format", choices=["mmseqs", "blastp"], required=True)
     parser.add_argument("--input", required=True, help="Path to TSV file")
     parser.add_argument("--output", required=True, help="Output directory")
-    parser.add_argument("--unp-dir", required=True, help="UniProt data directory")
+    parser.add_argument("--unp-csv", help="Path to UniProt CSV file (optional)")
     parser.add_argument("--workers", type=int, help="Number of workers")
     parser.add_argument("--identity-cutoff", type=float, default=IDENTITY_CUTOFF,
                        help=f"Minimum identity (default: {IDENTITY_CUTOFF})")
@@ -520,6 +520,7 @@ def main():
         format=args.format,
         result_file_path=args.input,
         out_dir=args.output,
+        unp_csv=args.unp_csv,
         max_workers=args.workers,
         identity_cutoff=args.identity_cutoff
     )
