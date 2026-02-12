@@ -101,6 +101,7 @@ class SiftsSearch:
         except Exception as e:
             return None, f"Failed to process {file_path}: {e}"
 
+
     def process_input_file(self) -> tuple[Path, str]:
         """
         Process a mmCIF or text file input.
@@ -165,12 +166,14 @@ class SiftsSearch:
         search.run()
         self.result_file_path[entry_id] = output_path
 
+
     def blastp_search(self, entry_id: str, fasta_path: Path):
         """Run a BLASTP search."""
         output_path = make_path(self.out_dir, entry_id, "blastp", f"hits_{entry_id}.tsv", self.date)
         search = BlastP(fasta_path, self.db_file, output_path, threads=self.threads)
         search.run()
         self.result_file_path[entry_id] = output_path
+
 
     def search(self, entry_id: str, fasta_path: Path):
         """Dispatch to the selected search tool."""
