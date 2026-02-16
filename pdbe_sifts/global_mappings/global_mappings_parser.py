@@ -144,7 +144,11 @@ SELECT
     qseq AS query_aligned,
     sseq AS target_aligned,
     staxid AS target_tax_id,
-    CAST(SPLIT_PART(qseqid, '=', 2) AS INTEGER) AS query_tax_id,
+    CASE
+    WHEN qseqid IS NOT NULL AND qseqid LIKE '%=%'
+    THEN TRY_CAST(SPLIT_PART(qseqid, '=', 2) AS INTEGER)
+    ELSE NULL
+    END AS query_tax_id,
     NULL AS sifts_score,
     NULL AS pdb_cross_references,
     NULL AS adjusted_score,
