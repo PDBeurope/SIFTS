@@ -30,29 +30,6 @@ If you prefer not to use conda, you must manually install the following system d
 - **BLAST**: Basic Local Alignment Search Tool
 - **FASTA3**: Sequence comparison tool suite
 
-#### Installation on Linux (Ubuntu/Debian):
-```bash
-# MMseqs2
-# Download from: https://github.com/soedinglab/MMseqs2/releases
-wget https://mmseqs.com/latest/mmseqs-linux-avx2.tar.gz
-tar xvfz mmseqs-linux-avx2.tar.gz
-export PATH=$(pwd)/mmseqs/bin/:$PATH
-
-# BLAST
-sudo apt-get install ncbi-blast+
-
-# FASTA3
-sudo apt-get install fasta3
-```
-
-#### Installation on macOS:
-```bash
-# With Homebrew
-brew install mmseqs2
-brew install blast
-brew install brewsci/bio/fasta3
-```
-
 #### Then install Python dependencies:
 ```bash
 pip install -r requirements.txt
@@ -77,21 +54,11 @@ The following dependencies will be automatically installed via pip:
 - omegaconf
 - gemmi
 
-## Verifying Installation
-
-To verify that all tools are correctly installed:
-```bash
-python -c "import pdbe_sifts; print('Package imported successfully')"
-mmseqs --version
-blastp -version
-fasta36 -version
-```
-
 ## System Requirements
 
 - Python >= 3.8
 - Operating System: Linux, macOS, or Windows (WSL recommended)
-- Minimum 4GB RAM (8GB+ recommended for large datasets)
+- Minimum 4GB RAM (16GB+ recommended for large datasets)
 
 ## Usage
 
