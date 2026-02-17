@@ -22,6 +22,7 @@ setup(
         'ete4',
         'omegaconf',
         'gemmi',
+        'duckdb',
     ],
     include_package_data=True,
     classifiers=[
