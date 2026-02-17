@@ -1,5 +1,0 @@
-[sifts]
-tax_fix_pkl = "input_files/nf90_taxid.pkl"
-three_to_one = "input_files/three_to_one_letter_mapping.csv"
-unp_cache = "/hps/nobackup/pdbe/users/adamb/datasets/uniprot_xml/accessions/"
-unp_score_file = "/hps/software/users/pdbe/user/adamb/save/scores.pkl"
