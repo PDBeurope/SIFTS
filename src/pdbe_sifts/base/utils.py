@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import os
+import dateparser
 import requests
 import shutil
 from pathlib import Path
@@ -12,9 +14,10 @@ import funcy
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.exceptions import ObsoleteUniProtError, AccessionNotFound
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.config import Config
+from pdbe_sifts.config import load_config
+from sqlalchemy import create_engine
 
-conf = Config()
+conf = load_config()
 
 UNIPROT_REGEX = r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}"
 UNIPROT_API_BASE_URL = "https://www.uniprot.org/uniprot"
@@ -203,3 +206,48 @@ def get_next_release_date() -> date:
     in which case it returns same as `date.today()`.
     """
     return date.today() + relativedelta(weekday=WE(+1))
+
+def create_db_connection(conn_str, retries=3):
+    """Creates a database connection to _conn_str_. Retries _retries_ times.
+
+    Does not use any pooling. Returns single connection. Can be used as a context manager.
+
+    Example:
+        >>> with create_db_connection("sqlite:///test.db") as conn:
+        >>>     conn.execute("select 1")
+
+    Args:
+        conn_str (str): Connection string in SQLAlchemy format.
+        retries (int, optional): Number of retries. Defaults to 3.
+
+    Returns:
+        sqlalchemy.engine.base.Connection: Database connection.
+
+    Raises:
+        DatabaseError: If connection fails after _retries_.
+    """
+    i = 0
+    while True:
+        try:
+            conn = create_engine(conn_str, poolclass=NullPool).connect()
+            return conn
+        except DatabaseError:
+            logger.warning(
+                f"Failed to connect to {conn_str}. Retrying {i} of {retries}"
+            )
+            i += 1
+            time.sleep(0.2 * i)
+            if i == retries:
+                raise
+
+def utc_to_local(utc_dt):
+    return utc_dt.replace(tzinfo=timezone.utc).astimezone(tz=None)
+
+def get_exc_context() -> tuple[str, str]:
+    if "AIRFLOW_CTX_EXECUTION_DATE" in os.environ:
+        exc_date = dateparser.parse(os.environ["AIRFLOW_CTX_EXECUTION_DATE"])
+        return ("Airflow", utc_to_local(exc_date).strftime("%Y-%m-%d %H:%M:%S"))
+    else:
+        now = datetime.now()
+        s_exc_date = now.strftime("%Y-%m-%d %H:%M:%S")
+        return ("CLI", s_exc_date)

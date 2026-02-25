@@ -19,7 +19,7 @@ from pdbe_sifts.mmcif.chem_comp import ChemCompMapping
 from pdbe_sifts.base.parser import parse_with_base_parser
 from pdbe_sifts.base import pdbe_path
 from pdbe_sifts.mmcif.mmcif_helper import NotAPolyPeptide
-from pdbe_sifts.base.batchable import Batchable
+from pdbe_sifts.base.batchable_bis import Batchable
 from pdbe_sifts.segments_generation.get_list_of_mappings import get_curated_db_mappings
 import pdbe_sifts.segments_generation.generate_xref_csv as generate_xref_csv
 from pdbe_sifts.database.sifts_db_wrapper import SiftsDB
@@ -62,10 +62,9 @@ class SiftsAlign(Batchable):
         self.out_dir = out_dir
         self.NFC = {}
         self.NFT = {}
-
         self.initial_memory = 8000
         self.retry_memory = 16000
-        # self.entry_file_path = conf.lists.entries_all
+        self.entry_file_path = conf.lists.entries_all
         self.used_cif_categories = [
             "entity_poly",
             "pdbx_struct_mod_residue",

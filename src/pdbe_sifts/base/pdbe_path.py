@@ -1,9 +1,9 @@
 """Utility methods for getting paths to various files and directories to avoid hardcoding paths."""
 
 from pathlib import Path
-from pdbe_sifts.config import Config
+from pdbe_sifts.config import load_config
 
-conf = Config()
+conf = load_config()
 
 
 class SubDir:

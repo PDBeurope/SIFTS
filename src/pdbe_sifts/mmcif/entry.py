@@ -4,7 +4,6 @@ import pickle as pickle
 from collections.abc import Mapping
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.config import Config
 from pdbe_sifts.unp.unp import UNP
 
 from . import mmcif_helper
@@ -16,7 +15,6 @@ class Entry:
     """Docstring for Entry."""
 
     def __init__(self, name, cif_file):
-        # self.cif_dir = cif_dir or conf.location.work.data_entry_dir
         self.cif_file = cif_file
 
         self.name = name

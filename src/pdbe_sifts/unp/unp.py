@@ -21,9 +21,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.utils import fetch_uniprot_file
-from pdbe_sifts.config import Config
+from pdbe_sifts.config import load_config
 
-conf = Config()
+conf = load_config()
 UNP_CACHE = conf.cache.uniprot
 
 COLORS = {

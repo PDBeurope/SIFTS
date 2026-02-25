@@ -30,7 +30,7 @@ class SiftsGlobalMappings:
         cif_file: str | Path,
         out_dir: str | Path,
         db_file: str | Path,
-        unp_csv: Optional[str | Path],
+        unp_csv: Optional[str | Path] = None,
         tool: str = "mmseqs",
         threads: int = 1,
         batch_size: int = 100000,

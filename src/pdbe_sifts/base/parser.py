@@ -21,6 +21,7 @@ The options provided by the base parser are:
                     queues (failed, result) will be derived from this name.
                     This name is also used as the job name on the farm
                     and for log directory
+--executor: Executor to be used for the application. Default: ORC_EXECUTOR env var or conf.executor.type
 """
 
 import argparse
@@ -32,12 +33,12 @@ from pdbe_sifts.base.log import logger
 from pdbe_sifts.config import Config
 
 conf = Config()
-
 # Defaults
 INIT_MEM = 1024
 RETRY_MEM = 4096
 JOBS = 100
 CORES = 1
+GPUS = "0"
 
 filter_help = """Filter to be used for refinement of input list.
                  Only entries with an allowed size are going to be
@@ -119,6 +120,15 @@ def parse_with_base_parser(
         help=(
             "CPU cores to use. If >1 and run-local is True,"
             f" multiproc is used. Default: {CORES}"
+        ),
+    )
+    parser_batch.add_argument(
+        "--gpus",
+        help=(
+            "Number of gpus to use. If 0, normal node will be used,"
+            f" Otherwise, gpu nodes will be used."
+            f" It can be passed as gpu:2 or gpu:a100:2"
+            f" Default: {GPUS}"
         ),
     )
     parser_batch.add_argument(

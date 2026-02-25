@@ -18,9 +18,9 @@ import os
 import platform
 import re
 
-from pdbe_sifts.config import Config
+from pdbe_sifts.config import load_config
 
-conf = Config()
+conf = load_config()
 
 LOG_FORMAT = (
     "{hostname}: {username}: {asctime}: {module}: {lineno} {levelname}: {message}"

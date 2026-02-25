@@ -2,13 +2,10 @@
 
 import os
 import pickle as pickle
+from importlib.resources import files
 from collections.abc import Mapping
+
 from pdbe_sifts.base.log import logger
-
-from pdbe_sifts.config import Config
-
-
-conf = Config()
 
 STANDARD_AA = {
     "ALA": "A",
@@ -38,7 +35,7 @@ class ChemCompMapping:
     _dictionary: Mapping[str, str] = {}
 
     def __init__(self):
-        cc_file = conf.location.work.chem_letter_mapping_file
+        cc_file = files("pdbe_sifts.data").joinpath("three_to_one_letter_mapping.csv")
 
         self.hydrate(cc_file)
 

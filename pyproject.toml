@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdbe_sifts"
+version = "0.1.0"
+description = "Python package to run SIFTS from EMBL-EBI locally."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+
+authors = [
+    { name = "Adam Bellaiche", email = "adamb@ebi.ac.uk" },
+    { name = "Preeti Choudhary" },
+    { name = "Sreenath Sasidharan Nair" },
+    { name = "Jennifer Fleming" },
+    { name = "Sameer Velankar" }
+]
+
+dependencies = [
+    "tqdm",
+    "biopython",
+    "funcy",
+    "lxml",
+    "requests",
+    "pandas",
+    "pymmseqs",
+    "coloredlogs",
+    "pyyaml",
+    "scikit-learn",
+    "ete4",
+    "omegaconf",
+    "gemmi",
+    "duckdb",
+    "dateparser",
+    "SQLAlchemy",
+    "platformdirs"
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pdbe_sifts = ["data/*.csv", "data/*.pkl", "data/*.yaml"]
+
+[project.scripts]
+pdbe_sifts = "pdbe_sifts.cli:main"

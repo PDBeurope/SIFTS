@@ -25,3 +25,6 @@ dependencies:
     - omegaconf
     - gemmi
     - duckdb
+    - dateparser
+    - SQLAlchemy
+    - platformdirs
