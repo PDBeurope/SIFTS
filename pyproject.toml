@@ -50,7 +50,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-pdbe_sifts = ["data/*.csv", "data/*.pkl", "data/*.yaml"]
+pdbe_sifts = ["data/*.csv", "data/*.pkl.gz", "data/*.yaml"]
 
 [project.scripts]
 pdbe_sifts = "pdbe_sifts.cli:main"
