@@ -49,6 +49,7 @@ class TargetDb(ToolDatabase):
         output_path: Union[str, Path],
         tax_mapping_file: Union[str, Path],
         tool: Union[str, Path] = 'mmseqs',
+        threads=1,
         **kwargs,
     ):
         """Initialize the TargetDb instance with input/output paths and configuration."""
@@ -56,6 +57,7 @@ class TargetDb(ToolDatabase):
         self.tool = tool
         self.target_db = None
         self.tax_mapping_file = tax_mapping_file
+        self.threads = threads
         self.db_config_kwargs = kwargs
 
     def _process(self):
@@ -63,13 +65,13 @@ class TargetDb(ToolDatabase):
         match self.tool:
             case 'mmseqs':
                 self.target_db = createdb(self.input_path, self.output_path,  **self.db_config_kwargs)
-                # tmp_fold = Path(self.output_path).parent / 'tmp'
-                # tmp_fold.mkdir(parents=True, exist_ok=True)
-                # CreateTaxDBConfig(sequence_db=self.target_db.to_path(),
-                #                       tmp_dir=tmp_fold,
-                #                       tax_mapping_file=self.tax_mapping_file,
-                #                       threads=48,).run()
-                self.target_db = createindex(self.target_db.to_path())
+                tmp_fold = Path(self.output_path).parent / 'tmp'
+                tmp_fold.mkdir(parents=True, exist_ok=True)
+                CreateTaxDBConfig(sequence_db=self.target_db.to_path(),
+                                      tmp_dir=tmp_fold,
+                                      tax_mapping_file=self.tax_mapping_file,
+                                      threads=self.threads).run()
+                self.target_db = createindex(self.target_db.to_path(), threads=self.threads)
             case 'blastp':
                 self.target_db = MakeBlastDb(self.input_path, self.output_path, self.tax_mapping_file)
                 self.target_db._process()

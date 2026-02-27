@@ -3,6 +3,7 @@ from pathlib import Path
 
 from pdbe_sifts.config import init_config, load_config, _USER_CONFIG_FILE
 from pdbe_sifts.sifts_global_mappings import SiftsGlobalMappings
+from pdbe_sifts.global_mappings.target_database import TargetDb
 
 conf = load_config()
 
@@ -14,7 +15,7 @@ def main():
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    # INIT — copies the YAML template to user config dir
+    #########  INIT — copies the YAML template to user config dir
     init_parser = subparsers.add_parser(
         "init",
         help="Copy the config template to ~/.config/pdbe_sifts/config.yaml"
@@ -28,7 +29,7 @@ def main():
         help="Overwrite existing config file."
     )
 
-    # SHOW — display resolved config
+    #########  SHOW — display resolved config
     show_parser = subparsers.add_parser(
         "show",
         help="Display the resolved configuration."
@@ -38,7 +39,33 @@ def main():
         help="Path to a custom config file."
     )
 
-    # RUN sifts_global_mappings
+    ######### BUILD DATABASE
+    targetbuild_parser = subparsers.add_parser(
+        "build_db",
+        help="Creation of a reference target database that alignment tools can search against."
+    )
+    targetbuild_parser.add_argument(
+        "-i", "--fasta", required=True,
+        help="Base location for the fasta file (with at least one sequence)."
+    )
+    targetbuild_parser.add_argument(
+        "-o", "--output-path", required=True,
+        help="Base location where to saved target database files."
+    )
+    targetbuild_parser.add_argument(
+        "-t", "--tax-mapping-file", required=True,
+        help="File to map sequence identifier to taxonomical identifier."
+    )
+    targetbuild_parser.add_argument(
+        "-tool", "--tool", default="mmseqs",
+        help="Tool to use for creating the reference database ('mmseqs' by default or 'blastp')."
+    )
+    targetbuild_parser.add_argument(
+        "-threads", "--threads", type=int, default=1,
+        help="Number of threads to use for parsing and searches."
+    )
+
+    ######### RUN sifts_global_mappings
     global_parser = subparsers.add_parser(
         "global_mappings",
         help="Runs alignment and scoring function."
@@ -102,7 +129,15 @@ def main():
             )
         gb_m.process()
         
-
+    elif args.command == "build_db":
+        db_b = TargetDb(
+            input_path=args.fasta,
+            output_path=args.output_path,
+            tax_mapping_file=args.tax_mapping_file,
+            tool=args.tool,
+            threads=args.threads
+            )
+        db_b._process()
 
 
     # elif args.command == "run":
