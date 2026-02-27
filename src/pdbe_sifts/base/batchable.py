@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Iterable
 
 import gemmi
-from pdbe_sifts.config import Config
+from pdbe_sifts.config import load_config
 
 from pdbe_sifts.base.exceptions import (
     BatchRunException,
@@ -32,7 +32,7 @@ class Modes(Enum):
     BATCH = "BATCH"
 
 
-conf = Config()
+conf = load_config()
 
 
 class Batchable(ABC):

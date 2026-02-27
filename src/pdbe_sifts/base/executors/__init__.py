@@ -6,12 +6,12 @@ from collections import defaultdict
 from enum import Enum
 from textwrap import dedent
 
-from pdbe_sifts.config import Config
+from pdbe_sifts.config import load_config
 from tqdm import tqdm
 
 from pdbe_sifts.base.log import logger
 
-conf = Config()
+conf = load_config()
 
 
 class JobStatus(Enum):

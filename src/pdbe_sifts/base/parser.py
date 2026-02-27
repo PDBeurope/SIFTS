@@ -30,9 +30,7 @@ import sys
 from pathlib import Path
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.config import Config
 
-conf = Config()
 # Defaults
 INIT_MEM = 1024
 RETRY_MEM = 4096

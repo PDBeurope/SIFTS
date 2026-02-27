@@ -1,8 +1,8 @@
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.queues.iqueue import IQueue
-from pdbe_sifts.config import Config
+from pdbe_sifts.config import load_config
 
-conf = Config()
+conf = load_config()
 
 
 class BatchableQueue:

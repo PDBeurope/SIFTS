@@ -19,14 +19,17 @@ from pdbe_sifts.mmcif.chem_comp import ChemCompMapping
 from pdbe_sifts.base.parser import parse_with_base_parser
 from pdbe_sifts.base import pdbe_path
 from pdbe_sifts.mmcif.mmcif_helper import NotAPolyPeptide
-from pdbe_sifts.base.batchable_bis import Batchable
+from pdbe_sifts.base.batchable import Batchable
 from pdbe_sifts.segments_generation.get_list_of_mappings import get_curated_db_mappings
 import pdbe_sifts.segments_generation.generate_xref_csv as generate_xref_csv
 from pdbe_sifts.database.sifts_db_wrapper import SiftsDB
-# from orc.base.exceptions import ObsoleteUniProtError
+from pdbe_sifts.base.exceptions import ObsoleteUniProtError
 from pdbe_sifts.segments_generation.alignment import helper
+from pdbe_sifts.unp.unp import UNP
+from pdbe_sifts.config import load_config
 # from orc.sifts.uniref90_pkl import NF90Coverage, NF90TaxID
-# from orc.sifts.unp import UNP
+
+conf = load_config()
 
 class SiftsAlign(Batchable):
     def __init__(
@@ -50,10 +53,10 @@ class SiftsAlign(Batchable):
             unp_mode(str): Provide mapping A:P00963,B:P00963
         """
 
-        self.cif_dir = cif_dir
+        self.cif_dir = cif_dir if cif_dir else conf.location.work.data_entry_dir
         self.file_duckdb = file_duckdb
         self.conn = duckdb.connect(self.file_duckdb)
-        self.unp_dir = unp_dir
+        self.unp_dir = unp_dir if unp_dir else conf.cache.uniprot
         self.nf90_mode = nf90_mode
         self.dbmode = dbmode
         self.failure_threshold = 0.01
@@ -204,33 +207,27 @@ def run():
     parser.add_argument(
         "-i",
         "--cif-input-dir",
-        required=True,
-        # action=OrcAction,
-        # default=conf.location.work.data_entry_dir,
+        default=conf.location.work.data_entry_dir,
         help="Base location for mmCIF files",
     )
     parser.add_argument(
         "-db",
         "--db",
         required=True,
-        # action=OrcAction,
-        # default=conf.location.work.data_entry_dir,
         help="duckdb file location",
     )
     parser.add_argument(
         "-o",
         "--output-dir",
-        required=True,
-        # action=OrcAction,
-        # default=conf.location.work.data_entry_dir,
+        required=False,
+        default=conf.location.work.data_entry_dir,
         help="Base location for output CSV files.",
     )
     parser.add_argument(
         "-unp",
         "--unp-dir",
-        required=True,
-        # action=OrcAction,
-        # default=conf.location.work.data_entry_dir,
+        required=False,
+        default=conf.cache.uniprot,
         help="Base location for unp files.",
     )
     parser.add_argument(
