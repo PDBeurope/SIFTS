@@ -10,10 +10,10 @@ from pathlib import Path
 from gemmi import cif
 
 from pdbe_sifts.base import pdbe_path
+from pdbe_sifts.base.batchable import Batchable
 from pdbe_sifts.base.exceptions import EntryFailedException
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.base.parser import parse_with_base_parser
-from pdbe_sifts.config import Config
+from pdbe_sifts.config import load_config
 from pdbe_sifts.sifts_to_mmcif import comm_utils, fetch_xref_data
 from pdbe_sifts.sifts_to_mmcif.def_mmcif_cat import (
     NEW_MMCIF_CAT,
@@ -28,17 +28,15 @@ from pdbe_sifts.sifts_to_mmcif.delta_mappings import (
 )
 from pdbe_sifts.sifts_to_mmcif.read_sifts_csv import get_unp_segments, get_unpres_mapping
 
-conf = Config()
+conf = load_config()
 
 
 class NoSegmentsError(Exception):
     pass
 
 
-class ExportSIFTSTommCIF():
-    """
-    Write the updated mmcif file with sifts_data
-    """
+class ExportSIFTSTommCIF(Batchable):
+    """Write the updated mmcif file with sifts_data."""
 
     def __init__(
         self,
@@ -49,19 +47,53 @@ class ExportSIFTSTommCIF():
         track_changes,
         prev_run_dir,
         delta_file,
+        log_dir=None,
     ):
         self.output_path = output_path
         self.cif_dir = cif_dir
         self.duckdb_file = duckdb_file
         self.sifts_csv_base = sifts_csv_dir
-        self.conn = duckdb.connect(self.duckdb_file)
+        # self.conn is NOT opened here — opened per-worker in worker_setup()
 
         self.track_changes = track_changes
         self.prev_run_dir = prev_run_dir
         self.entry_file_path = conf.lists.entries_all
 
         self.delta_file = delta_file
+        self.log_dir = log_dir
 
+    def worker_setup(self):
+        """Open a read-only DuckDB connection in each worker process.
+
+        Read-only allows multiple workers to query the DB concurrently without
+        locking issues. ExportSIFTSTommCIF never writes to DuckDB.
+        """
+        self.conn = duckdb.connect(self.duckdb_file, read_only=True)
+
+    def worker_teardown(self):
+        """Close DuckDB connection."""
+        self.conn.close()
+
+    def teardown(self):
+        """Generate delta mapping list from log files (batch mode only).
+
+        Requires log_dir to be set. If not set, a warning is logged and the
+        step is skipped.
+        """
+        if not (self.track_changes and self.delta_file):
+            return
+        if not self.log_dir:
+            logger.warning(
+                "track_changes=True but log_dir not set — skipping delta file generation."
+            )
+            return
+        logger.info("Batching all pdb entries whose mapping changed from the logs")
+        cmd = (
+            f"grep Mapping {self.log_dir}/* "
+            f"|cut -d']' -f2 |cut -d' ' -f6,7 >{self.delta_file}"
+        )
+        subprocess.check_call(cmd, shell=True)
+        logger.info(f"DELTA_MAPPING_LIST: {self.delta_file}")
 
     def _check_mmcif_output(self, infile, outfile):
         logger.debug("Checking if the output file is more/equal to input file")
@@ -80,9 +112,7 @@ class ExportSIFTSTommCIF():
             raise EntryFailedException(f"Output {outfile} file not found for {outfile}")
 
     def _check_clean_mmcif(self, outfile):
-        """
-        Checking if the output clean mmcif file doesn't have null values in their primary keys
-        """
+        """Check that the output clean mmcif file has no null values in primary keys."""
         block = cif.read(str(outfile)).sole_block()
         category_list = [f"_{item}" for item in SIFTS_NEW_CAT]
         required_fields = PRIMARY_KEYS
@@ -115,58 +145,36 @@ class ExportSIFTSTommCIF():
     def _process_cif_file(
         self, d_block, sifts_segments, sifts_seg_inst, sifts_res_csv, pdb_id
     ):
-        # parsing the input mmcif file
         self.UpdateFlag = False
         self.UnpDataFlag = False
 
         sifts_res_info = {}
-        # for each data block in mmcif file
-
-        """
-        Adding new category #1: pdbx_sifts_unp_segments
-        @values coming here from sifts_segment_csv
-        """
 
         self.UpdateFlag = self.write_data(
             d_block, "_pdbx_sifts_unp_segments", sifts_segments
         )
-        # print(d_block.get_mmcif_category("_pdbx_sifts_unp_segments"))
-        """
-        Adding new category #2: pdbx_sifts_xref_db_segments
-        @values coming here from database
-        """
-        # Get total entity_id,asymid for pdbentry, for sorting your data
+
         cat = d_block.get_mmcif_category("_pdbx_poly_seq_scheme")
         if cat:
             my_ent = cat["entity_id"]
             my_ch = cat["asym_id"]
             my_seq_id = cat["seq_id"]
             my_mon_id = cat["mon_id"]
-            # get observed residues from mmcif _pdbx_poly_seq_scheme
             my_observed = cat["auth_seq_num"]
             my_observed = ["y" if item is not None else "n" for item in my_observed]
             my_obs_res = comm_utils.get_obs(my_ch, my_seq_id, my_observed)
-            # get mh_id flag from mmcif
             hetero = cat["hetero"]
             my_mh_id = comm_utils.get_mh_id(my_seq_id, my_mon_id, hetero)
 
             all_ent, all_res = comm_utils.get_ent_chains(
                 my_ent, my_ch, my_seq_id, my_mon_id
             )
-            # xref_segments, xref_res_info = fetch_xref_data.get_xref_info(
-            #     all_ent, pdb_id, self.conn
-            # )
             xref_segments, xref_res_info = [], {}
 
             self.UpdateFlag = self.write_data(
                 d_block, "_pdbx_sifts_xref_db_segments", xref_segments
             )
 
-            """
-            Adding new category #3: pdbx_sifts_xref_db
-            showed best mapped uniprot accession
-            @values coming here from sifts_residue_csv
-            """
             if sifts_res_csv:
                 res_cursor = None
             else:
@@ -192,30 +200,19 @@ class ExportSIFTSTommCIF():
         else:
             logger.warning(f"The entry {pdb_id} is not a polymer")
 
-        """
-        Modifying atom site category #4:
-        add db_name, db_accession, db_num, db_res
-        modified only if sifts unp mapping present,else skipped
-        """
         if sifts_res_info:
             self.UnpDataFlag = True
             self.UpdateFlag = True
             atom_site = d_block.get_mmcif_category("_atom_site")
-
-            # Rename pdbe_label_seq_id
             atom_site = {
                 "pdbx_label_index" if k == "pdbe_label_seq_id" else k: v
                 for k, v in atom_site.items()
             }
-
-            # add new items to _atom_site category
             atom_site = comm_utils.modify_atomsite(atom_site, sifts_res_info)
-
             d_block.set_mmcif_category("_atom_site", atom_site)
         else:
             if not self.UnpDataFlag:
                 atom_site = d_block.get_mmcif_category("_atom_site")
-                # Rename pdbe_label_seq_id
                 atom_site = {
                     "pdbx_label_index" if k == "pdbe_label_seq_id" else k: v
                     for k, v in atom_site.items()
@@ -232,8 +229,6 @@ class ExportSIFTSTommCIF():
         return False
 
     def delta_changes(self):
-        # track delta mappings before writing the new file
-        # reading sifts segments from current run
         self.sifts_delta_csv = None
         if self.track_changes and self.UnpDataFlag:
             base_sifts_dir = Path(self.sifts_updated_cif).parent
@@ -243,8 +238,6 @@ class ExportSIFTSTommCIF():
                 f"{self.entry_id}_delta_{delta_suff}.csv.gz",
             )
             new_seg_data, new_seg_list = read_sifts_segments(self.d_block)
-            # reading sifts segment from old/previous run
-            # read from prev run dir given
             if self.prev_run_dir:
                 old_sifts_csv_dir = pdbe_path.get_entry_dir(
                     self.entry_id, base_dir=self.prev_run_dir, suffix="sifts"
@@ -252,7 +245,6 @@ class ExportSIFTSTommCIF():
                 old_sifts_cif = Path(
                     Path(old_sifts_csv_dir), f"{self.entry_id}_sifts_only.cif.gz"
                 )
-            # look in the output folder as prev run dir not given
             else:
                 old_sifts_cif = self.sifts_only_cif
 
@@ -262,13 +254,14 @@ class ExportSIFTSTommCIF():
                 old_seg_data, old_seg_list = read_sifts_segments(old_block)
             else:
                 logger.warning(
-                    f"Track changes failed for {self.entry_id}.\
-                    Previous run file not found!Either a new entry or previous run failed!"
+                    f"Track changes failed for {self.entry_id}."
+                    " Previous run file not found!"
+                    " Either a new entry or previous run failed!"
                 )
             if old_seg_list == new_seg_list:
                 logger.info(
-                    f"No mappings changes tracked for {self.entry_id}.\
-                    Skipping writing new mmcif files"
+                    f"No mappings changes tracked for {self.entry_id}."
+                    " Skipping writing new mmcif files"
                 )
                 self.sifts_delta_csv = None
                 return
@@ -279,10 +272,6 @@ class ExportSIFTSTommCIF():
                 ).find_mapping_changes()
 
     def process_entry(self, entry_id):
-        """
-        @requiremnts clean_cif_file,seg_csv,res_csv file
-        @database connection
-        """
         sifts_csv_dir = None
         if self.sifts_csv_base:
             sifts_csv_dir = pdbe_path.get_entry_dir(
@@ -314,7 +303,6 @@ class ExportSIFTSTommCIF():
         )
         sifts_segments = [item for item in sifts_segments if item != []]
 
-        # uses pdb_updated.cif.gz
         orig_updated_cif = Path(pdbe_path.get_updated_cif(entry_id, self.cif_dir))
 
         if not Path(orig_updated_cif).exists():
@@ -326,24 +314,16 @@ class ExportSIFTSTommCIF():
             self.d_block, sifts_segments, sifts_seg_inst, sifts_res_csv, entry_id
         )
 
-        # track delta mappings before writing the new file
-        # reading sifts segments from current run
         self.entry_id = entry_id
         self.delta_changes()
 
-        # writing new mmcif file
         doc = cif.Document()
         doc.add_copied_block(self.d_block)
         with gzip.open(self.sifts_updated_cif, "wt") as f:
             f.write(doc.as_string(cif.Style.Pdbx))
 
-        # writing a snipped file :
-        # removes the original categories keeping only sifts categories
-        # for next-gen-archive, we need snipped file always for pdbx_label_index
-
         doc = cif.Document()
         block = doc.add_new_block(entry_id.upper())
-        # copy required sifts categories
         cat_to_copy = SIFTS_NEW_CAT
 
         for cat in cat_to_copy:
@@ -355,28 +335,22 @@ class ExportSIFTSTommCIF():
                 continue
             block.set_mmcif_category(f"_{cat}.", data)
 
-        # take only limited items from atom_site
         atom_cat = block.get_mmcif_category("_atom_site")
         if self.UnpDataFlag:
             for key in list(atom_cat.keys()):
                 if key not in SIFTS_ATOMSITE_ITEM:
                     del atom_cat[key]
         else:
-            # copy the atom_site id and pdbx_label_index
             for key in list(atom_cat.keys()):
                 if key not in ["id", "pdbx_label_index"]:
                     del atom_cat[key]
         block.set_mmcif_category("_atom_site.", atom_cat)
 
-        # Write to temp file. This is needed to avoid
-        # corrupting the original file in case of errors
-        # while writing the file
         with tempfile.TemporaryDirectory() as d:
             temp_name = Path(d, f"{entry_id}_sifts_only.cif.gz")
             with gzip.open(temp_name, "wt") as f:
                 f.write(doc.as_string(cif.Style.Pdbx))
                 f.flush()
-            # Copy temp file to sifts_only_cif
             shutil.copyfile(temp_name, self.sifts_only_cif)
 
         self._check_sifts_mmcif(self.sifts_only_cif)
@@ -386,13 +360,10 @@ class ExportSIFTSTommCIF():
 
         if self.UpdateFlag:
             logger.info(f"SIFTS mapping found for {self.entry_id}")
-
         else:
             logger.info(f"No mappings in SIFTS for {self.entry_id}")
-        # need to delete the object to read file again
 
         self._check_mmcif_output(orig_updated_cif, self.sifts_updated_cif)
-
         self._check_clean_mmcif(self.sifts_updated_cif)
         logger.info(
             f"""
@@ -405,108 +376,89 @@ class ExportSIFTSTommCIF():
         )
         return (orig_updated_cif, self.sifts_updated_cif, self.sifts_only_cif)
 
-    def after_job_end(self):
-        """Close the database connection."""
-        close_db_connection(self.conn)
-
-    def post_run(self):
-        # works only in batch mode
-        # generate a list of pdb entries and what db mapping changed
-        if self.track_changes and self.delta_file and self.mode == Modes.BATCH:
-            logger.info("Batching all pdb entries whose mapping changed from the logs")
-            cmd = f"""
-            grep Mapping {self.log_dir}/* |cut -d"]" -f2 |cut -d" " -f6,7 >{self.delta_file}"""
-            subprocess.check_call(cmd, shell=True)
-            logger.info(f"DELTA_MAPPING_LIST: {self.delta_file}")
-
 
 def run():
-    parser = argparse.ArgumentParser("Given a clean mmcif file, add sifts_data")
+    parser = argparse.ArgumentParser(
+        "Given a clean mmcif file, add sifts_data",
+        add_help=False,
+    )
     parser.add_argument(
         "-o",
         "--output-dir",
-        help="directory where output mmcif files will be stored",
+        help="Directory where output mmcif files will be stored",
         default=conf.sifts_to_mmcif.clean_output_path,
-        # action=OrcAction,
         required=True,
     )
     parser.add_argument(
         "-i",
         "--input-cif-dir",
-        # action=OrcAction,
-        required=True,
+        required=False,
         default=conf.location.work.data_entry_dir,
-        help="input cif base directory",
+        help="Input CIF base directory",
     )
-
     parser.add_argument(
         "-s",
         "--sifts-csv-dir",
-        # action=OrcAction,
         required=False,
-        help="sifts_xref_residue csv file, if not given data taken from database",
+        help="SIFTS CSV base directory. If not given, data is read from the database.",
     )
-
     parser.add_argument(
         "-d",
         "--db-conn-str",
         required=True,
-        # action=OrcAction,
-        # envvar="ORC_PDBEREAD_DB_CONN",
-        help="Database connection string",
+        help="DuckDB file path",
     )
-
     parser.add_argument(
         "-T",
         "--no-track-changes",
         required=False,
         action="store_true",
         default=False,
-        help="""
-        Compares the mapping from previous run and track changes.
-        Default is True. Store the delta_mappings_csv from last 10 releases
-        """,
+        help="Disable comparison with previous run to track mapping changes.",
     )
-
     parser.add_argument(
         "-p",
         "--prev-run-dir",
         required=False,
-        # action=OrcAction,
-        help="""
-        Compare sifts_only.mmcif from here.
-        If not given, it looks in the output directory for previous run file,
-        it expects data in the format it writes data i.e. given_dir/suff_pdb/pdb/sifts/.
-        If no file is found, it assumes it is a new csv file
-        """,
+        help=(
+            "Compare sifts_only.mmcif from this directory. "
+            "If not given, looks in the output directory for the previous run file."
+        ),
     )
-
     parser.add_argument(
         "-l",
         "--delta-sifts-file",
         required=False,
-        # action=OrcAction,
         default=conf.lists.sifts_mapping_changes,
-        help="""
-        Directory where delta_sifts.list is generated (works only in batch mode).
-        This file has pdb entries which has there mapping changed last week.
-        It contains pdb, comma seperated list of db for which mapping changed.
-        """,
+        help=(
+            "Path for the delta_sifts.list output file (batch mode only). "
+            "Contains PDB entries whose mappings changed."
+        ),
+    )
+    parser.add_argument(
+        "--log-dir",
+        required=False,
+        default=None,
+        help=(
+            "Directory containing log files. Required to generate the delta "
+            "mapping list in teardown() when track-changes is enabled."
+        ),
     )
 
-    args = parse_with_base_parser(parser)
+    custom_args, remaining = parser.parse_known_args()
 
-    track_changes = not args.no_track_changes
-    c = ExportSIFTSTommCIF(
-        args.output_dir,
-        args.input_cif_dir,
-        args.sifts_csv_dir,
-        args.db_conn_str,
+    track_changes = not custom_args.no_track_changes
+    obj = ExportSIFTSTommCIF(
+        custom_args.output_dir,
+        custom_args.input_cif_dir,
+        custom_args.sifts_csv_dir,
+        custom_args.db_conn_str,
         track_changes,
-        args.prev_run_dir,
-        args.delta_sifts_file,
+        custom_args.prev_run_dir,
+        custom_args.delta_sifts_file,
+        log_dir=custom_args.log_dir,
     )
-    c.process_entry(args.entry)
+    obj.main(remaining)
 
 
 if __name__ == "__main__":

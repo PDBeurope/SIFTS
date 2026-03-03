@@ -14,7 +14,6 @@ from pathlib import Path
 from pdbe_sifts.base import pdbe_path
 from pdbe_sifts.base.batchable import Batchable
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.base.parser import parse_with_base_parser
 from pdbe_sifts.config import Config
 
 conf = Config()
@@ -49,15 +48,15 @@ class CopyToExchange(Batchable):
             logger.info(f"Create remote output dir using cmd: {ssh_cmd}")
             subprocess.run(ssh_cmd, check=True, shell=True)
 
-            dest = "{self.username}@{self.remote_server}:{output_dir}"
-            cmd = f"rsync -av {sifts_only_file} {dest}"  # noqa: E501,B950
+            dest = f"{self.username}@{self.remote_server}:{self.output_dir}"
+            cmd = f"rsync -av {sifts_only_file} {dest}"
             logger.info(f"Copy file to remote using cmd: {cmd}")
             subprocess.run(cmd, check=True, shell=True)
         else:
             Path(div_output_dir).mkdir(parents=True, exist_ok=True)
             shutil.copy(sifts_only_file, div_output_dir)
 
-    def post_run(self):
+    def teardown(self):
         if self.remote:
             logger.info("Copying list of changes to remote server")
             dest = f"{self.username}@{self.remote_server}:{self.output_dir}/"
@@ -72,7 +71,7 @@ class CopyToExchange(Batchable):
 
 
 def run():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(add_help=False)
 
     parser.add_argument(
         "-i",
@@ -86,7 +85,6 @@ def run():
         "--output-dir",
         help="Output base directory",
     )
-
     parser.add_argument(
         "--remote",
         action="store_true",
@@ -97,12 +95,17 @@ def run():
         ),
     )
 
-    args = parse_with_base_parser(parser)
+    custom_args, remaining = parser.parse_known_args()
 
-    if not args.output_dir:
-        args.output_dir = conf.sifts_to_mmcif.staging_dir
-        if args.remote:
-            args.output_dir = conf.sifts_to_mmcif.exchange_dir
+    output_dir = custom_args.output_dir
+    if not output_dir:
+        output_dir = conf.sifts_to_mmcif.staging_dir
+        if custom_args.remote:
+            output_dir = conf.sifts_to_mmcif.exchange_dir
 
-    obj = CopyToExchange(args.input_dir, args.output_dir, args.remote)
-    obj.process_entry()
+    obj = CopyToExchange(custom_args.input_dir, output_dir, custom_args.remote)
+    obj.main(remaining)
+
+
+if __name__ == "__main__":
+    run()

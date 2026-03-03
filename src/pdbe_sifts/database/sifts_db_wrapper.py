@@ -2,6 +2,8 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
+from pdbe_sifts.base.log import logger
+
 def segment_to_dict(seg):
     return {
         "entry_id": seg.entry_id,
@@ -190,3 +192,66 @@ class SiftsDB:
     
     def clean_by_entry(self, entry):
         pass
+
+    def bulk_load_from_dir(self, out_dir, batch_size: int = 1000) -> None:
+        """Bulk-load all segment and residue CSV files from out_dir into DuckDB.
+
+        Scans out_dir recursively for *_seg.csv.gz and *_res.csv.gz files,
+        then loads them in batches. Each batch is idempotent: existing rows
+        for those entry_ids are deleted before inserting the new ones.
+
+        Args:
+            out_dir: Root directory to scan for CSV files.
+            batch_size: Number of CSV files to load per DuckDB transaction.
+        """
+        out_path = Path(out_dir)
+        seg_files = sorted(out_path.rglob("*_seg.csv.gz"))
+        res_files = sorted(out_path.rglob("*_res.csv.gz"))
+
+        if not seg_files and not res_files:
+            logger.warning("bulk_load_from_dir: no CSV files found in %s", out_dir)
+            return
+
+        logger.info(
+            "Bulk loading %d segment files and %d residue files from %s",
+            len(seg_files), len(res_files), out_dir,
+        )
+        self._bulk_load_table("sifts_xref_segment", seg_files, batch_size)
+        self._bulk_load_table("sifts_xref_residue", res_files, batch_size)
+        logger.info("DuckDB bulk load complete.")
+
+    def _bulk_load_table(self, table: str, files: list, batch_size: int) -> None:
+        """Load a list of gzipped CSV files into a DuckDB table in batches.
+
+        For each batch:
+          - entry_ids are extracted from filenames (e.g. 1abc_seg.csv.gz → 1abc)
+          - existing rows for those entry_ids are deleted first (idempotent)
+          - new rows are inserted via DuckDB's read_csv_auto()
+
+        Args:
+            table: Target table name in DuckDB.
+            files: List of Path objects pointing to gzipped CSV files.
+            batch_size: Number of files per batch.
+        """
+        total = len(files)
+        if not total:
+            return
+
+        logger.info("Loading %d files into %s...", total, table)
+
+        for i in range(0, total, batch_size):
+            batch = files[i : i + batch_size]
+
+            entry_ids = [f.name.split("_")[0] for f in batch]
+            entry_ids_sql = ", ".join(f"'{e}'" for e in entry_ids)
+            file_list_sql = "[" + ", ".join(f"'{f}'" for f in batch) + "]"
+
+            self.conn.execute(
+                f"DELETE FROM {table} WHERE entry_id IN ({entry_ids_sql})"
+            )
+            self.conn.execute(
+                f"INSERT INTO {table} SELECT * FROM read_csv_auto({file_list_sql})"
+            )
+
+            loaded = min(i + batch_size, total)
+            logger.info("  %s: %d/%d files loaded", table, loaded, total)

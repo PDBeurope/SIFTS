@@ -1,7 +1,3 @@
-class BatchRunException(Exception):
-    pass
-
-
 class ReleaseCheckFailedException(Exception):
     def __init__(self, entry_id, message, context=None):
         self.entry_id = entry_id

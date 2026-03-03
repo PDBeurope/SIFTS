@@ -1,29 +1,17 @@
 user:
-  # --- Paths ---
-  base_dir: /hps/nobackup/pdbe/users/adamb/sifts_demo/
-  nobackup_dir: /hps/nobackup/pdbe/users/adamb/sifts_demo/
+  base_dir: null
+  nobackup_dir: null
 
-  # --- Entry lists ---
-  entries_all: /hps/nobackup/pdbe/users/adamb/datasets/lists/entries_all
-  entries_this_week: /hps/nobackup/pdbe/users/adamb/datasets/lists/entries_this_week
-  sifts_mapping_changes: /hps/nobackup/pdbe/users/adamb/datasets/lists/sifts_mapping_changes.list
-  sifts_modified_entries: /hps/nobackup/pdbe/users/adamb/datasets/lists/sifts_modified_entries
+  entries_all: null
+  entries_this_week: null
+  sifts_mapping_changes: null
+  sifts_modified_entries: null
 
-  # --- Exchange ---
+  target_db: null
+
   exchange_server: null
   exchange_username: null
 
-  # --- Executor ---
-  executor_type: slurm
-  executor_default_queue: production
-
-  # --- Queue ---
-  queue_host: pdbe-airflow-prod-redis
-  queue_port: 6379
-  queue_password:
-  queue_db: 0
-
-  # --- Logging ---
   log_destination: console
 
 
@@ -40,10 +28,6 @@ location:
     base_dir: ${location.base}/release
     data_dir: ${location.work.base_dir}/data
     data_entry_dir: ${location.work.data_dir}/entry
-    logs_dir: ${location.nobackup_dir}/release/logs/
-    chem_letter_mapping_file: ${user.chem_letter_mapping_file}
-    configs_dir: ${location.work.base_dir}/configs/release
-    pickle_dir: null
 
 
 cache:
@@ -57,29 +41,6 @@ sifts_to_mmcif:
   exchange_dir: null
 
 
-sifts:
-  base: ${location.work.data_dir}/sifts
-  nf90_coverage: 0.7
-  nobackup: ${location.nobackup_dir}/sifts/temp
-  tax_fix_pkl: ${user.tax_fix_pkl}
-  nf90_taxid_pkl: ${cache.base}/nf90_taxid.pkl
-  nf90_coverage_pkl: ${cache.base}/nf90_coverage.pkl
-  unp_url: https://www.uniprot.org/uniprot
-  unp_filtered_mappings_file: ${sifts.nobackup}/idmapping_filtered.tab.gz
-  csv_dir: ${sifts.base}
-  report_dir: ${sifts.csv_dir}/reports
-  res_csv: ${sifts.csv_dir}/res_csv
-  seg_csv: ${sifts.csv_dir}/seg_csv
-  nf90_csv: ${sifts.csv_dir}/nf90_csv
-  results: ${sifts.nobackup}/results
-  flatfiles: ${sifts.results}/flatfiles
-  flatfiles_exchange: ${exchange.msd}/sifts/flatfiles
-  split_xml: ${sifts.results}/split_xml
-  pfam_dir: ${sifts.nobackup}/pfam
-  ncbi_orthologs_url: https://ftp.ncbi.nih.gov/gene/DATA/
-  scop2_url: https://www.ebi.ac.uk/pdbe/scop/files/
-
-
 lists:
   entries_all: ${user.entries_all}
   entries_this_week: ${user.entries_this_week}
@@ -90,35 +51,3 @@ lists:
 exchange:
   server: ${user.exchange_server}
   username: ${user.exchange_username}
-
-
-executor:
-  type: ${user.executor_type}
-  default_queue: ${user.executor_default_queue}
-  # For slurm->production. LSF->bigmem
-  bigmem_queue: production
-  datamover_queue: datamover
-  default_log_base: ${location.work.base_dir}/logs/orc_${executor.type}
-  default_cores: 1
-  default_memory: 4096 # 4GB
-  default_timeout: 1440 # 24h
-  default_num_jobs: 100
-  default_project: null
-
-
-queue:
-  type: redis
-  host: ${user.queue_host}
-  port: ${user.queue_port}
-  cli: redis-cli
-  password: ${user.queue_password}
-  db: ${user.queue_db}
-
-
-farm:
-  cluster_queue: production
-  bigmem_queue: bigmem
-  datamover_queue: datamover
-  num_jobs: 100
-  bigmem_limit: 300000
-  bigmem_project: bigmem

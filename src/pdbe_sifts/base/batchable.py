@@ -1,684 +1,401 @@
+"""Batchable — Base class for tasks that process entries one at a time or in parallel.
+
+Usage:
+
+    class MyTask(Batchable):
+        workers = 4
+        entry_file_path = "/path/to/entries.txt"
+        failure_threshold = 0.01
+
+        def worker_setup(self):
+            # Called once per worker process before it processes its entries.
+            # Put expensive/non-picklable initialization here (e.g. DB connections).
+            self.db = open_connection()
+
+        def worker_teardown(self):
+            self.db.close()
+
+        def process_entry(self, entry_id: str):
+            # Called for every entry in the worker process.
+            pass
+
+    # From CLI (in a run() function or __main__):
+    custom_args, remaining = parser.parse_known_args()
+    task = MyTask(custom_args.foo, custom_args.bar)
+    task.main(remaining)   # handles 'single' or 'batch' subcommand
+
+    # Programmatically:
+    task = MyTask(...)
+    task.run_single("1abc")
+    task.run_batch(["1abc", "2xyz", "3pqr"])
+
+Lifecycle — single mode:
+    setup() → worker_setup() → process_entry() → worker_teardown() → teardown()
+
+Lifecycle — batch mode:
+    setup()
+      → [parallel workers: worker_setup() → process_entry()* → worker_teardown()]
+      → [retry if enabled: same worker lifecycle for failed entries]
+    → teardown()
+"""
+
 import argparse
-import os
-import pickle  # nosec
-import subprocess
-import sys
+import logging
 from abc import ABC, abstractmethod
-from datetime import datetime
-from enum import Enum
-from multiprocessing.dummy import Process
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Iterable
+from typing import Optional
 
-import gemmi
-from pdbe_sifts.config import load_config
-
-from pdbe_sifts.base.exceptions import (
-    BatchRunException,
-    EntryTimedOutException,
-    TooManyFailedEntries,
-)
-from pdbe_sifts.base.executors import get_executor
+from pdbe_sifts.base.exceptions import TooManyFailedEntries
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.base.parser import CORES, INIT_MEM, JOBS, RETRY_MEM, GPUS
-from pdbe_sifts.base.process_remote import __file__ as process_remote_script
-from pdbe_sifts.base.queues.batchable_queue import BatchableQueue
-from pdbe_sifts.base.queues.iqueue import IQueue
-from pdbe_sifts.base.report import EntryStatusType, log_entry, send_summary_message
 
 
-class Modes(Enum):
-    SINGLE = "SINGLE"
-    BATCH = "BATCH"
+# ---------------------------------------------------------------------------
+# Module-level worker functions (must be top-level for pickling)
+# ---------------------------------------------------------------------------
+
+def _run_chunk(obj: "Batchable", entries: list[str]) -> list[str]:
+    """Run a list of entries inside a worker process.
+
+    Calls worker_setup() once, then process_entry() for each entry,
+    then worker_teardown() once. Returns list of failed entry IDs.
+    """
+    failed: list[str] = []
+    obj.worker_setup()
+    try:
+        for entry_id in entries:
+            try:
+                if obj.entry_timeout_secs and obj.entry_timeout_secs > 0:
+                    _run_with_timeout(obj, entry_id, obj.entry_timeout_secs)
+                else:
+                    obj.process_entry(entry_id)
+            except Exception:
+                logger.error(f"Failed [{entry_id}]:", exc_info=True)
+                failed.append(entry_id)
+    finally:
+        obj.worker_teardown()
+    return failed
 
 
-conf = load_config()
+def _run_with_timeout(obj: "Batchable", entry_id: str, timeout_secs: int) -> None:
+    """Run process_entry in a subprocess with a hard timeout."""
+    from multiprocessing import Process
 
+    p = Process(target=obj.process_entry, args=(entry_id,))
+    p.start()
+    p.join(timeout_secs)
+    if p.is_alive():
+        p.kill()
+        p.join()
+        raise TimeoutError(
+            f"Entry {entry_id!r} timed out after {timeout_secs}s"
+        )
+
+
+def _split(items: list, n: int) -> list[list]:
+    """Split *items* into at most *n* non-empty chunks."""
+    if n <= 0 or not items:
+        return [list(items)]
+    k, rem = divmod(len(items), n)
+    chunks: list[list] = []
+    i = 0
+    for _ in range(n):
+        size = k + (1 if rem > 0 else 0)
+        rem -= 1
+        chunk = items[i : i + size]
+        if chunk:
+            chunks.append(chunk)
+        i += size
+    return chunks
+
+
+def _parse_entry_list(entry_list: str) -> list[str]:
+    """Return entry IDs from a file path or a comma-separated string."""
+    path = Path(entry_list)
+    if path.exists():
+        entries = [
+            line.strip()
+            for line in path.read_text().splitlines()
+            if line.strip()
+        ]
+        logger.info(f"Loaded {len(entries)} entries from {path}")
+        return entries
+    items = [e.strip() for e in entry_list.split(",") if e.strip()]
+    if not items:
+        raise ValueError(f"No entries found in: {entry_list!r}")
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Batchable base class
+# ---------------------------------------------------------------------------
 
 class Batchable(ABC):
-    """Abstract Base Class for tasks that can be parallelized.
+    """Base class for tasks that run on individual entries.
 
-    the parallelization can be either locally or on remote cluster (LSF for now).
-    The subclass can additionally set the attributes below (shown with defaults):
+    Subclasses **must** implement :meth:`process_entry`.
+    All other methods are optional lifecycle hooks.
 
-    Raises:
-        ValueError: If neither --list option specified nor self.entry_file_path
-            set to a valid file, in batch mode
-        BatchRunException: If some entries did not process successfully.
-            Overridden by ignore_batch_failures and failure_threshold.
-        TooManyFailedEntries: If more than `failure_threshold` entries failed
-    """  # noqa: E501,B950
+    Attributes:
+        workers: Number of parallel worker processes in batch mode.
+        entry_file_path: Default file to load entries from (one ID per line).
+            Used when ``--list`` is not supplied on the CLI.
+        failure_threshold: Maximum allowed failures before raising.
+            A value < 1 is treated as a fraction of total entries (e.g. ``0.01``
+            = 1 %); a value >= 1 is an absolute count.
+        retry_on_failure: Retry failed entries once after the initial run.
+        entry_timeout_secs: Per-entry timeout in seconds. ``None`` = no timeout.
 
-    initial_memory: int = INIT_MEM
-    """Initial memory in MB to submit with."""
-
-    retry_memory: int = RETRY_MEM
-    """Memory in MB to retry failed entries with."""
-
-    jobs: int = JOBS
-    """Jobs/threads to submit in parallel"""
-
-    cores: int = CORES
-    """Number of cores to request to use/request for each job"""
-
-    gpus: str = GPUS
-    """Number of gpus to request to use/request for each job"""
-
-    cluster_queue: str = conf.farm.cluster_queue
-    """Name of cluster queue to submit to."""
-
-    entries: list[str] = []
-    """List of entries to process."""
-
-    failed_entries: set = set()
-    """Set of failed entries"""
-
-    entry_file_path: str | None = None
-    """File with list of entries to process. Optional"""
-
-    no_retry: bool = False
-    """If True, do no retry if there are failures in batch run"""
-
-    ignore_batch_failures: bool = False
-    """If True, does not raise exception if batch run fails. Overrides failure_threshold."""
-
-    known_exceptions: set = set()
-    """List of known exceptions. Optional"""
-
-    exceptions_file: str | None = None
-    """File with list of entries of known exceptions. Optional"""
-
-    log_dir: str = ""
-    """Directory to write logs to. Defaults to conf.location.work.bsub_logs_dir."""
-
-    mode: Modes = Modes.SINGLE
-    """Mode to run in. SINGLE or BATCH"""
-
-    filter: range | None = None  # noqa: A003
-    """Range of entries to process. Optional"""
-
-    failure_threshold: float = 0.0
-    """Number or fraction of failures to tolerate before raising exception."""
-
-    entry_timeout_secs = None
-    """Number of seconds to wait for entry to be processed before timing out."""
-
-    pickle_dir = Path(
-        os.getenv("ORC_PICKLE_DIR") or conf.location.work.pickle_dir or Path.home()
-    )
-    """Directory to store pickled objects. Defaults to envvar ORC_PICKLE_DIR.
-
-    If not set, defaults to user's home directory.
+    Note on DuckDB (or any single-writer resource):
+        DuckDB does not allow concurrent write connections from multiple
+        processes. When ``dbmode=True`` (or equivalent), pass
+        ``--workers 1`` to the CLI to avoid locking errors.
     """
 
-    pickle_file = None
-    """File to pickle self to. Optional. defaults to <pickle_dir>/<main_queue>"""
+    # --- Configuration: override in subclasses ---
+    workers: int = 4
+    entry_file_path: Optional[str] = None
+    failure_threshold: float = 0.0
+    retry_on_failure: bool = True
+    entry_timeout_secs: Optional[int] = None
 
-    used_cif_categories: Iterable[str] = set()
+    # --- Lifecycle hooks (all optional) ---
 
-    executor = None
+    def setup(self) -> None:
+        """Called once in the **main process** before any processing starts."""
 
-    _start_timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    def teardown(self) -> None:
+        """Called once in the **main process** after all processing is done."""
 
-    _task_name = "task"
+    def worker_setup(self) -> None:
+        """Called once per **worker process** before it processes its entries.
 
-    def _log_config(self):
-        logger.info("::params::Parameters:")
-        logger.info(f"Cores: {self.cores}")
-        logger.info(f"Gpus: {self.gpus}")
-        logger.info(f"Initial Memory: {self.initial_memory}")
-        logger.info(f"Retry Memory: {self.retry_memory}")
-        logger.info(f"Jobs: {self.jobs}")
-        logger.info(f"Cluster Queue: {self.cluster_queue}")
-        logger.info(f"Log Directory: {self.log_dir}")
-        logger.info(f"Filter: {self.filter}")
-        logger.info(f"Failure Threshold: {self.failure_threshold}")
-        logger.info(f"Entry Timeout: {self.entry_timeout_secs}")
-        logger.info(f"Run Local: {self.run_local}")
-        logger.info(f"List of Entries: {self.entry_file_path}")
-        logger.info(f"Exceptions File: {self.exceptions_file}")
-        logger.info(f"No of Known Exceptions: len({self.known_exceptions})")
-        logger.info("::endparams::")
-
-    def _clear_queues(self, queue: IQueue):
-        """Clears failed and main queues if exist."""
-        queue.delete(self.main_queue)
-        queue.delete(self.failed_queue)
-
-    def load_entries(self):
-        """Loads self.entries list from a file as specified by `entries_file_path`.
-
-        Override this to have a custom way of populating self.entries.
-        This does not load into the queue. Use `_enqueue_entries` for that.
+        Use this for expensive or non-picklable initialization such as database
+        connections or loading large data structures.
         """
-        if self.entry_file_path:
-            if not Path(self.entry_file_path).exists():
-                raise FileNotFoundError(
-                    f"File {self.entry_file_path} must exists and be readable"
-                )
-            if not Path(self.entry_file_path).lstat().st_size > 0:
-                raise ValueError(
-                    f"List of entries file {self.entry_file_path} cannot be empty"
-                )
 
-            with open(self.entry_file_path) as f:
-                self.entries = [line.strip() for line in f]
+    def worker_teardown(self) -> None:
+        """Called once per **worker process** after all its entries are processed.
 
-        if not self.entries:
-            raise ValueError("No entries to process.")
-        logger.info(f"{len(self.entries)} items added for processing")
-
-    def _copy_entries_to_log_dir(self):
-        ids_copy_file = os.path.join(self.log_dir, "all_ids.list")
-        with open(ids_copy_file, "w+") as f:
-            logger.info(f"Will process {len(self.entries)} entries")
-            for entry in self.entries:
-                print(entry, file=f)
-        logger.info(f"Ids to process copied to: {ids_copy_file}")
-
-    def _enqueue_entries(self, queue: IQueue):
-        """Enqueues entries to messaging queue."""
-
-        for e in self.entries:
-            queue.push(self.main_queue, e)
-
-        count_items = queue.length(self.main_queue)
-        logger.info(f"{count_items} items added to queue {self.main_queue}")
-
-    def submit_batch(self):
-        """Submit batch jobs the compute cluster.
-
-        Name of job in cluster is same as self.main_queue
+        Use this to clean up resources allocated in :meth:`worker_setup`.
         """
-        self._copy_entries_to_log_dir()
 
-        self.failed_queue = f"{self.main_queue}-failed"
-
-        queue = BatchableQueue().get_queue()
-
-        self._clear_queues(queue)
-
-        logger.debug(f"Loading {len(self.entries)} entries into messaging queue")
-        self._enqueue_entries(queue)
-
-        if not self.entries:
-            raise BatchRunException(
-                "No entries to process. What are the chances? so failing"
-            )
-
-        self._pickle_obj()
-
-        self._log_config()
-
-        try:
-            jobs = min(self.jobs, queue.length(self.main_queue))
-
-            self.failed_entries = set(
-                self._submit_to_farm(queue, jobs, self.initial_memory, self.main_queue)
-            )
-
-            if not self.no_retry and self.failed_entries and self.before_retry():
-                logger.info(f"Retrying {len(self.failed_entries)} failed entries")
-
-                queue.rename(self.failed_queue, self.main_queue)
-
-                jobs = min(len(self.failed_entries), self.jobs)
-
-                self.failed_entries = self._submit_to_farm(
-                    queue, jobs, self.retry_memory, f"{self.main_queue}-failed"
-                )
-
-            if self.failed_entries:
-                self.write_failed_entries_to_file()
-                self.log_failed_entries()
-
-            else:
-                logger.info("Processed all entries successfully")
-
-        finally:
-            logger.debug("removing  pickle file")
-            if self.pickle_file and os.path.exists(self.pickle_file):
-                os.remove(self.pickle_file)
-
-    def log_failed_entries(self):
-        count = min(5, len(self.failed_entries))
-        logger.info(
-            f"First {count} failed entries: {list(self.failed_entries)[:count]}"
-        )
-        one_failed = list(self.failed_entries)[0]
-        # Log the first failed entry in detail
-        logger.info(f"Logging details for failed entry {one_failed}")
-        # grep for the entry in all log files in the log_dir and extract the error lines
-        # with context
-        grep_cmd = f"grep -r {one_failed} {self.log_dir}/*.out | grep -C 10 -i error"
-        logger.info(f"Running: {grep_cmd}")
-        try:
-            grep_result = subprocess.run(
-                grep_cmd,
-                shell=True,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            logger.info(
-                f"Failed log for {one_failed} : {grep_result.stdout.decode().strip()}"
-            )
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Grep command failed with error: {e.stderr.decode().strip()}")
-            print(e.stdout.decode().strip())
-
-    def write_failed_entries_to_file(self):
-        failed_file = Path(self.log_dir, "failed.list")
-        with open(failed_file, "w+") as f:
-            for e in self.failed_entries:
-                print(e, file=f)
-        logger.info(f"List of failed entries written to {failed_file}")
-
-    def job_cleanup(self):  # noqa: B027
-        """Override this to do any job clean up"""
-        pass
-
-    def _pickle_obj(self):
-        self.pickle_file = self.pickle_file or Path(self.pickle_dir, self.main_queue)
-        with open(self.pickle_file, "wb") as fp:
-            logger.debug("Dumping pickle")
-            pickle.dump(self, fp)
-
-    def _submit_to_farm(self, queue: IQueue, jobs: int, memory: int, job_name: str):
-        """Sends a job array to the farm which uses the pickled object to run from queue."""
-        remote_command = f"{sys.executable} {process_remote_script} {self.pickle_file}"
-        logger.info(f"Submitting command to farm: {remote_command}")
-
-        cluster_queue = self.cluster_queue or conf.farm.cluster_queue
-        timeout_mins = (
-            self.entry_timeout_secs // 60
-            if self.entry_timeout_secs and self.entry_timeout_secs > 0
-            else None
-        )
-
-        gpus = "0"
-        if self.gpus and not str(self.gpus) == "0":
-            gpus = self.gpus
-            cluster_queue = "short"
-
-        self.executor.submit(
-            job_name,
-            remote_command,
-            queue=cluster_queue,
-            log_dir=str(self.log_dir),
-            jobs=jobs,
-            memory=memory,
-            cores=self.cores,
-            gpus=gpus,
-            timeout_mins=timeout_mins,
-        )
-
-        unprocessed = queue.get_all(self.main_queue)
-        if unprocessed:
-            logger.warning(
-                f"Some {len(unprocessed)} entries are unprocessed. "
-                "Merging them to failed entries"
-            )
-            for item in unprocessed:
-                queue.push(self.failed_queue, item)
-
-        failed_entries = queue.get_all(self.failed_queue)
-        if failed_entries:
-            logger.info(f"{len(failed_entries)} failed entries")
-
-        return failed_entries
-
-    def pre_run(self):  # noqa: B027
-        """Override this to do setup before run is called."""
-        pass
-
-    def before_job_start(self):  # noqa: B027
-        """Override this to specify per job pre-process logic.
-
-        This is executed before the start of each job on the farm in batch mode,
-        or before process_entry for single mode. Use this to do setup of values
-        that should be used across the job e.g. a database connection that will
-        be used for all entries processed by this job or, a working area for that
-        is specific to the job.
-        """
-        pass
+    # --- Abstract method ---
 
     @abstractmethod
-    def process_entry(self, entry_id: str):
-        """Abstract method to process single entry.
-
-        Each subclass should implement this method to process a single entry.
+    def process_entry(self, entry_id: str) -> None:
+        """Process a single entry.
 
         Args:
-            entry_id: ID to process e.g. CCD ID, PDB ID, PRD ID, Uniprot Accession
+            entry_id: The entry identifier (e.g. PDB ID, UniProt accession).
         """
-        pass
 
-    def after_job_end(self):  # noqa: B027
-        """Override this method to specify per job post-process logic.
+    # --- Public run API ---
 
-        This is executed after all entries have been executed for a specific farm job.
-        for single mode, it is executed after `process_entry`. Use this for cleanup of
-        temp files, database connections etc specified by before_job_start.
-        """
-        pass
-
-    def post_run(self):  # noqa: B027
-        """Override this to do summary and cleanup after run completes."""
-        pass
-
-    def before_retry(self) -> bool:
-        """Override this method to add logic to be run before retry.
-
-        Use this to conditionally interrupt retries to either set some specific values
-        or cancel the retry.
-
-        Returns:
-            Return False to cancel retrying, True to go ahead with retry.
-        """
-        return True
-
-    def process_single(self, entry_id: str):
-        """Process entry in single mode.
-
-        Wrapper to run pre- and post-process tasks.
-
-        Args:
-            entry_id: ID to process passed to `process_entry`
-        """
-        self.before_job_start()
-        self.__process_entry(entry_id)
-        self.after_job_end()
-
-    def process_remote(self) -> int:
-        """Process entries, picking them from a queue."""
-        self.before_job_start()
-
-        queue: IQueue = BatchableQueue().get_queue()
-        while True:
-            entry = queue.pop_and_push(self.main_queue, self.failed_queue)
-            if not entry:
-                break
-
-            try:
-                self.__process_entry(entry)
-                queue.remove_item(self.failed_queue, entry)
-                log_entry(entry, self._task_name, EntryStatusType.SUCCESS)
-            except Exception:
-                exc_type, exc_value, _ = sys.exc_info()
-                log_entry(
-                    entry,
-                    self._task_name,
-                    EntryStatusType.FAILED,
-                    exc_type,
-                    exc_value,
-                )
-
-                logger.error(f"Failed for entry {entry}:", exc_info=True)
-
-        self.after_job_end()
-
-        return queue.length(self.failed_queue)
-
-    def raise_(self, ex):
-        raise ex
-
-    def __process_entry(self, entry_id):
+    def run_single(self, entry_id: str) -> None:
+        """Process a single entry with full lifecycle hooks."""
+        self.setup()
         try:
-            if not self.entry_timeout_secs or self.entry_timeout_secs <= 0:
-                self.process_entry(entry_id)
-            else:
-                # Actually, its a thread, not a process. (ref: import multiprocessing.dummy)
-                p = Process(
-                    target=self.process_entry,
-                    args=(entry_id,),
-                )
+            _run_chunk(self, [entry_id])
+        finally:
+            self.teardown()
 
-                # Inject sub-method to stop the thread
-                p.stop = lambda: self.raise_(
-                    EntryTimedOutException(f"Timeout for {entry_id}")
-                )
-                p.start()
-                p.join(self.entry_timeout_secs)
-
-                if p.is_alive():
-                    p.stop()
-                    p.join()
-
-        except Exception:
-            if entry_id not in self.known_exceptions:
-                raise
-            logger.warning(
-                f"Entry {entry_id} is in known_exceptions. Will ignore failure"
-            )
-
-    def local_batch(self):
-        """Process the batch locally when --run-local is specified.
-
-        Uses multiprocessing if cores > 1. Falls back to mutithreading otherwise
-
-        Returns:
-            list -- results of each entry processing as a list
-        """
-        self._copy_entries_to_log_dir()
-
-        if self.cores > 1:
-            from multiprocessing import Pool
-
-            self.jobs = self.cores
-        else:
-            from multiprocessing.dummy import Pool
-
-        p = Pool(self.jobs)
-        results = p.map(self.process_single, self.entries)
-        return results
-
-    def load_exceptions(self):
-        if self.exceptions_file and Path(self.exceptions_file).exists():
-            with open(self.exceptions_file) as f:
-                self.known_exceptions = {line.strip() for line in f}
-
-    def setup(self, args):
-        """Hydrates the object members from passed command line arguments."""
-
-        # Convert argparse.Namespace to Dictionary
-        if isinstance(args, argparse.Namespace):
-            args = vars(args)
-
-        self._task_name = self.__class__.__name__
-
-        self.mode = Modes(args["subcommand"].upper())
-        if self.mode == Modes.SINGLE:
-            self.entries = [args["entry"]]
-            return
-        self.filter = args["filter"]
-
-        self.ignore_batch_failures = (
-            args["ignore_batch_failures"] or self.ignore_batch_failures
-        )
-        self.failure_threshold = float(
-            args["failure_threshold"] or self.failure_threshold
-        )
-        self.entry_timeout_secs = (
-            int(args["entry_timeout_secs"]) if args["entry_timeout_secs"] else None
-        )
-
-        self.executor = get_executor(args.get("cluster"))
-        self.initial_memory = args["initial_memory"] or self.initial_memory
-        self.cores = args["cores"] or self.cores
-        self.gpus = args["gpus"] or self.gpus or "0"
-        self.retry_memory = args["retry_memory"] or self.retry_memory
-        self.retry_memory = max(self.initial_memory, self.retry_memory)
-        self.no_retry = args["no_retry"]
-        self.jobs = args["no_of_jobs"] or self.jobs
-        self.cluster_queue = args["cluster_queue"] or self.cluster_queue
-        self.main_queue = args["main_queue_name"] or "_".join(
-            [self._task_name.lower(), self._start_timestamp]
-        )
-        log_base_dir = (
-            args["log_dir"]  # Specified by user
-            or os.getenv("ORC_EXECUTOR_LOG_DIR")  # Specified in env
-            or self.log_dir  # Specified in subclass
-            or conf.executor.log_base_dir  # Default
-        )
-        self.log_dir = (
-            f"{Path(log_base_dir, self._task_name.lower(), self._start_timestamp)}"
-        )
-
-        self.pickle_dir.mkdir(parents=True, exist_ok=True)
-
-        if args["list"] and isinstance(args["list"], str):
-            self.entry_file_path = args["list"]
-            self.entries = []
-        if args["list"] and isinstance(args["list"], list):
-            self.entry_file_path = None
-            self.entries = args["list"]
-        self.run_local = True if args["run_local"] else False
-
-    def _is_future_date(self, date: str) -> bool:
-        """Check if the date is in the future.
+    def run_batch(
+        self,
+        entries: list[str],
+        workers: Optional[int] = None,
+        retry: Optional[bool] = None,
+    ) -> None:
+        """Process multiple entries in parallel.
 
         Args:
-            date (str): Date in the format "YYYY-MM-DD"
+            entries: List of entry IDs to process.
+            workers: Number of parallel worker processes.
+                Defaults to :attr:`workers`.
+            retry: Whether to retry failed entries.
+                Defaults to :attr:`retry_on_failure`.
+        """
+        n_workers = workers or self.workers
+        should_retry = retry if retry is not None else self.retry_on_failure
+
+        self.setup()
+        try:
+            failed = self._run_parallel(entries, n_workers)
+
+            if failed and should_retry:
+                logger.info(f"Retrying {len(failed)} failed entries...")
+                failed = self._run_parallel(failed, min(n_workers, len(failed)))
+
+            if failed:
+                self._log_failed(failed)
+            self._check_failures(failed, len(entries))
+        finally:
+            self.teardown()
+
+    def load_entries(self) -> list[str]:
+        """Load entries from :attr:`entry_file_path`.
+
+        Override this for custom entry-loading logic.
 
         Returns:
-            bool: True if the date is in the future, False otherwise.
-        """
-        return datetime.strptime(date, "%Y-%m-%d") > datetime.now()
-
-    def no_used_cif_category_modified(self, cif_file: str) -> bool:
-        """Returns true if the CIF file has no modifications in the categories used by the task.
-
-        Scenarios
-        1. Missing _pdbx_audit_revision_history or _pdbx_audit_revision_category, return False
-        2. `self.used_cif_categories` is empty, return False.
-        3. Latest revision is not in the future, return False.
-        4. Modified categories exist, but none of them are used by task, return True.
-
-        Args:
-            cif_file (str): Path to the CIF file
-
-        Returns:
-            bool: True if the CIF file has no modifications in the categories used by the task.
-                  False otherwise including if the categories are not found in the CIF file.
-        """
-        if not self.used_cif_categories:
-            logger.debug("No categories to check for modifications")
-            return False
-
-        # Remove leading _ in self.used_cif_categories if present
-        # since the categories in pdbx_ausit_category are without leading _
-        self.used_cif_categories = {cat.lstrip("_") for cat in self.used_cif_categories}
-
-        block = gemmi.cif.read(str(cif_file)).sole_block()
-        history = block.find(
-            "_pdbx_audit_revision_history.", ["ordinal", "revision_date"]
-        )
-        ordinals = [
-            row["ordinal"]
-            for row in history
-            if self._is_future_date(row["revision_date"])
-        ]
-
-        if not ordinals:
-            logger.info("No future revisions found")
-            return False
-
-        categories = block.find(
-            "_pdbx_audit_revision_category.", ["revision_ordinal", "category"]
-        )
-        if not categories:
-            logger.info("No pdbx_audit_revision_category found")
-            return False
-
-        modified_categories = {
-            row["category"] for row in categories if row["revision_ordinal"] in ordinals
-        }
-        modified_used_categories = modified_categories.intersection(
-            self.used_cif_categories
-        )
-        if not modified_used_categories:
-            logger.debug(f"Modified categories: {', '.join(modified_categories)}")
-            logger.debug(f"Used categories: {', '.join(self.used_cif_categories)}")
-            logger.info("None of the modified categories are used.")
-            return True
-
-        logger.info(f"Modified categories found: {', '.join(modified_used_categories)}")
-        return False
-
-    def run(self, args: argparse.Namespace | dict):
-        """Run application based on args options.
-
-        If dictionary is specified, the keys should be the same as the base parser destinations.
-
-        Args:
-            args: Parsed Args in either dictionary
+            List of entry IDs.
 
         Raises:
-            KeyError: if dictionary inoput provided is missing required key
+            ValueError: If ``entry_file_path`` is not set or the file is empty.
+            FileNotFoundError: If the entry file does not exist.
         """
-        self.setup(args)
+        if not self.entry_file_path:
+            raise ValueError(
+                "No entry_file_path configured. "
+                "Set entry_file_path on the class or pass --list."
+            )
+        path = Path(self.entry_file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Entry file not found: {path}")
+        entries = [
+            line.strip()
+            for line in path.read_text().splitlines()
+            if line.strip()
+        ]
+        if not entries:
+            raise ValueError(f"Entry file is empty: {path}")
+        logger.info(f"Loaded {len(entries)} entries from {path}")
+        return entries
 
-        self.pre_run()
-        self.load_exceptions()
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """Override to add custom CLI arguments.
 
-        try:
-            if self.mode == Modes.SINGLE:
-                for entry in self.entries:
-                    self.process_single(entry)
+        This is called with the **root** ArgumentParser before subparsers are
+        added, so arguments defined here are available in both ``single`` and
+        ``batch`` subcommands.
 
-            elif self.mode == Modes.BATCH:
-                os.makedirs(self.log_dir, exist_ok=True)
-                self.load_entries()
-                if self.run_local:
-                    self.local_batch()
-                else:
-                    self.submit_batch()
-                self.check_failure()
+        Args:
+            parser: The root :class:`argparse.ArgumentParser`.
+        """
 
-        finally:
-            self.post_run()
-            if self.mode == Modes.BATCH:
-                self.send_summary()
+    # --- CLI entry point ---
 
-    def check_failure(self):
-        if not self.failed_entries:
-            logger.debug("All entries processed successfully")
-            return
+    def main(self, argv: Optional[list[str]] = None) -> None:
+        """Parse CLI arguments and dispatch to :meth:`run_single` or :meth:`run_batch`.
 
-        failures = len(self.failed_entries)
-        if self.ignore_batch_failures:
-            logger.warning(f"Batch failed with {failures} entries. Ignoring failures")
-            return
+        Subcommands::
 
-        allowed_failures = (
-            int(self.failure_threshold * len(self.entries))
-            if self.failure_threshold < 1
-            else self.failure_threshold
+            single  --entry <id>
+            batch   --list <file_or_csv> [--workers N] [--no-retry]
+                    [--failure-threshold F] [--timeout S]
+
+        Args:
+            argv: Argument list to parse. Uses ``sys.argv[1:]`` when ``None``.
+        """
+        root = argparse.ArgumentParser(description=self.__class__.__name__)
+        self.add_arguments(root)
+        sub = root.add_subparsers(dest="mode", required=True)
+
+        # single subcommand
+        single_p = sub.add_parser("single", help="Process one entry.")
+        single_p.add_argument(
+            "--entry", "-e", required=True, help="Entry ID to process."
         )
 
-        logger.debug(f"Threshold: {self.failure_threshold} ==> {allowed_failures}")
-        logger.debug(f"Failed: {failures}")
+        # batch subcommand
+        batch_p = sub.add_parser("batch", help="Process multiple entries in parallel.")
+        batch_p.add_argument(
+            "--list",
+            "-l",
+            dest="entry_list",
+            help=(
+                "Path to a file of entry IDs (one per line) or a comma-separated "
+                "list. Uses entry_file_path if not provided."
+            ),
+        )
+        batch_p.add_argument(
+            "--workers",
+            "-w",
+            type=int,
+            default=self.workers,
+            help=f"Number of parallel worker processes (default: {self.workers}).",
+        )
+        batch_p.add_argument(
+            "--no-retry",
+            action="store_true",
+            help="Disable automatic retry for failed entries.",
+        )
+        batch_p.add_argument(
+            "--failure-threshold",
+            type=float,
+            default=self.failure_threshold,
+            dest="failure_threshold",
+            help=(
+                "Max allowed failure ratio (<1) or count (>=1). "
+                "Default: %(default)s."
+            ),
+        )
+        batch_p.add_argument(
+            "--timeout",
+            type=int,
+            default=self.entry_timeout_secs,
+            dest="entry_timeout_secs",
+            help="Per-entry timeout in seconds. No timeout if not set.",
+        )
 
-        if failures > allowed_failures:
-            msg = f"failures ({failures}) > threshold({allowed_failures})"
-            raise TooManyFailedEntries(msg)
+        args = root.parse_args(argv)
+        logger.info(vars(args))
 
-    def send_summary(self):
-        no_of_entries = len(self.entries)
-        no_of_known_exceptions = len(self.known_exceptions)
-        no_failed = len(self.failed_entries)
-        unknown_exceptions = set(self.failed_entries).difference(self.known_exceptions)
+        if args.mode == "single":
+            self.run_single(args.entry)
+        else:
+            self.failure_threshold = args.failure_threshold
+            self.entry_timeout_secs = args.entry_timeout_secs
+            entries = (
+                _parse_entry_list(args.entry_list)
+                if args.entry_list
+                else self.load_entries()
+            )
+            self.run_batch(entries, workers=args.workers, retry=not args.no_retry)
 
-        status = EntryStatusType.SUCCESS
-        if no_failed > 0 and not self.ignore_batch_failures:
-            status = EntryStatusType.FAILED
+    # --- Internal helpers ---
 
-        send_summary_message(
-            self._task_name,
-            status,
-            no_of_entries,
-            len(unknown_exceptions),
-            no_of_known_exceptions,
-            self.log_dir,
+    def _run_parallel(self, entries: list[str], n_workers: int) -> list[str]:
+        """Distribute entries across worker processes; return list of failed IDs."""
+        chunks = _split(entries, n_workers)
+        failed: list[str] = []
+
+        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+            futures = {
+                executor.submit(_run_chunk, self, chunk): chunk
+                for chunk in chunks
+            }
+            for future in as_completed(futures):
+                chunk = futures[future]
+                try:
+                    chunk_failed = future.result()
+                    failed.extend(chunk_failed)
+                except Exception:
+                    logger.error("Worker process crashed:", exc_info=True)
+                    failed.extend(chunk)
+
+        return failed
+
+    def _check_failures(self, failed: list[str], total: int) -> None:
+        if not failed:
+            logger.info("All entries processed successfully.")
+            return
+        if self.failure_threshold <= 0:
+            return
+        allowed = (
+            int(self.failure_threshold * total)
+            if self.failure_threshold < 1
+            else int(self.failure_threshold)
+        )
+        logger.debug(f"Failures: {len(failed)}, allowed: {allowed}")
+        if len(failed) > allowed:
+            raise TooManyFailedEntries(
+                f"{len(failed)} failures exceed threshold "
+                f"({self.failure_threshold} → {allowed} entries)"
+            )
+
+    def _log_failed(self, failed: list[str]) -> None:
+        count = min(5, len(failed))
+        logger.warning(
+            f"{len(failed)} entries failed. First {count}: {failed[:count]}"
         )
