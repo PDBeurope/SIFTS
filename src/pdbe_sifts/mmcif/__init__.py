@@ -22,7 +22,7 @@ def extract_entities(cif_file):
     if not Path(cif_file).exists():
         raise FileNotFoundError(f"The mmcif file {cif_file} does not exist.")
     
-    block = cif.read(cif_file).sole_block()
+    block = cif.read(str(cif_file)).sole_block()
     cc = ChemCompMapping()
     
     # Get required categories
