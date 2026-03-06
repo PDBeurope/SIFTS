@@ -74,6 +74,8 @@ pdbe_sifts build_db \
 
 The taxonomy mapping file must be tab-separated with columns `sequence_id` and `tax_id`.
 
+Then edit your config file by adding the target_db created path.
+
 ### 3. Run global mappings
 
 ```bash
