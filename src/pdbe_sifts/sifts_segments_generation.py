@@ -132,7 +132,8 @@ class SiftsAlign(Batchable):
             logger.info(f"Processing {entry_id} entity {entity}")
 
             em = helper.EntryMapping(
-                entry, entity, entity_mapping, self.nf90_mode, self.NFT, self.NFC
+                entry, entity, entity_mapping, self.nf90_mode, self.NFT, self.NFC,
+                unp_dir=self.unp_dir,
             )
 
             if not em.set_chain_accessions():

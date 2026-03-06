@@ -12,7 +12,7 @@ from pdbe_sifts.mmcif.entry import Entry
 from pdbe_sifts.unp.unp import UNP
 
 NF_COVERAGE = 0.7
-N_PROC = 64
+N_PROC = 1
 STEP_SIZE = 2000
 
 
@@ -31,10 +31,10 @@ class SiftsMode(Enum):
     NF90 = 2
 
 
-def get_accession(entry: Entry, acc: str) -> UNP:
+def get_accession(entry: Entry, acc: str, unp_dir: str = "./") -> UNP:
     if acc in entry.accessions:
         return entry.accessions[acc]
-    unp = UNP(acc, './')
+    unp = UNP(acc, unp_dir)
     if unp:
         entry.accessions[unp.accession] = unp
     return unp
@@ -132,6 +132,7 @@ class EntryMapping:
         nf90_mode=False,
         NFT=None,
         NFC=None,
+        unp_dir: str = "./",
     ):
         self.entry = entry
         self.entity = entity
@@ -143,11 +144,12 @@ class EntryMapping:
         self.ranges: list[tuple[int, int]] = []
         self.NFT: NF90TaxID = NFT
         self.NFC: NF90Coverage = NFC
+        self.unp_dir = unp_dir
 
     def _get_accessions(self):
         # Validate the provided mappings
         for mapping in self.entity_mapping:
-            unp = get_accession(self.entry, mapping.accession)
+            unp = get_accession(self.entry, mapping.accession, self.unp_dir)
             if unp:
                 logger.info(
                     f"Valid mapping: {unp.accession} {mapping.range_start}-{mapping.range_stop}"
@@ -157,9 +159,10 @@ class EntryMapping:
 
         # If no valid mappings were provided, try to get them from the mmCIF
         if not self.accs:
-            cif_accs = self.entry.mmcif.get_unp(self.chain)
+            _chain = next(iter(self.entity_obj.chains), None)
+            cif_accs = self.entry.mmcif.get_unp(_chain) if _chain else []
             for acc in cif_accs:
-                unp = get_accession(self.entry, acc)
+                unp = get_accession(self.entry, acc, self.unp_dir)
                 if unp:
                     self.accs.append(unp.accession)
 
@@ -168,8 +171,10 @@ class EntryMapping:
 
         # If we have mappings but no ranges, try to get them from the mmCIF
         if self.accs and not self.ranges:
-            self.ranges = self.entry.mmcif.get_ranges(self.chain, self.accs[0])
-            logger.info(f"Ranges come from mmCIF: {self.ranges}")
+            _chain = next(iter(self.entity_obj.chains), None)
+            if _chain:
+                self.ranges = self.entry.mmcif.get_ranges(_chain, self.accs[0])
+                logger.info(f"Ranges come from mmCIF: {self.ranges}")
 
     def set_chain_accessions(self):
         self._get_accessions()
@@ -216,7 +221,7 @@ class EntryMapping:
         for acc in set(self.accs):
             self.acc = acc
             isoforms = {}
-            unp = get_accession(self.entry, acc)
+            unp = get_accession(self.entry, acc, self.unp_dir)
             if not unp:
                 continue
             self.unp = unp
@@ -315,7 +320,7 @@ class EntryMapping:
     def get_nf90_isoforms(self, unp, isoforms):
         logger.debug(f"fetching NF90 isoforms for {unp}")
         for acc in self.NFT.get_nf90(unp.accession):
-            unp_nf90 = get_accession(self.entry, acc)
+            unp_nf90 = get_accession(self.entry, acc, self.unp_dir)
 
             if not unp_nf90:
                 continue
@@ -332,14 +337,15 @@ class EntryMapping:
         return isoforms
 
     def get_valid_accession(self, acc):
-        unp = get_accession(self.entry, acc)
+        unp = get_accession(self.entry, acc, self.unp_dir)
         if not unp:
-            accs = self.entry.mmcif.get_unp(self.chain)
+            _chain = next(iter(self.entity_obj.chains), None)
+            accs = self.entry.mmcif.get_unp(_chain) if _chain else []
             if not accs:
                 logger.warning(
                     f"The mmCIF doesnt have a UniProt accession: {self.entry.pdbid}"
                 )
-                self.chain_obj.is_chimera = False
+                self.entity_obj.is_chimera = False
                 self.repeated_acc = False
                 return
 
@@ -347,7 +353,7 @@ class EntryMapping:
                 logger.error(
                     "It is a chimera and at least one of the accessions is not valid anymore."
                 )
-                self.chain_obj.is_chimera = False
+                self.entity_obj.is_chimera = False
                 self.repeated_acc = False
                 return
 
@@ -360,16 +366,16 @@ class EntryMapping:
                 )
                 return
 
-            unp = get_accession(self.entry, accs[0])
+            unp = get_accession(self.entry, accs[0], self.unp_dir)
 
         return unp
 
     def _update_best_mapping(self, unp, iso, al, score):
         try:
             ad_dbref_acc = self.entity_mapping[0].accession
-        except Exception:
+        except (IndexError, AttributeError):
             logger.warning(
-                f"Could not get the AD_DBREF accession for {self.entry.pdbid} {self.entity}"
+                f"Could not get the AD_DBREF accession for {self.entry.name} {self.entity}"
             )
             ad_dbref_acc = None
         best_score = self.entity_obj.best[unp.accession][1]
@@ -388,15 +394,16 @@ class EntryMapping:
 
     def check_unp_coverage(self):
         logger.debug("Checking coverage")
-        unp = get_accession(self.entry, self.accs[0])
+        unp = get_accession(self.entry, self.accs[0], self.unp_dir)
 
         if not unp:
             return False
 
-        if self.repeated_acc or self.chain_obj.is_chimera:
+        if self.repeated_acc or self.entity_obj.is_chimera:
             logger.warning("It is a chimera so we skip it for UniRef90")
             return False
-        coverage = self.NFC.get_coverage(self.entry.pdbid, self.chain, unp.accession)
+        _chain = next(iter(self.entity_obj.chains), None)
+        coverage = self.NFC.get_coverage(self.entry.pdbid, _chain, unp.accession)
         if coverage < NF_COVERAGE:
             logger.warning(
                 f"Coverage {coverage} < {NF_COVERAGE} so we skip it for UniRef90"
@@ -419,4 +426,4 @@ class EntryMapping:
                     logger.warning("Large gap detected")
             else:
                 logger.info(f"Chain {self.entity} is Chimera!")
-                self.chain_obj.is_chimera = True
+                self.entity_obj.is_chimera = True
