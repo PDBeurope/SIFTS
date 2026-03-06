@@ -6,13 +6,8 @@ This allows for faster access to a small subset of required information
 from a large XML file.
 """
 
-import os
-import pickle
-import random
 import requests
-from collections.abc import Mapping
-from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import funcy
 from lxml import etree as ElementTree
@@ -21,10 +16,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.utils import fetch_uniprot_file
-from pdbe_sifts.config import load_config
-
-conf = load_config()
-UNP_CACHE = conf.cache.uniprot
 
 COLORS = {
     "white": 0,
@@ -150,46 +141,38 @@ class UNP:
     unp_dir: str
     ad_dbref_auto_acc: str
     sequence: str
-    keywords: str
-    signal: str
-    chain: str
+    keywords: Optional[list[str]]
+    signal: Optional[tuple]
+    chain: Optional[tuple[int, int]]
     molName: str
-    synonyms: list[str] = []
+    synonyms: list[str]
     longName: str
-    organism: str
-    taxonomy: str
+    organism: list[str]
+    taxonomy: list[str]
     date_created: str
-    date_annotated: str
-    date_seq_update: str
-    seq_length: str
+    date_annotated: list[str]
+    date_seq_update: list[str]
+    seq_length: int
     seq_molWeight: str
     seq_checksum: str
-    comments: Mapping[str, str] = {}
+    comments: dict[str, list]
     dbentry_id: str
-    dbreferences: Mapping[str, list[str]] = {}
-    features: Mapping[str, str] = {}
+    dbreferences: dict[str, list[str]]
+    features: dict[str, list]
     dataset: str
-    evidences: list[str] = []
-    secondary_accessions: list[str] = []
-    annotation_score: int
+    evidences: list[dict]
+    secondary_accessions: list[str]
+    annotation_score: Optional[int]
 
     def _load_uniprot_data(self, accession):
-        """Load the data for the accession from the uniprot XML file
+        """Load the data for the accession from the UniProt XML file.
 
-        Will try to load from a pickle file if it exists. If not, will fetch from uniprot and cache it.
-        if env var ORC_NO_CACHE_ALL is set to True, will not cache the data nor load from cache.
+        Delegates to ``fetch_uniprot_file``, which checks the local cache
+        directory (``self.unp_dir``) before fetching from the UniProt API.
 
         Args:
-            accession (str): The accession to load
-
+            accession (str): The canonical UniProt accession to load (no isoform suffix).
         """
-        pickle_file_path = None
-        xml_file_path = Path(UNP_CACHE) / f'{accession[0]}/{accession[0:2]}/{accession}.xml'
-
-        if Path(xml_file_path).exists():
-            self._load_from_uniprot_xml(accession, xml_file_path)
-            return
-
         self._load_from_uniprot_xml(accession)
 
     @funcy.retry(3, errors=XMLSyntaxError, timeout=0.2)
@@ -204,7 +187,7 @@ class UNP:
         """
         return ElementTree.parse(xml_file).getroot()
 
-    def _load_from_uniprot_xml(self, accession, xml_file_path = None) -> dict:
+    def _load_from_uniprot_xml(self, accession, xml_file_path=None) -> None:
         if xml_file_path is not None:
             xml_file = xml_file_path
         else:
@@ -215,25 +198,26 @@ class UNP:
         if not accessions:
             raise ValueError(f"Invalid file for {accession}. No accessions found.")
 
-        self.accession = accession
-        accessions = list(map(str, doc[0].xpath(".//*[name()='accession']/text()")))
-        if not accessions:
-            raise ValueError(f"Invalid file for {accession}. No accessions found.")
-
-        self.accession = accession
         self._populate_fields(doc)
 
-    def __init__(self, accession, unp_dir):
-        self.seq_isoforms: Mapping[str, Any] = {}
-        self.isoforms: Mapping[str, Any] = {}
-        self.features: Mapping[str, str] = {}
+    def __init__(self, accession, unp_dir, fetch_annotation_score: bool = True):
+        self.seq_isoforms: dict[str, Any] = {}
+        self.isoforms: dict[str, Any] = {}
+        self.features: dict[str, list] = {}
+        self.comments: dict[str, list] = {}
+        self.dbreferences: dict[str, list[str]] = {}
+        self.evidences: list[dict] = []
+        self.secondary_accessions: list[str] = []
+        self.synonyms: list[str] = []
         self.accession = None
+        self.annotation_score = None
         self.unp_dir = unp_dir
         self.ad_dbref_auto_acc = accession
         if "-" in accession:
             accession = accession.split("-")[0]
         self._load_uniprot_data(accession)
-        self.annotation_score = get_annotation_score(accession)
+        if fetch_annotation_score:
+            self.annotation_score = get_annotation_score(accession)
 
     def _populate_fields(self, doc):
         uniprot = doc[0]
@@ -363,8 +347,8 @@ class UNP:
             ]:
                 if feat.xpath("./@id"):
                     id_value = str(feat.xpath("./@id")[0])
-                else:  # check out P26039
-                    id_value = str(random.randint(0, 1000))
+                else:  # some features have no @id in the XML (e.g. P26039)
+                    id_value = None
 
                 if feat.xpath(".//*[name()='original']/text()") == []:
                     original = ""
@@ -518,12 +502,6 @@ class UNP:
 
         if self.hasSpliceVariants():
             splices.append(self.sequence)
-
-            # splices.append(
-            #     self.applySpliceVariant(
-            #         [x["id"] for x in self.features["splice variant"]]
-            #     )
-            # )
 
             for var in self.features["splice variant"]:
                 splices.append(self.applySpliceVariant(var["id"]))
