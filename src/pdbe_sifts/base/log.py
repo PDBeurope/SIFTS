@@ -68,12 +68,11 @@ logging.setLogRecordFactory(record_factory)
 logger = logging.getLogger()
 logger.addHandler(_get_handler())
 
-logLevel = 'INFO'
-
+logLevel = os.environ.get("SIFTS_LOG_LEVEL", "INFO").upper()
 try:
     logger.setLevel(logLevel)
 except ValueError:
-    logger.error(f"Invalid log level in env var {envvar}. Defaulting to INFO")
+    logger.error(f"Invalid log level '{logLevel}' in SIFTS_LOG_LEVEL. Defaulting to INFO")
     logLevel = "INFO"
     logger.setLevel(logLevel)
 
@@ -84,4 +83,3 @@ try:
     coloredlogs.install(level=logLevel, logger=logger)
 except ImportError:
     pass
-

@@ -21,7 +21,7 @@ def main():
         help="Copy the config template to ~/.config/pdbe_sifts/config.yaml"
     )
     init_parser.add_argument(
-        "-dest", type=Path, default=None,
+        "--dest", type=Path, default=None,
         help="Custom destination path (default: ~/.config/pdbe_sifts/config.yaml)"
     )
     init_parser.add_argument(
@@ -57,11 +57,11 @@ def main():
         help="File to map sequence identifier to taxonomical identifier."
     )
     targetbuild_parser.add_argument(
-        "-tool", "--tool", default="mmseqs",
+        "--tool", default="mmseqs",
         help="Tool to use for creating the reference database ('mmseqs' by default or 'blastp')."
     )
     targetbuild_parser.add_argument(
-        "-threads", "--threads", type=int, default=1,
+        "--threads", type=int, default=1,
         help="Number of threads to use for parsing and searches."
     )
 
@@ -71,38 +71,147 @@ def main():
         help="Runs alignment and scoring function."
     )
     global_parser.add_argument(
-        "-config", "--config", required=False,
-        help="Path to a custom config file."
+        "-i", "--input-file", required=True,
+        help=(
+            "Input file: a single mmCIF (.cif / .cif.gz), "
+            "a FASTA (.fasta / .fa / .faa), "
+            "or a text file listing mmCIF paths (.txt)."
+        ),
     )
     global_parser.add_argument(
-        "-i", "--cif-file", required=True,
-        help="Path to a PDBx/mmCIF file or a text file listing multiple CIF paths."
-    )
-    global_parser.add_argument(
-        "-od", "--output-dir", required=False, default=conf.user.base_dir,
+        "-o", "--output-dir", required=False, default=conf.user.base_dir,
         help="Directory where all results will be written."
     )
     global_parser.add_argument(
-        "-db", "--db-file", required=False, default=conf.user.target_db,
+        "--db-file", required=False, default=conf.user.target_db,
         help="Path to the preformatted sequence database (MMseqs or BLAST)."
     )
     global_parser.add_argument(
-        "-t", "--tool", default="mmseqs",
+        "--tool", default="mmseqs",
         help="Alignment tool to use ('mmseqs' or 'blastp')."
     )
     global_parser.add_argument(
-        "-ucsv", "--unp-csv-file", default=None,
+        "--unp-csv-file", default=None,
         help="Path to the csv file containing accession info: accession, provenance, pdb_xref, annotation_score."
     )
     global_parser.add_argument(
-        "-threads", "--threads", type=int, default=1,
+        "--threads", type=int, default=1,
         help="Number of threads to use for parsing and searches."
     )
     global_parser.add_argument(
-        "-bs", "--batch-size", type=int, default=100000,
+        "--batch-size", type=int, default=100000,
         help="Number of CIF files to process per batch (default: 100000)."
     )
 
+    ######### BUILD FASTA
+    fasta_parser = subparsers.add_parser(
+        "fasta_build",
+        help="Build a query FASTA from mmCIF files."
+    )
+    fasta_parser.add_argument(
+        "-i", "--input", required=True,
+        help="Input file (.cif, .cif.gz, .fasta, .fa, .faa, or .txt list of CIF paths).",
+    )
+    fasta_parser.add_argument(
+        "-o", "--output-dir", required=True,
+        help="Directory where the generated FASTA will be written.",
+    )
+    fasta_parser.add_argument(
+        "--threads", type=int, default=1,
+        help="Number of parallel workers for .txt list processing (default: 1).",
+    )
+    fasta_parser.add_argument(
+        "--batch-size", type=int, default=100000,
+        help="Number of CIF files per batch for .txt list processing (default: 100000).",
+    )
+
+    ######### SEGMENTS GENERATION
+    segments_parser = subparsers.add_parser(
+        "segments",
+        help=(
+            "Generate SIFTS segments via local sequence alignment (lalign36). "
+            "Append 'single --entry <id>' or 'batch --list <file> [--workers N]'."
+        ),
+    )
+    segments_parser.add_argument(
+        "-i", "--cif-input-dir",
+        default=conf.location.work.data_entry_dir,
+        help="Base location for mmCIF files.",
+    )
+    segments_parser.add_argument(
+        "-db", "--db", required=True,
+        help="DuckDB file location.",
+    )
+    segments_parser.add_argument(
+        "-o", "--output-dir",
+        default=conf.location.work.data_entry_dir,
+        help="Base location for output CSV files.",
+    )
+    segments_parser.add_argument(
+        "--unp-dir",
+        default=conf.cache.uniprot,
+        help="Base location for UniProt cache files.",
+    )
+    segments_parser.add_argument(
+        "--nf90", action="store_true", default=False,
+        help="UniRef90 mode (default: False).",
+    )
+    segments_parser.add_argument(
+        "-w", "--write-to-db", action="store_true", default=False,
+        help="Additionally write results to the DuckDB file (default: False).",
+    )
+    segments_parser.add_argument(
+        "-m", "--mapping",
+        help="User-defined UniProt accessions, e.g. A:P00963,B:P00963.",
+    )
+    segments_parser.add_argument(
+        "run_args", nargs=argparse.REMAINDER,
+        help="Batchable subcommand: 'single --entry <id>' or 'batch --list <file> [--workers N]'.",
+    )
+
+    ######### SIFTS → mmCIF
+    sifts2mmcif_parser = subparsers.add_parser(
+        "sifts2mmcif",
+        help="Inject SIFTS mappings into mmCIF files.",
+    )
+    sifts2mmcif_parser.add_argument(
+        "-o", "--output-dir", required=True,
+        help="Directory where output mmCIF files will be stored.",
+    )
+    sifts2mmcif_parser.add_argument(
+        "-i", "--input-cif-dir",
+        default=conf.location.work.data_entry_dir,
+        help="Input CIF base directory.",
+    )
+    sifts2mmcif_parser.add_argument(
+        "-s", "--sifts-csv-dir", required=False,
+        help="SIFTS CSV base directory. If not given, data is read from the database.",
+    )
+    sifts2mmcif_parser.add_argument(
+        "-d", "--db-conn-str", required=True,
+        help="DuckDB file path.",
+    )
+    sifts2mmcif_parser.add_argument(
+        "-T", "--no-track-changes", action="store_true", default=False,
+        help="Disable comparison with previous run to track mapping changes.",
+    )
+    sifts2mmcif_parser.add_argument(
+        "-p", "--prev-run-dir", required=False,
+        help="Compare sifts_only.mmcif from this directory for delta tracking.",
+    )
+    sifts2mmcif_parser.add_argument(
+        "-l", "--delta-sifts-file",
+        default=conf.lists.sifts_mapping_changes,
+        help="Output file for delta mapping changes (batch mode only).",
+    )
+    sifts2mmcif_parser.add_argument(
+        "--log-dir", required=False, default=None,
+        help="Log directory for generating the delta mapping list in teardown().",
+    )
+    sifts2mmcif_parser.add_argument(
+        "run_args", nargs=argparse.REMAINDER,
+        help="Batchable subcommand: 'single --entry <id>' or 'batch --list <file> [--workers N]'.",
+    )
 
     args = parser.parse_args()
 
@@ -114,38 +223,67 @@ def main():
     elif args.command == "show":
         cfg = load_config(args.config)
         print(cfg)
-    
+
     elif args.command == "global_mappings":
-        if args.config:
-            cfg = load_config(args.config)
         gb_m = SiftsGlobalMappings(
-                cif_file=args.cif_file,
-                out_dir=args.output_dir,
-                db_file=args.db_file,
-                unp_csv=args.unp_csv_file,
-                tool=args.tool,
-                threads=args.threads,
-                batch_size=args.batch_size,
-            )
+            input_file=args.input_file,
+            out_dir=args.output_dir,
+            db_file=args.db_file,
+            unp_csv=args.unp_csv_file,
+            tool=args.tool,
+            threads=args.threads,
+            batch_size=args.batch_size,
+        )
         gb_m.process()
-        
+
     elif args.command == "build_db":
         db_b = TargetDb(
             input_path=args.fasta,
             output_path=args.output_path,
             tax_mapping_file=args.tax_mapping_file,
             tool=args.tool,
-            threads=args.threads
-            )
+            threads=args.threads,
+        )
         db_b._process()
 
+    elif args.command == "fasta_build":
+        from pdbe_sifts.sifts_fasta_builder import FastaBuilder
+        out_dir = Path(args.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        fasta_path = FastaBuilder(
+            input_path=args.input,
+            out_dir=out_dir,
+            threads=args.threads,
+            batch_size=args.batch_size,
+        ).build()
+        print(f"FASTA written to: {fasta_path}")
 
-    # elif args.command == "run":
-    #     cfg = load_config(args.config)
-    #     if args.overrides:
-    #         from omegaconf import OmegaConf
-    #         cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(args.overrides))
-        # ... pipeline logic
+    elif args.command == "segments":
+        from pdbe_sifts.sifts_segments_generation import SiftsAlign
+        sifts_align = SiftsAlign(
+            cif_dir=args.cif_input_dir,
+            out_dir=args.output_dir,
+            file_duckdb=args.db,
+            unp_dir=args.unp_dir,
+            nf90_mode=args.nf90,
+            unp_mode=args.mapping,
+            dbmode=args.write_to_db,
+        )
+        sifts_align.main(args.run_args)
+
+    elif args.command == "sifts2mmcif":
+        from pdbe_sifts.sifts_to_mmcif.main import ExportSIFTSTommCIF
+        obj = ExportSIFTSTommCIF(
+            output_path=args.output_dir,
+            cif_dir=args.input_cif_dir,
+            sifts_csv_dir=args.sifts_csv_dir,
+            duckdb_file=args.db_conn_str,
+            track_changes=not args.no_track_changes,
+            prev_run_dir=args.prev_run_dir,
+            delta_file=args.delta_sifts_file,
+            log_dir=args.log_dir,
+        )
+        obj.main(args.run_args)
 
     else:
         parser.print_help()

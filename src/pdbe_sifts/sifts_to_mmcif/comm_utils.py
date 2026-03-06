@@ -402,13 +402,11 @@ def check_output_mmcif(file1, file2):
 def check_sifts_mmcif(file1, file2, category_list):
     """Checks if the sifts category contents in file1 are still present in file2"""
 
-    # infile = mmcifIO.CifFileReader(input="data", preserve_order=True)
-
     block_a = cif.read(str(file1)).sole_block()
     block_b = cif.read(str(file2)).sole_block()
 
     for cat in category_list:
-        logger.debug("Category: {cat}")
+        logger.debug(f"Category: {cat}")
         a_cat_table = block_a.get_mmcif_category(cat)
         b_cat_table = block_b.get_mmcif_category(cat)
 

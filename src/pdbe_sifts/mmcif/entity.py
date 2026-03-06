@@ -78,7 +78,6 @@ class Entity:
         # residues are the same to each chain belonging to the same entity
         # however in chain X they can be observed and not in chain Y
         self.residues: List[Residue] = []
-        self.observed_by_chain: Dict[str, Dict[int, bool]]
         self.alignment_sequence: List[str] = []
         self.expression_tag_start = None
         
@@ -113,7 +112,7 @@ class Entity:
         )
 
     def get_entity_sequence(self):
-        self.sequence = self.mmcif.get_sequence(self.entity_id)
+        return self.mmcif.get_sequence(self.entity_id)
 
 
     def _load_chains_info(self) -> None:

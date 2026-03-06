@@ -53,8 +53,6 @@ def read_sifts_segments(block):
             )
 
     rows = sorted(rows)
-    # print(data)
-    # print(rows)
     return data, rows
 
 
@@ -66,7 +64,6 @@ def get_delta_csv_suffix(csv_dir):
     """
     my_cutoff = 10
     suff = str(get_next_release_date()).split("-", 1)[1]
-    # print(csv_dir)
     # file all the files with delta mappings
     all_file = sorted(
         [

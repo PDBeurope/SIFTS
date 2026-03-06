@@ -49,8 +49,9 @@ def get_unp_segments(pdbid, seg_csv, pdbecursor):
             f.close()
             reader = csv.DictReader(csvfile, delimiter=",", fieldnames=sifts_seg_header)
     else:
-        query = f"select * from sifts_xref_segment where entry_id='{pdbid}'"
-        rows = pdbecursor.execute(query).fetchdf()
+        rows = pdbecursor.execute(
+            "select * from sifts_xref_segment where entry_id=?", [pdbid]
+        ).fetchdf()
         reader = [row[1].to_dict() for row in rows.iterrows()]
 
     for row in reader:
@@ -178,8 +179,9 @@ def get_unpres_mapping(pdbid, res_csv, pdbecursor):
             f.close()
             reader = csv.DictReader(csvfile, delimiter=",", fieldnames=sifts_res_header)
     else:
-        query = f"select * from sifts_xref_residue where entry_id='{pdbid}'"
-        rows = pdbecursor.execute(query).fetchdf()
+        rows = pdbecursor.execute(
+            "select * from sifts_xref_residue where entry_id=?", [pdbid]
+        ).fetchdf()
         reader = [row[1].to_dict() for row in rows.iterrows()]
 
     for row in reader:

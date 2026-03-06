@@ -12,15 +12,14 @@ import argparse
 import shutil
 from timeit import default_timer as timer
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Optional
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.mmcif import extract_entities
 from pdbe_sifts.global_mappings.mmseqs_search import MmSearch
 from pdbe_sifts.global_mappings.blastp import BlastP
 from pdbe_sifts.global_mappings.global_mappings_parser import GlobMappingsParser
 from pdbe_sifts.base.utils import get_date
+from pdbe_sifts.sifts_fasta_builder import FastaBuilder
 
 
 class SiftsGlobalMappings:
@@ -28,7 +27,7 @@ class SiftsGlobalMappings:
 
     def __init__(
         self,
-        cif_file: str | Path,
+        input_file: str | Path,
         out_dir: str | Path,
         db_file: str | Path,
         unp_csv: Optional[str | Path] = None,
@@ -40,7 +39,7 @@ class SiftsGlobalMappings:
         Initialize SiftsGlobalMappings.
 
         Args:
-            cif_file: Path to a mmCIF file (.cif / .cif.gz), a FASTA file
+            input_file: Path to a mmCIF file (.cif / .cif.gz), a FASTA file
                       (.fasta / .fa / .faa), or a text file listing mmCIF
                       paths (.txt).
             out_dir: Directory where results will be written.
@@ -51,7 +50,7 @@ class SiftsGlobalMappings:
             threads: Number of CPU threads to use.
             batch_size: Number of CIF files per batch when processing a .txt list.
         """
-        self.cif_file = Path(cif_file)
+        self.input_file = Path(input_file)
         self.out_dir = Path(out_dir)
         self.db_file = Path(db_file)
         self.unp_csv = Path(unp_csv) if unp_csv is not None else None
@@ -59,166 +58,6 @@ class SiftsGlobalMappings:
         self.threads = threads
         self.batch_size = batch_size
         self.date = get_date()
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
-    def _get_entry_name(self) -> str:
-        """Derive the run name from the input filename, stripping all known suffixes.
-
-        Examples:
-            1vyc.cif      → 1vyc
-            1vyc.cif.gz   → 1vyc
-            query.fasta   → query
-            entries.txt   → entries
-        """
-        name = self.cif_file.name
-        for suffix in (".cif.gz", ".cif", ".fasta", ".fa", ".faa", ".txt"):
-            if name.lower().endswith(suffix):
-                return name[: -len(suffix)]
-        return self.cif_file.stem
-
-    # ------------------------------------------------------------------
-    # FASTA generation
-    # ------------------------------------------------------------------
-
-    def generate_fasta(
-        self,
-        entity_seq_tax_dict: dict,
-        entry_name: str,
-        fasta_path: Path,
-        mode: str = "w",
-    ) -> Path:
-        """Write entity sequences to a FASTA file.
-
-        Args:
-            entity_seq_tax_dict: Mapping of entity_id → (sequence, taxid).
-            entry_name: Entry name used in the FASTA header (e.g. '1vyc').
-            fasta_path: Destination file path.
-            mode: File open mode ('w' to create/overwrite, 'a' to append).
-
-        Returns:
-            Path to the written FASTA file.
-        """
-        with open(fasta_path, mode) as fh:
-            for entity, (seq, tax_id) in entity_seq_tax_dict.items():
-                fh.write(f">pdb|{entry_name}-{entity}|OX={tax_id}\n{seq}\n")
-        return fasta_path
-
-    # ------------------------------------------------------------------
-    # Input processing
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _process_single_file(file_path: str | Path):
-        """Extract sequence/taxonomy info from one mmCIF file.
-
-        Module-level staticmethod so it can be pickled by ProcessPoolExecutor.
-
-        Returns:
-            ((entry_name, entity_seq_tax_dict), None) on success
-            (None, warning_message) on failure
-        """
-        file_path = Path(file_path)
-        if not file_path.exists():
-            return None, f"Missing CIF file: {file_path}"
-
-        name = file_path.name
-        entry_name = name
-        for suffix in (".cif.gz", ".cif"):
-            if name.lower().endswith(suffix):
-                entry_name = name[: -len(suffix)]
-                break
-        else:
-            entry_name = file_path.stem
-
-        try:
-            entity_seq_tax = extract_entities(file_path)
-            return (entry_name, entity_seq_tax), None
-        except Exception as e:
-            return None, f"Failed to process {file_path}: {e}"
-
-    def process_input_file(self, result_dir: Path) -> tuple[Path, str]:
-        """Process the input file and return (fasta_path, entry_name).
-
-        Supports three input formats:
-        - .fasta / .fa / .faa  — used as-is (no conversion)
-        - .cif / .cif.gz       — single mmCIF, sequences extracted via extract_entities()
-        - .txt                  — list of mmCIF paths, processed in parallel batches
-
-        The generated FASTA (for CIF inputs) is written into result_dir so it
-        lives alongside hits.duckdb.
-
-        Args:
-            result_dir: The run's result directory (already created by process()).
-
-        Returns:
-            Tuple of (path to FASTA file, entry/run name).
-        """
-        if not self.cif_file.exists():
-            raise FileNotFoundError(f"Input file not found: {self.cif_file}")
-
-        name = self.cif_file.name.lower()
-        entry_name = self._get_entry_name()
-
-        # ---- FASTA input: use directly, no conversion needed ----
-        if name.endswith((".fasta", ".fa", ".faa")):
-            logger.info(f"Using FASTA input directly: {self.cif_file}")
-            return self.cif_file, entry_name
-
-        # ---- Single mmCIF file ----
-        if name.endswith((".cif.gz", ".cif")):
-            logger.info(f"Extracting sequences from {self.cif_file}")
-            entity_seq_tax = extract_entities(self.cif_file)
-            fasta_path = result_dir / f"{entry_name}.fasta"
-            self.generate_fasta(entity_seq_tax, entry_name, fasta_path)
-            return fasta_path, entry_name
-
-        # ---- Text file listing mmCIF paths ----
-        if name.endswith(".txt"):
-            fasta_path = result_dir / f"{entry_name}.fasta"
-            fasta_path.unlink(missing_ok=True)
-
-            file_paths = [
-                line.strip()
-                for line in self.cif_file.read_text().splitlines()
-                if line.strip()
-            ]
-            logger.info(f"Processing {len(file_paths)} CIF files from {self.cif_file}")
-
-            for i in range(0, len(file_paths), self.batch_size):
-                batch = file_paths[i : i + self.batch_size]
-                results = []
-
-                with ProcessPoolExecutor(max_workers=self.threads) as pool:
-                    futures = {
-                        pool.submit(self._process_single_file, fp): fp
-                        for fp in batch
-                    }
-                    for fut in as_completed(futures):
-                        res, warn = fut.result()
-                        if warn:
-                            logger.warning(warn)
-                            continue
-                        if res:
-                            results.append(res)
-
-                for en, entity_seq_tax in results:
-                    self.generate_fasta(entity_seq_tax, en, fasta_path, mode="a")
-
-            if not fasta_path.exists() or fasta_path.stat().st_size == 0:
-                raise RuntimeError(
-                    f"No sequences were extracted from {self.cif_file}. "
-                    "Check that the CIF paths in the file are valid and readable."
-                )
-
-            return fasta_path, entry_name
-
-        raise ValueError(
-            f"Unsupported input format '{self.cif_file.suffix}'. "
-            "Expected .cif, .cif.gz, .fasta, .fa, .faa, or .txt"
-        )
 
     # ------------------------------------------------------------------
     # Search
@@ -260,10 +99,10 @@ class SiftsGlobalMappings:
         ``{out_dir}/{tool}_{entry_name}_{date}/`` and writes all outputs
         there: the generated FASTA, the raw hits TSV, and hits.duckdb.
         """
-        logger.info(f"Processing [{self.cif_file}]")
+        logger.info(f"Processing [{self.input_file}]")
         start = timer()
 
-        entry_name = self._get_entry_name()
+        entry_name = FastaBuilder.entry_name_from(self.input_file)
 
         # Create (or wipe and recreate) the result directory
         result_dir = self.out_dir / f"{self.tool}_{entry_name}_{self.date}"
@@ -272,7 +111,9 @@ class SiftsGlobalMappings:
         result_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Results will be written to {result_dir}")
 
-        fasta_path, entry_name = self.process_input_file(result_dir)
+        fasta_path = FastaBuilder(
+            self.input_file, result_dir, self.threads, self.batch_size
+        ).build()
         hits_path = self.search(entry_name, fasta_path, result_dir)
 
         logger.info(f"Parsing {self.tool} hits.")
@@ -292,7 +133,7 @@ def run():
         description="Generate SIFTS mappings between a structure and sequence database."
     )
     parser.add_argument(
-        "-i", "--cif-file", required=True,
+        "-i", "--input-file", required=True,
         help=(
             "Input file. Accepted formats: "
             "a single mmCIF file (.cif or .cif.gz), "
@@ -332,7 +173,7 @@ def run():
     logger.info(vars(args))
 
     pipeline = SiftsGlobalMappings(
-        cif_file=args.cif_file,
+        input_file=args.input_file,
         out_dir=args.output_dir,
         db_file=args.db_file,
         unp_csv=args.unp_csv_file,

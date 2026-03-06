@@ -292,7 +292,7 @@ class ExportSIFTSTommCIF(Batchable):
                 logger.error(f"{sifts_seg_csv} does not exist")
 
             sifts_res_csv = Path(sifts_csv_dir, f"{entry_id}_res.csv.gz")
-            if not sifts_seg_csv.exists():
+            if not sifts_res_csv.exists():
                 logger.error(f"{sifts_res_csv} does not exist")
         else:
             sifts_seg_csv, sifts_res_csv = None, None
