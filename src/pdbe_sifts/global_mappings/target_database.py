@@ -9,7 +9,7 @@ It provides a command-line interface (`run()`) for creating the database directl
 from a FASTA file.
 
 Usage (CLI example):
-    python target_db.py -i input.fasta -o output_dir --tool mmseqs
+    python target_db.py -i input.fasta -o output_path --tool mmseqs
 
 Classes:
     TargetDb: Concrete subclass of ToolDatabase implementing database creation for MMseqs2 or BLAST.
@@ -37,10 +37,11 @@ class TargetDb(ToolDatabase):
     `makeblastdb`, depending on the chosen tool.
 
     Args:
-        fasta_path (str | Path): Path to the input FASTA file containing sequences.
-        output_path (str | Path): Path to the directory where output database files will be saved.
-        tax_mapping_file (str | Path): File to map sequence identifier to taxonomical identifier.
-        tool (str, optional): The tool to use for database creation ('mmseqs' or 'blastp'). Defaults to 'mmseqs'.
+        input_path (str | Path): Path to the input FASTA file containing sequences.
+        output_path (str | Path): Path where output database files will be saved.
+        tax_mapping_file (str | Path): File mapping sequence identifiers to taxonomic identifiers.
+        tool (str): The tool to use for database creation ('mmseqs' or 'blastp'). Defaults to 'mmseqs'.
+        threads (int): Number of CPU threads to use. Defaults to 1.
         **kwargs: Additional keyword arguments passed to the database creation commands.
     """
     def __init__(
@@ -48,8 +49,8 @@ class TargetDb(ToolDatabase):
         input_path: Union[str, Path],
         output_path: Union[str, Path],
         tax_mapping_file: Union[str, Path],
-        tool: Union[str, Path] = 'mmseqs',
-        threads=1,
+        tool: str = "mmseqs",
+        threads: int = 1,
         **kwargs,
     ):
         """Initialize the TargetDb instance with input/output paths and configuration."""
@@ -77,43 +78,43 @@ class TargetDb(ToolDatabase):
                 self.target_db._process()
 
 def run():
-    """Command-line interface for creating a MMseqs or BLAST target database."""
+    """Command-line entry point for creating a MMseqs2 or BLAST target database."""
     parser = argparse.ArgumentParser(
-        description="Creation of a mmseqs or blast target database."
+        description="Create a MMseqs2 or BLAST target database from a FASTA file."
     )
 
     parser.add_argument(
-        "-i",
-        "--fasta-path",
+        "-i", "--input-file",
         required=True,
-        help="Base location for the fasta file (with at least one sequence).",
+        help="Path to the input FASTA file (with at least one sequence).",
     )
     parser.add_argument(
-        "-o",
-        "--output-path",
+        "-o", "--output-path",
         required=True,
-        help="Base location where to saved target database files.",
+        help="Path where the target database files will be saved.",
     )
     parser.add_argument(
-        "-t",
-        "--tax-mapping-file",
+        "-t", "--tax-mapping-file",
         required=True,
-        help="File to map sequence identifier to taxonomical identifier",
+        help="File mapping sequence identifiers to taxonomic identifiers.",
     )
     parser.add_argument(
-        "-tool",
-        "--tool",
-        required=True,
-        help="Tool to use for creating the reference database ('mmseqs' or 'blastp').",
+        "--tool", default="mmseqs",
+        help="Tool to use for database creation ('mmseqs' or 'blastp'). Default: mmseqs.",
+    )
+    parser.add_argument(
+        "--threads", type=int, default=1,
+        help="Number of CPU threads to use. Default: 1.",
     )
     args = parser.parse_args()
 
     logger.info(vars(args))
     target_db = TargetDb(
-        args.fasta_path,
-        args.output_path,
-        args.tax_mapping_file,
-        args.tool,
+        input_path=args.input_file,
+        output_path=args.output_path,
+        tax_mapping_file=args.tax_mapping_file,
+        tool=args.tool,
+        threads=args.threads,
     )
     target_db.run()
 

@@ -362,6 +362,7 @@ class GlobMappingsParser:
         conn.close()
 
     def compute_dataset_score(self):
+        """Propagate dataset_score and pdb_cross_references from accession_info into hits."""
         conn = duckdb.connect(str(self.db_path))
         conn.execute("""
             UPDATE hits
@@ -390,6 +391,7 @@ class GlobMappingsParser:
 
 
     def compute_rank(self):
+        """Assign a dense rank to each hit per (entry, entity), ordered by SIFTS score descending."""
         conn = duckdb.connect(self.db_path)
         conn.execute("""
             ALTER TABLE hits

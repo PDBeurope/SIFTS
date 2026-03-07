@@ -63,6 +63,7 @@ class FastaBuilder:
 
     @property
     def entry_name(self) -> str:
+        """Entry name derived from the input filename (all known suffixes stripped)."""
         return self.entry_name_from(self.input_path)
 
     @staticmethod
@@ -183,6 +184,11 @@ class FastaBuilder:
 
 
 def run():
+    """Command-line entry point for building a query FASTA from mmCIF input(s).
+
+    Accepts a single .cif/.cif.gz, an existing .fasta/.fa/.faa,
+    or a .txt file listing mmCIF paths (one per line).
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Build a query FASTA from one or more mmCIF files. "
@@ -191,7 +197,7 @@ def run():
         )
     )
     parser.add_argument(
-        "-i", "--input", required=True,
+        "-i", "--input-file", required=True,
         help="Input file (.cif, .cif.gz, .fasta, .fa, .faa, or .txt list of CIF paths).",
     )
     parser.add_argument(
@@ -199,11 +205,11 @@ def run():
         help="Directory where the generated FASTA will be written.",
     )
     parser.add_argument(
-        "-threads", "--threads", type=int, default=1,
+        "--threads", type=int, default=1,
         help="Number of parallel workers for .txt list processing (default: 1).",
     )
     parser.add_argument(
-        "-bs", "--batch-size", type=int, default=100000,
+        "--batch-size", type=int, default=100000,
         help="Number of CIF files per batch for .txt list processing (default: 100000).",
     )
     args = parser.parse_args()
@@ -212,7 +218,7 @@ def run():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     fasta_path = FastaBuilder(
-        input_path=args.input,
+        input_path=args.input_file,
         out_dir=out_dir,
         threads=args.threads,
         batch_size=args.batch_size,

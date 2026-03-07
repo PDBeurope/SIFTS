@@ -16,7 +16,7 @@ Functions:
 import argparse
 import subprocess
 import shutil
-from typing import Union, Optional, List
+from typing import Union
 from pathlib import Path
 
 from pdbe_sifts.base.log import logger
@@ -58,7 +58,7 @@ class BlastP(AlignmentSearch):
         self.evalue = evalue
         self.threads = threads
 
-    def _process(self, extra_args: list = None):
+    def _process(self):
         """Run the BLASTP search using subprocess."""
         if shutil.which("blastp") is None:
             raise FileNotFoundError("blastp command not found. Please install BLAST+.")
