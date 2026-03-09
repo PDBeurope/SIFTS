@@ -7,7 +7,7 @@ name = "pdbe_sifts"
 version = "0.1.0"
 description = "Python package to run SIFTS from EMBL-EBI locally."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 
 authors = [
@@ -53,3 +53,10 @@ pdbe_sifts = ["data/*.csv", "data/*.pkl.gz", "data/*.yaml"]
 
 [project.scripts]
 pdbe_sifts = "pdbe_sifts.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-mock>=3"]
+redis = ["redis>=4"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

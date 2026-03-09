@@ -28,6 +28,7 @@ location:
     base_dir: ${location.base}/release
     data_dir: ${location.work.base_dir}/data
     data_entry_dir: ${location.work.data_dir}/entry
+    pickle_dir: null           # Serialised Batchable objects for LSF/Slurm jobs
 
 
 cache:
@@ -51,3 +52,26 @@ lists:
 exchange:
   server: ${user.exchange_server}
   username: ${user.exchange_username}
+
+
+# ---------------------------------------------------------------------------
+# Cluster execution (LSF / Slurm)
+# Only needed when using pdbe_sifts segments batch --cluster lsf/slurm
+# ---------------------------------------------------------------------------
+
+farm:
+  cluster_queue: normal          # Default LSF/Slurm queue/partition name
+
+executor:
+  type: lsf                      # Cluster type: "lsf" or "slurm"
+  log_base_dir: null             # Root directory for bsub/sbatch stdout logs
+                                 # e.g. /hps/software/users/pdbe/sifts/bsub_logs
+  default_queue: normal          # Fallback queue if not overridden on CLI
+  default_cores: 1               # CPU cores per job
+  default_memory: 4096           # Memory per job in MB
+  default_timeout: 120           # Wall-clock limit per job in minutes
+
+queue:
+  type: local                    # Queue backend: "local" (multiprocessing) or "redis"
+  host: localhost                # Queue manager hostname
+  port: 50000                    # Queue manager TCP port

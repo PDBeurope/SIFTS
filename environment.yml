@@ -26,5 +26,4 @@ dependencies:
     - gemmi
     - duckdb
     - dateparser
-    - SQLAlchemy
     - platformdirs

@@ -1,3 +1,9 @@
+class BatchRunException(Exception):
+    """Raised when a batch run fails (e.g. no entries to process)."""
+
+    pass
+
+
 class ReleaseCheckFailedException(Exception):
     def __init__(self, entry_id, message, context=None):
         self.entry_id = entry_id
