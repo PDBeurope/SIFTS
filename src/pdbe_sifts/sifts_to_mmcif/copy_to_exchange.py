@@ -14,9 +14,9 @@ from pathlib import Path
 from pdbe_sifts.base import pdbe_path
 from pdbe_sifts.base.batchable import Batchable
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.config import Config
+from pdbe_sifts.config import load_config
 
-conf = Config()
+conf = load_config()
 
 
 class CopyToExchange(Batchable):
