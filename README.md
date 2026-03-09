@@ -8,93 +8,94 @@ Developed at [EMBL-EBI](https://www.ebi.ac.uk/) by the [PDBe](https://www.ebi.ac
 
 ## What is SIFTS?
 
-SIFTS provides residue-level mappings between PDB protein structures and external databases. This package automates the core sequence alignment and mapping generation pipeline:
+SIFTS provides residue-level mappings between PDB protein structures and UniProt sequences. This package automates the full pipeline:
 
-1. **Extract** protein sequences from PDB mmCIF files
-2. **Align** them against a reference UniProt database (MMseqs2 or BLASTP)
-3. **Score** and rank the alignments to select the best UniProt match per chain
-4. **Generate** residue- and segment-level cross-reference mappings
-5. **Export** mappings back into mmCIF files or CSV files
+1. **Build** a reference UniProt sequence database (MMseqs2 or BLASTP)
+2. **Align** PDB entity sequences against it to identify the best UniProt match per chain (≥ 90% identity) according to the SIFTS scoring function
+3. **Generate** precise residue- and segment-level PDB-UNIPROT mappings via local alignment (FASTA36 `lalign36`)
+4. **Store** results in a DuckDB database and per-entry CSV files
+5. **Export** mappings back into annotated mmCIF files
 
 ---
 
 ## Installation
 
-### Recommended: Conda
+### System dependencies
+
+The following binaries must be installed and available on `PATH`:
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| [MMseqs2](https://github.com/soedinglab/MMseqs2) | Fast global sequence search | `conda install -c conda-forge mmseqs2` |
+| [FASTA36](https://fasta.bioch.virginia.edu/wrpearson/fasta/) (`lalign36`) | Local pairwise alignment | `conda install -c bioconda fasta3` |
+| [BLAST+](https://blast.ncbi.nlm.nih.gov/) | Optional alternative to MMseqs2 | `conda install -c bioconda blast` |
+
+### Python package
 
 ```bash
+# Recommended: conda environment
 conda env create -f environment.yml
 conda activate pdbe_sifts
 pip install -e .
-```
 
-### Manual
-
-Install system dependencies first:
-- [MMseqs2](https://github.com/soedinglab/MMseqs2) — fast sequence search
-- [BLAST+](https://blast.ncbi.nlm.nih.gov/doc/blast-help/downloadblastdata.html) — optional alternative aligner
-- [FASTA36] or [FASTA3]: conda install bioconda::fasta3 or (https://fasta.bioch.virginia.edu/wrpearson/fasta/)
-
-Then install the Python package:
-
-```bash
-pip install -e .
-```
-or 
-
-```bash
+# Or directly
 pip install pdbe_sifts
 ```
 
-### Requirements
-
-- Python >= 3.8
-- 16 GB RAM minimum (32 GB+ recommended for large datasets)
+**Requirements:** Python ≥ 3.10 · 16 GB RAM minimum (32 GB+ recommended for large datasets)
 
 ---
 
 ## Quick Start
 
-### 1. Initialize your config
+### 1 — Initialise your config
 
 ```bash
 pdbe_sifts init
+# → creates ~/.config/pdbe_sifts/config.yaml
 ```
 
-This copies the config template to `~/.config/pdbe_sifts/config.yaml` (Linux). Edit it to set your paths.
+Edit the config to set your paths (`cif_dir`, `unp_dir`, `target_db`, etc.).
 
-### 2. Build a reference database
+### 2 — Build a reference database
 
 ```bash
 pdbe_sifts build_db \
   -i uniprot_sprot.fasta \
   -o ./my_db \
-  -t taxonomy_mapping.tsv
+  -t taxonomy_mapping.tsv   # TSV: sequence_id <tab> tax_id
 ```
 
-The taxonomy mapping file must be tab-separated with columns `sequence_id` and `tax_id`.
-
-Then edit your config file by adding the target_db created path.
-
-### 3. Run global mappings
+### 3 — Run global mappings
 
 ```bash
-pdbe_sifts global_mappings \
-  -i 1abc.cif \
-  -od ./results \
-  -db ./my_db/target_db \
-  -t mmseqs \
-  -threads 4
+# Single entry
+pdbe_sifts global_mappings -i 1abc.cif -od ./results -db ./my_db/target_db
+
+# Batch (one mmCIF path per line)
+pdbe_sifts global_mappings -i entries.txt -od ./results -db ./my_db/target_db -threads 8
 ```
 
-For a batch of entries, pass a text file listing one mmCIF path per line:
+Produces `hits.duckdb` — a scored table of UniProt accession candidates per PDB entity.
+
+### 4 — Generate SIFTS segments and residue mappings
 
 ```bash
-pdbe_sifts global_mappings \
-  -i entries.txt \
-  -od ./results \
-  -db ./my_db/target_db \
-  -threads 8 \
+# Single entry
+pdbe_sifts segments -d hits.duckdb -o ./segments single --entry 1abc
+
+# Batch (parallel, 4 workers)
+pdbe_sifts segments -d hits.duckdb -o ./segments batch \
+  --list entries.txt --workers 4 > segments.log 2>&1
+```
+
+Produces per-entry gzip-compressed CSV files under `{output_dir}/{entry_id}/sifts/`.
+
+### 5 — Annotate mmCIF files with SIFTS data
+
+```bash
+pdbe_sifts sifts2mmcif -d hits.duckdb -i ./mmcif -o ./mmcif_annotated batch \
+  --list entries.txt --workers 4
 ```
 
 ---
@@ -103,12 +104,52 @@ pdbe_sifts global_mappings \
 
 | Command | Description |
 |---------|-------------|
-| `pdbe_sifts init` | Copy default config to `~/.config/pdbe_sifts/config.yaml` (Linux) |
-| `pdbe_sifts show` | Print the resolved configuration |
-| `pdbe_sifts build_db` | Build a reference sequence database |
-| `pdbe_sifts global_mappings` | Run alignment and mapping pipeline |
+| `pdbe_sifts init` | Copy default config template to `~/.config/pdbe_sifts/config.yaml` |
+| `pdbe_sifts show` | Print the fully resolved configuration |
+| `pdbe_sifts build_db` | Build a reference sequence database (MMseqs2 or BLASTP) from a UniProt FASTA |
+| `pdbe_sifts fasta_build` | Extract entity sequences from mmCIF files and write a FASTA |
+| `pdbe_sifts global_mappings` | Align PDB sequences against the reference DB; score and store hits in DuckDB |
+| `pdbe_sifts segments` | Generate residue- and segment-level SIFTS mappings via local alignment (`lalign36`) |
+| `pdbe_sifts sifts2mmcif` | Inject SIFTS mappings into annotated mmCIF files |
 
-See [docs/cli.md](docs/cli.md) for full argument reference.
+`segments` and `sifts2mmcif` accept `single` or `batch` sub-commands:
+
+```
+single --entry <pdb_id>
+batch  --list <file>  --workers <N>  [--timeout <secs>]  [--no-retry]  [--failure-threshold <f>]
+```
+
+---
+
+## Outputs
+
+### Global mappings
+
+| File | Format | Content |
+|------|--------|---------|
+| `hits.duckdb` | DuckDB | Scored UniProt accession candidates per PDB entity |
+| `hits_<entry>.tsv` | TSV | Raw MMseqs2 / BLASTP alignment hits |
+
+### Segment generation
+
+Per entry, under `{output_dir}/{entry_id}/sifts/`:
+
+| File | Format | Content |
+|------|--------|---------|
+| `sifts_segment_mapping.csv.gz` | CSV (gzip) | One row per contiguous aligned range (PDB ↔ UniProt positions, identity, conflicts, chimera flag) |
+| `sifts_residue_mapping.csv.gz` | CSV (gzip) | One row per mapped PDB residue (auth seq id, UniProt position, one-letter codes, observed flag) |
+
+When `--write-to-db` is set, results are also loaded into DuckDB tables `sifts_xref_segment` and `sifts_xref_residue`.
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SIFTS_MAXTASKS_PER_CHILD` | `25` | Worker processes are recycled after this many entries to limit memory accumulation |
+| `SIFTS_LALIGN_TIMEOUT` | `350` | Per-entry timeout in seconds for `lalign36` alignments |
+| `SIFTS_LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 
 ---
 
@@ -116,46 +157,38 @@ See [docs/cli.md](docs/cli.md) for full argument reference.
 
 ```
 src/pdbe_sifts/
-├── cli.py                         # Entry point (pdbe_sifts command)
+├── cli.py                         # CLI entry point (pdbe_sifts command)
 ├── sifts_global_mappings.py       # Global mapping pipeline
-├── sifts_segments_generation.py   # Segment generation (parallel, Batchable)
-├── config/                        # OmegaConf config loading
+├── sifts_segments_generation.py   # Segment generation (SiftsAlign, Batchable subclass)
+├── config/                        # OmegaConf configuration loading
 ├── base/
-│   ├── batchable.py               # Parallel processing base class
-│   ├── utils.py                   # Shared utilities
-│   ├── log.py                     # Logging
+│   ├── batchable.py               # Parallel processing base class (Pool + imap_unordered)
+│   ├── utils.py                   # UniProt fetch, identity/coverage helpers
+│   ├── log.py                     # Logging setup
 │   └── exceptions.py              # Custom exceptions
-├── mmcif/                         # mmCIF parsing (Entry, Chain, Entity, Residue)
-├── global_mappings/               # Alignment tools wrappers + result parsing
-│   ├── target_database.py         # Build MMseqs2/BLAST database
-│   ├── mmseqs_search.py           # MMseqs2 search wrapper
+├── mmcif/                         # mmCIF parsing (Entry, Chain, Entity, Residue, ChemComp)
+├── global_mappings/
+│   ├── target_database.py         # Build MMseqs2 / BLAST reference database
+│   ├── mmseqs_search.py           # MMseqs2 easy-search wrapper
 │   ├── blastp.py                  # BLASTP wrapper
-│   └── global_mappings_parser.py  # Parse + score alignment results
-├── segments_generation/           # Alignment → CSV mapping generation
-├── sifts_to_mmcif/                # Export SIFTS data to mmCIF files
+│   └── global_mappings_parser.py  # Parse TSV hits, score, store in DuckDB
+├── segments_generation/
+│   └── alignment/                 # lalign36 wrapper, isoform alignment, residue mapping
+├── sifts_to_mmcif/                # Inject SIFTS data back into mmCIF files
 ├── database/
-│   └── sifts_db_wrapper.py        # DuckDB wrapper (SiftsDB)
+│   └── sifts_db_wrapper.py        # DuckDB schema and bulk-load helpers
 ├── unp/
-│   └── unp.py                     # UniProt API client + UNP class
+│   └── unp.py                     # UniProt REST client, isoform handling
 └── data/
     └── default_config.yaml        # Default configuration template
 ```
 
 ---
 
-## Documentation
-
-- [CLI Reference](docs/cli.md)
-- [Configuration](docs/configuration.md)
-- [Architecture](docs/architecture.md)
-- [Usage Guide](docs/usage.md)
-
----
-
 ## Authors
 
-EMBL-EBI: Adam Bellaiche, Preeti Choudhary, Sreenath Sasidharan Nair, Jennifer Fleming, Sameer Velankar
+EMBL-EBI PDBe team: Adam Bellaiche, Preeti Choudhary, Sreenath Sasidharan Nair, Jennifer Fleming, Sameer Velankar
 
 ## License
 
-MIT License
+MIT
