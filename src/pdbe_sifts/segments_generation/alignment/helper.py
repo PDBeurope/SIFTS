@@ -6,6 +6,7 @@ from typing import NamedTuple
 import tqdm
 from funcy.debug import log_durations
 
+from pdbe_sifts.base.exceptions import SplitAccessionError
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.segments_generation import alignment
 from pdbe_sifts.mmcif.entry import Entry
@@ -13,12 +14,11 @@ from pdbe_sifts.mmcif.entry import Entry
 from pdbe_sifts.unp.unp import UNP
 
 NF_COVERAGE = 0.7
-N_PROC = int(os.environ.get("SIFTS_N_PROC", min(64, os.cpu_count() or 1)))
+N_PROC = int(os.environ.get(
+    "SIFTS_N_PROC",
+    os.environ.get("SLURM_CPUS_PER_TASK", min(64, os.cpu_count() or 1)),
+))
 STEP_SIZE = 2000
-
-
-class SplitAccessionError(Exception):
-    pass
 
 
 class SMapping(NamedTuple):

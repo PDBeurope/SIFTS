@@ -63,7 +63,7 @@ class SiftsAlign(Batchable):
         self.entry_file_path = conf.lists.entries_all
         self.db_batch_size = 1000
         """Number of CSV files to load per DuckDB batch in teardown()."""
-        self.used_cif_categories = [
+        self.used_cif_categories = {
             "entity_poly",
             "pdbx_struct_mod_residue",
             "pdbx_poly_seq_scheme",
@@ -76,7 +76,7 @@ class SiftsAlign(Batchable):
             "entity",
             "pdbx_database_status",
             "pdbx_audit_revision_history",
-        ]
+        }
 
     def worker_setup(self):
         """Open a read-only DuckDB connection and load ChemComp mapping in each worker.
@@ -182,10 +182,6 @@ class SiftsAlign(Batchable):
         if not self.used_cif_categories:
             logger.debug("No categories to check for modifications")
             return False
-
-        self.used_cif_categories = {
-            cat.lstrip("_") for cat in self.used_cif_categories
-        }
 
         block = gemmi.cif.read(str(cif_file)).sole_block()
         history = block.find(

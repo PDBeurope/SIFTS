@@ -43,3 +43,9 @@ class AccessionNotFound(Exception):
     """
 
     pass
+
+
+class SplitAccessionError(Exception):
+    """Raised when an accession cannot be split or resolved during segment generation."""
+
+    pass

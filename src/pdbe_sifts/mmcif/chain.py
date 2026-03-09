@@ -6,12 +6,13 @@ from operator import itemgetter
 import tqdm
 from Bio.Seq import Seq
 
-from pdbe_sifts.mmcif import mmcif_helper
+import os
 
+from . import mmcif_helper
 from ..taxonomy_fix_pkl import TaxonomyFix
 from .residue import Residue
 
-N_PROC = 64
+N_PROC = int(os.environ.get("SIFTS_N_PROC", min(64, os.cpu_count() or 1)))
 STEP_SIZE = 2000
 
 
