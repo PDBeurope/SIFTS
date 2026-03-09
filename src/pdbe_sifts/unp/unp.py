@@ -6,7 +6,9 @@ This allows for faster access to a small subset of required information
 from a large XML file.
 """
 
+import pickle as pkl
 import requests
+from pathlib import Path
 from typing import Any, Optional
 
 import funcy
@@ -15,7 +17,11 @@ from lxml.etree import XMLSyntaxError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.base.utils import fetch_uniprot_file
+from pdbe_sifts.base.utils import fetch_uniprot_file, _uniprot_cache_path
+
+# Fields that are instance-specific (set in __init__) and must NOT be
+# overwritten from the pickle.
+_PICKLE_SKIP_FIELDS = frozenset({"unp_dir", "ad_dbref_auto_acc"})
 
 COLORS = {
     "white": 0,
@@ -164,16 +170,73 @@ class UNP:
     secondary_accessions: list[str]
     annotation_score: Optional[int]
 
-    def _load_uniprot_data(self, accession):
-        """Load the data for the accession from the UniProt XML file.
+    # ------------------------------------------------------------------
+    # Cache helpers
+    # ------------------------------------------------------------------
 
-        Delegates to ``fetch_uniprot_file``, which checks the local cache
-        directory (``self.unp_dir``) before fetching from the UniProt API.
+    def _pickle_path(self, accession: str) -> Path:
+        """Return the pickle cache path for *accession*."""
+        return _uniprot_cache_path(accession, "pickle", self.unp_dir)
+
+    def _load_from_pickle(self, path: Path) -> None:
+        """Restore instance state from *path* (pickle file)."""
+        with open(path, "rb") as fh:
+            data: dict = pkl.load(fh)
+        # Restore all cached fields, but never overwrite constructor fields.
+        for key, value in data.items():
+            if key not in _PICKLE_SKIP_FIELDS:
+                setattr(self, key, value)
+
+    def _save_to_pickle(self, path: Path) -> None:
+        """Persist current instance state to *path* (pickle file)."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        data = {k: v for k, v in self.__dict__.items() if k not in _PICKLE_SKIP_FIELDS}
+        tmp = path.with_suffix(".tmp")
+        try:
+            with open(tmp, "wb") as fh:
+                pkl.dump(data, fh, protocol=pkl.HIGHEST_PROTOCOL)
+            tmp.replace(path)  # atomic rename
+        except Exception:
+            logger.warning(f"Could not save pickle for {path.stem}")
+            tmp.unlink(missing_ok=True)
+
+    # ------------------------------------------------------------------
+    # Data loading
+    # ------------------------------------------------------------------
+
+    def _load_uniprot_data(self, accession: str, fetch_annotation_score: bool = False) -> None:
+        """Load UNP data, preferring the local cache.
+
+        Load order:
+        1. Pickle (``{unp_dir}/{first_letter}/{accession}.pickle``) — fastest,
+           zero network traffic.
+        2. XML on disk (``{unp_dir}/{first_letter}/{accession}.xml``) — parse
+           locally, then save a pickle for future runs.
+        3. Download XML from UniProt REST API — save XML + pickle.
 
         Args:
-            accession (str): The canonical UniProt accession to load (no isoform suffix).
+            accession: Canonical UniProt accession (no isoform suffix).
+            fetch_annotation_score: When *True* and the pickle does not already
+                contain ``annotation_score``, fetch it from the API and include
+                it in the newly written pickle.
         """
+        pickle_path = self._pickle_path(accession)
+
+        if pickle_path.exists():
+            logger.debug(f"{accession}: loading from pickle cache")
+            self._load_from_pickle(pickle_path)
+            # annotation_score may already be populated from the pickle.
+            return
+
+        # Parse from XML (downloads if not yet cached).
         self._load_from_uniprot_xml(accession)
+
+        # Optionally fetch annotation score while we are about to save the pickle
+        # so that future loads need zero network round-trips.
+        if fetch_annotation_score and self.annotation_score is None:
+            self.annotation_score = get_annotation_score(accession)
+
+        self._save_to_pickle(pickle_path)
 
     @funcy.retry(3, errors=XMLSyntaxError, timeout=0.2)
     def parse_xml(self, xml_file):
@@ -213,11 +276,16 @@ class UNP:
         self.annotation_score = None
         self.unp_dir = unp_dir
         self.ad_dbref_auto_acc = accession
-        if "-" in accession:
-            accession = accession.split("-")[0]
-        self._load_uniprot_data(accession)
-        if fetch_annotation_score:
-            self.annotation_score = get_annotation_score(accession)
+        canonical = accession.split("-")[0] if "-" in accession else accession
+        # Pass fetch_annotation_score so that when we save the pickle for the
+        # first time we include the score — avoiding a separate network call on
+        # every subsequent load.
+        self._load_uniprot_data(canonical, fetch_annotation_score=fetch_annotation_score)
+        # If the pickle was loaded but didn't yet contain annotation_score,
+        # fetch it now and update the pickle.
+        if fetch_annotation_score and self.annotation_score is None:
+            self.annotation_score = get_annotation_score(canonical)
+            self._save_to_pickle(self._pickle_path(canonical))
 
     def _populate_fields(self, doc):
         uniprot = doc[0]
