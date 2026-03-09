@@ -18,50 +18,63 @@ from pdbe_sifts.config import load_config
 conf = load_config()
 
 UNIPROT_REGEX = r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}"
-UNIPROT_API_BASE_URL = "https://www.uniprot.org/uniprot"
+UNIPROT_API_BASE_URL = "https://rest.uniprot.org/uniprotkb"
+
 
 def get_uniprot_cache_dir(unp_accession, base_dir):
     """Path to UNP cache directory for specified UNP accession."""
     return str(Path(base_dir, unp_accession[0], unp_accession))
 
 
-def fetch_uniprot_file(uniprot_id: str, file_type: str, unp_dir, fail_silently=False) -> str:
-    """Fetches Uniprot file for a given Uniprot ID.
+def _uniprot_cache_path(uniprot_id: str, file_type: str, unp_dir) -> Path:
+    """Return the cache path for a UniProt file.
 
-    First checks cache directory for the file. If not found, fetches from Uniprot.
-    Cache is derived from config variable `cache.uniprot`.
+    Structure: ``{unp_dir}/{first_letter}/{uniprot_id}/my.{file_type}``
+
+    Each accession gets its own subdirectory, keeping the per-letter directory
+    manageable regardless of how many accessions share the same first letter.
+    """
+    return Path(unp_dir) / uniprot_id[0] / uniprot_id / f"my.{file_type}"
+
+
+def fetch_uniprot_file(uniprot_id: str, file_type: str, unp_dir, fail_silently=False) -> Path:
+    """Fetch a UniProt file, using the local cache if available.
+
+    Cache layout: ``{unp_dir}/{first_letter}/{uniprot_id}/my.{file_type}``
 
     Args:
-        uniprot_id (str): Uniprot ID to fetch.
-        file_type (str): Type of file to fetch. One of: xml, json, fasta.
-        fail_silently(bool): Return None on fail instead of raising error
+        uniprot_id: UniProt accession (e.g. ``P12345``).
+        file_type: One of ``xml``, ``json``, ``fasta``.
+        unp_dir: Root directory for the UniProt cache.
+        fail_silently: Return ``None`` on failure instead of raising.
+
+    Returns:
+        Path to the (possibly freshly downloaded) file.
 
     Raises:
-        ValueError: If file_type is not one of xml, json, fasta.
-        ObsoleteUniProtError: If the Uniprot entry is deleted (including Blank XML/FASTA).
-        AccessionNotFound: If the Uniprot entry is not found (404 from Uniprot API)
+        ValueError: ``file_type`` is not recognised.
+        ObsoleteUniProtError: Entry is deleted / blank.
+        AccessionNotFound: Entry returns 404 from the UniProt API.
     """
     try:
-
         if file_type not in ["xml", "json", "fasta"]:
             raise ValueError(
-                f"Invalid file type {file_type}. Must be one of xml, json, fasta"
+                f"Invalid file type {file_type!r}. Must be one of xml, json, fasta."
             )
-        filename = f"{uniprot_id}.{file_type}"
-        unp_file = Path(unp_dir, filename)
 
+        unp_file = _uniprot_cache_path(uniprot_id, file_type, unp_dir)
         unp_file.parent.mkdir(parents=True, exist_ok=True)
 
-        if Path.exists(unp_file):
+        if unp_file.exists():
             logger.debug(f"Fetched from cache: {unp_file}")
             return unp_file
 
+        filename = f"{uniprot_id}.{file_type}"
         _unp_file_checks(file_type, filename, unp_file)
-
         return unp_file
     except Exception:
         if fail_silently:
-            return
+            return None
         raise
 
 
