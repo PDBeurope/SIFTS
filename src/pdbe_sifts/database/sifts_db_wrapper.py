@@ -239,6 +239,15 @@ class SiftsDB:
 
         logger.info("Loading %d files into %s...", total, table)
 
+        # Fetch the ordered column names from the table schema so that
+        # read_csv_auto does not try to infer them from the first data row.
+        schema = self.conn.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = ? ORDER BY ordinal_position",
+            [table],
+        ).fetchall()
+        col_names_sql = "[" + ", ".join(f"'{row[0]}'" for row in schema) + "]"
+
         for i in range(0, total, batch_size):
             batch = files[i : i + batch_size]
 
@@ -250,7 +259,8 @@ class SiftsDB:
                 f"DELETE FROM {table} WHERE entry_id IN ({entry_ids_sql})"
             )
             self.conn.execute(
-                f"INSERT INTO {table} SELECT * FROM read_csv_auto({file_list_sql})"
+                f"INSERT INTO {table} SELECT * FROM read_csv_auto("
+                f"{file_list_sql}, header=false, column_names={col_names_sql})"
             )
 
             loaded = min(i + batch_size, total)
