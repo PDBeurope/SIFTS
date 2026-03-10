@@ -16,6 +16,7 @@ import funcy
 from lxml import etree as ElementTree
 from lxml.etree import XMLSyntaxError
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from funcy.calc import memoize
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.pdbe_path import get_uniprot_cache_dir
