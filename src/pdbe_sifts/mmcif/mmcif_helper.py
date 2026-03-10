@@ -1,11 +1,12 @@
-#!/usr/bin/env python3
-
 import itertools
 from pathlib import Path
 
 from gemmi import cif
-from pdbe_sifts.mmcif.chem_comp import ChemCompMapping
-from pdbe_sifts.base.log import logger
+
+from pdbe_sifts.base import pdbe_path
+from pdbe_sifts.config import load_config
+
+conf = load_config()
 
 # mmCIF categories used in SIFTS
 CATEGORIES = [
@@ -31,23 +32,25 @@ class NotAPolyPeptide(Exception):
 class mmCIF:
     """Docstring for mmCIF."""
 
-    def __init__(self, name, cif_file):
-        self.name = name
-        self.cif_file = cif_file
-        if not Path(self.cif_file).exists():
-            raise FileNotFoundError(f"The mmcif file {self.cif_file} does not exists.")
+    def __init__(self, pdbid, cif_dir, chem_comp_dict):
+        self.pdbid = pdbid
+        self.cif_dir = cif_dir
+        self.fname = self.__get_fname()
+        if not Path(self.fname).exists():
+            raise FileNotFoundError(f"The mmcif file {self.fname} does not exists.")
 
-        block = cif.read(self.cif_file).sole_block()
+        block = cif.read(self.fname).sole_block()
         self.poly_seq = block.get_mmcif_category("_pdbx_poly_seq_scheme")
 
         if not self.poly_seq:
             raise NotAPolyPeptide(
                 "it is not a polypeptide! no poly_seq, only hetatms presents"
             )
-        self.cc = ChemCompMapping()
+        self.cc = chem_comp_dict
         self.entity_poly = block.get_mmcif_category("_entity_poly")
         self.mod_residue = block.get_mmcif_category("_pdbx_struct_mod_residue")
         self.seq_dif = block.get_mmcif_category("_struct_ref_seq_dif")
+        # self.ref_seq = block.get_mmcif_category("struct_ref_seq")
         self.struct_ref = block.get_mmcif_category("_struct_ref")
         self.struct_ref_seq = block.get_mmcif_category("_struct_ref_seq")
         self.src_nat = block.get_mmcif_category("_entity_src_nat")
@@ -58,6 +61,9 @@ class mmCIF:
         self.rev_date = block.get_mmcif_category("_pdbx_audit_revision_history")
         self.features = self.__get_features()
         del block
+
+    def __get_fname(self):
+        return pdbe_path.get_clean_mmcif(self.pdbid, self.cif_dir)
 
     def get_unp(self, chain):
         """Fetches uniprot accessions from CIF for a particular entity, where available."""
@@ -399,4 +405,3 @@ class mmCIF:
             return [x.strip() for x in out.split(",") if x not in ("?", ".")]
 
         return []
-

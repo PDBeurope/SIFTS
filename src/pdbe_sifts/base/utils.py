@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import argparse
 import dateparser
 import requests
 import shutil
@@ -10,10 +11,12 @@ from dateutil.relativedelta import WE, relativedelta
 from typing import Optional, List
 from xml.etree import ElementTree
 import funcy
+from funcy.calc import memoize
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.exceptions import ObsoleteUniProtError, AccessionNotFound
 from pdbe_sifts.config import load_config
+from pdbe_sifts.base.pdbe_path import get_uniprot_cache_dir
 
 conf = load_config()
 
@@ -21,60 +24,43 @@ UNIPROT_REGEX = r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]
 UNIPROT_API_BASE_URL = "https://rest.uniprot.org/uniprotkb"
 
 
-def get_uniprot_cache_dir(unp_accession, base_dir):
-    """Path to UNP cache directory for specified UNP accession."""
-    return str(Path(base_dir, unp_accession[0], unp_accession))
+def fetch_uniprot_file(uniprot_id: str, file_type: str, fail_silently=False) -> str:
+    """Fetches Uniprot file for a given Uniprot ID.
 
-
-def _uniprot_cache_path(uniprot_id: str, file_type: str, unp_dir) -> Path:
-    """Return the cache path for a UniProt file.
-
-    Structure: ``{unp_dir}/{first_letter}/{uniprot_id}/my.{file_type}``
-
-    Each accession gets its own subdirectory, keeping the per-letter directory
-    manageable regardless of how many accessions share the same first letter.
-    """
-    return Path(unp_dir) / uniprot_id[0] / uniprot_id / f"my.{file_type}"
-
-
-def fetch_uniprot_file(uniprot_id: str, file_type: str, unp_dir, fail_silently=False) -> Path:
-    """Fetch a UniProt file, using the local cache if available.
-
-    Cache layout: ``{unp_dir}/{first_letter}/{uniprot_id}/my.{file_type}``
+    First checks cache directory for the file. If not found, fetches from Uniprot.
+    Cache is derived from config variable `cache.uniprot`.
 
     Args:
-        uniprot_id: UniProt accession (e.g. ``P12345``).
-        file_type: One of ``xml``, ``json``, ``fasta``.
-        unp_dir: Root directory for the UniProt cache.
-        fail_silently: Return ``None`` on failure instead of raising.
-
-    Returns:
-        Path to the (possibly freshly downloaded) file.
+        uniprot_id (str): Uniprot ID to fetch.
+        file_type (str): Type of file to fetch. One of: xml, json, fasta.
+        fail_silently(bool): Return None on fail instead of raising error
 
     Raises:
-        ValueError: ``file_type`` is not recognised.
-        ObsoleteUniProtError: Entry is deleted / blank.
-        AccessionNotFound: Entry returns 404 from the UniProt API.
+        ValueError: If file_type is not one of xml, json, fasta.
+        ObsoleteUniProtError: If the Uniprot entry is deleted (including Blank XML/FASTA).
+        AccessionNotFound: If the Uniprot entry is not found (404 from Uniprot API)
     """
     try:
+        unp_dir = get_uniprot_cache_dir(uniprot_id)
         if file_type not in ["xml", "json", "fasta"]:
             raise ValueError(
-                f"Invalid file type {file_type!r}. Must be one of xml, json, fasta."
+                f"Invalid file type {file_type}. Must be one of xml, json, fasta"
             )
+        filename = f"{uniprot_id}.{file_type}"
+        unp_file = Path(unp_dir, filename)
 
-        unp_file = _uniprot_cache_path(uniprot_id, file_type, unp_dir)
         unp_file.parent.mkdir(parents=True, exist_ok=True)
 
-        if unp_file.exists():
-            logger.debug(f"Fetched from cache: {unp_file}")
+        if Path.exists(unp_file):
+            logger.info(f"Fetched from cache: {unp_file}")
             return unp_file
 
-        filename = f"{uniprot_id}.{file_type}"
         _unp_file_checks(file_type, filename, unp_file)
+
         return unp_file
     except Exception:
         if fail_silently:
-            return None
+            return
         raise
 
 
@@ -89,7 +75,7 @@ def fetch_uniprot_file(uniprot_id: str, file_type: str, unp_dir, fail_silently=F
 
 def _unp_file_checks(file_type, filename, unp_file):
     url = f"{UNIPROT_API_BASE_URL}/{filename}"
-    logger.debug(f"Fetching {url}")
+    logger.info(f"Fetching {url}")
     r = requests.get(url, timeout=5)
 
     if r.status_code in [404, 400]:
@@ -110,11 +96,9 @@ def _unp_file_checks(file_type, filename, unp_file):
 def _check_json_response(response: requests.Response) -> None:
     """Checks if the response is a valid JSON.
 
-    Args:
-        response (requests.Response): Response to check.
-
     Raises:
-        FileNotFoundError: If the response is not a valid JSON or if the entry is deleted.
+        ObsoleteUniProtError: If the entry is deleted.
+        AccessionNotFound: If the response is invalid.
     """
     content = response.json()
     try:
@@ -126,7 +110,6 @@ def _check_json_response(response: requests.Response) -> None:
 
 def _check_xml_contents(response: requests.Response) -> None:
     """Checks if the response is a valid XML by size."""
-
     root = ElementTree.fromstring(response.text)
     children = root.find(".//{http://uniprot.org/uniprot}entry")
     if children is None:
@@ -143,15 +126,6 @@ def _check_fasta_contents(response: requests.Response) -> None:
         raise ObsoleteUniProtError(
             f"{response.url} is blank. Entry is probably deleted."
         )
-
-def get_mismatches(seq1, seq2):
-    return sum(aa1 != aa2 for aa1, aa2 in zip(seq1, seq2))
-
-def get_identity(seq1, seq2):
-    return round(sum(aa1 == aa2 for aa1, aa2 in zip(seq1, seq2)) / float(len(seq2)), 2)
-
-def get_coverage(query_from, query_to, query_len):
-    return (query_to - query_from + 1) / query_len
 
 def get_date():
     now = datetime.now()
@@ -208,10 +182,35 @@ def utc_to_local(utc_dt):
     return utc_dt.replace(tzinfo=timezone.utc).astimezone(tz=None)
 
 def get_exc_context() -> tuple[str, str]:
+    """Returns the data and execution source of the module.
+
+    Checks if a task is run from airflow or from CLI and returns the time of execution.
+
+    Returns:
+        Tuple[str,str]: Airflow/CLI and execution_date
+    """
     if "AIRFLOW_CTX_EXECUTION_DATE" in os.environ:
         exc_date = dateparser.parse(os.environ["AIRFLOW_CTX_EXECUTION_DATE"])
+
         return ("Airflow", utc_to_local(exc_date).strftime("%Y-%m-%d %H:%M:%S"))
     else:
         now = datetime.now()
         s_exc_date = now.strftime("%Y-%m-%d %H:%M:%S")
         return ("CLI", s_exc_date)
+
+class SiftsAction(argparse.Action):
+    def __init__(
+        self, envvar=None, confvar=None, required=False, default=None, **kwargs
+    ):
+        if not default:
+            if envvar and envvar in os.environ:
+                default = os.environ[envvar]
+            if not default and confvar:
+                default = confvar
+
+        if required and default:
+            required = False
+        super().__init__(default=default, required=required, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)

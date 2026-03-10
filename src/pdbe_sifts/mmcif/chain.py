@@ -6,13 +6,12 @@ from operator import itemgetter
 import tqdm
 from Bio.Seq import Seq
 
-import os
+from pdbe_sifts.mmcif import mmcif_helper
 
-from . import mmcif_helper
 from ..taxonomy_fix_pkl import TaxonomyFix
 from .residue import Residue
 
-N_PROC = int(os.environ.get("SIFTS_N_PROC", min(64, os.cpu_count() or 1)))
+N_PROC = 64
 STEP_SIZE = 2000
 
 
@@ -54,6 +53,7 @@ class Chain:
         self.canonicals = []
         self.scores = {}
         self.seg_scores = {}
+        self.expression_tag_start = None
 
         self.ec = mmcif.get_ec(self.entity_id)
 
@@ -118,10 +118,13 @@ class Chain:
             # if self.alignment_sequence == [] and r.oneL == 'M':
             #    self.alignment_sequence.append('Z')
 
-            # "Remove":
+            # "Remove" and get the begining of the expression tag to remove methionine before expression tag:
             #   Insertion
             #   Linker
             #   Expression Tag
+
+            if r.rtype == "Expression tag" and self.expression_tag_start is None:
+                self.expression_tag_start = r.n
 
             if r.rtype in ("Insertion", "Linker", "Expression tag"):
                 self.alignment_sequence.append("J")
@@ -221,6 +224,15 @@ class Chain:
                     pdb_i += 1
                     unp_i += 1
                     continue
+                # Remove undesired met before expression tag to prevent single aa segment
+                if (
+                    r.rtype == "Initiating methionine"
+                    and self.expression_tag_start is not None
+                ):
+                    if r.n < self.expression_tag_start:
+                        pdb_i += 1
+                        unp_i += 1
+                        continue
                 if len(r.oneL) > 1 and pdb_r != "-" and unp_r != "-":
                     residue_map[pdb_i + pdb_start] = []
                     for x in range(len(r.oneL)):

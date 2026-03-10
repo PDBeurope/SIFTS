@@ -13,11 +13,6 @@ GAP_EXTEND = 2
 PWD = os.path.dirname(os.path.realpath(__file__))
 LALIGN = "lalign36"
 
-# Per-alignment timeout in seconds.  lalign36 can hang on pathological
-# sequences; without a timeout the calling thread blocks forever.
-# Override with the SIFTS_LALIGN_TIMEOUT environment variable.
-LALIGN_TIMEOUT = int(os.environ.get("SIFTS_LALIGN_TIMEOUT", 350))
-
 
 def do_alignment_lalign36(seq1, seq2, gap_open=GAP_OPEN, gap_extend=GAP_EXTEND):
     # cast into string if we get a list
@@ -51,10 +46,7 @@ def do_alignment_lalign36(seq1, seq2, gap_open=GAP_OPEN, gap_extend=GAP_EXTEND):
         ]
         logger.debug(cmd)
         output = subprocess.check_output(
-            cmd,
-            encoding="utf8",
-            stderr=subprocess.DEVNULL,
-            timeout=LALIGN_TIMEOUT,
+            cmd, encoding="utf8", stderr=subprocess.DEVNULL
         )
 
         return AlignIO.parse(io.StringIO(output), "fasta-m10")

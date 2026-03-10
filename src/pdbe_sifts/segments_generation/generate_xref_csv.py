@@ -530,7 +530,7 @@ def process_chromophores(
 def insert_mappings(out_dir, entry_obj: Entry, nf90_mode, conn=None):
     segs = []
     xref_residue = []
-    pdbid = entry_obj.name
+    pdbid = entry_obj.pdbid
     for _, chain_obj in list(entry_obj.chains.items()):
         if not nf90_mode and chain_obj.skip:
             logger.warning(f"Told to skip chain {chain_obj.auth_asym_id}. Skipping")

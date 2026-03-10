@@ -1,4 +1,3 @@
-import os
 from enum import Enum
 from multiprocessing.dummy import Pool
 from typing import NamedTuple
@@ -6,19 +5,20 @@ from typing import NamedTuple
 import tqdm
 from funcy.debug import log_durations
 
-from pdbe_sifts.base.exceptions import SplitAccessionError
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.segments_generation import alignment
 from pdbe_sifts.mmcif.entry import Entry
-# from orc.sifts.uniref90_pkl import NF90Coverage, NF90TaxID
+# from segments_gen.uniref90_pkl import NF90Coverage, NF90TaxID
 from pdbe_sifts.unp.unp import UNP
+from pdbe_sifts.unp.unp import get_unp_object
 
 NF_COVERAGE = 0.7
-N_PROC = int(os.environ.get(
-    "SIFTS_N_PROC",
-    os.environ.get("SLURM_CPUS_PER_TASK", min(64, os.cpu_count() or 1)),
-))
+N_PROC = 64
 STEP_SIZE = 2000
+
+
+class SplitAccessionError(Exception):
+    pass
 
 
 class SMapping(NamedTuple):
@@ -32,12 +32,14 @@ class SiftsMode(Enum):
     NF90 = 2
 
 
-def get_accession(entry: Entry, acc: str, unp_dir: str = "./") -> UNP:
+def get_accession(entry: Entry, acc: str) -> UNP:
     if acc in entry.accessions:
         return entry.accessions[acc]
-    unp = UNP(acc, unp_dir)
+
+    unp = get_unp_object(acc)
     if unp:
         entry.accessions[unp.accession] = unp
+
     return unp
 
 
@@ -128,29 +130,27 @@ class EntryMapping:
     def __init__(
         self,
         entry: Entry,
-        entity,
-        entity_mapping: list[SMapping],
+        chain,
+        chain_mapping: list[SMapping],
         nf90_mode=False,
         NFT=None,
         NFC=None,
-        unp_dir: str = "./",
     ):
         self.entry = entry
-        self.entity = entity
-        self.entity_mapping = entity_mapping
+        self.chain = chain
+        self.chain_mapping = chain_mapping
         self.nf90_mode = nf90_mode
-        self.entity_obj = self.entry.entities[self.entity]
+        self.chain_obj = self.entry.chains[self.chain]
         self.repeated_acc = False
         self.accs: list[str] = []
         self.ranges: list[tuple[int, int]] = []
         self.NFT: NF90TaxID = NFT
         self.NFC: NF90Coverage = NFC
-        self.unp_dir = unp_dir
 
     def _get_accessions(self):
         # Validate the provided mappings
-        for mapping in self.entity_mapping:
-            unp = get_accession(self.entry, mapping.accession, self.unp_dir)
+        for mapping in self.chain_mapping:
+            unp = get_accession(self.entry, mapping.accession)
             if unp:
                 logger.info(
                     f"Valid mapping: {unp.accession} {mapping.range_start}-{mapping.range_stop}"
@@ -160,10 +160,9 @@ class EntryMapping:
 
         # If no valid mappings were provided, try to get them from the mmCIF
         if not self.accs:
-            _chain = next(iter(self.entity_obj.chains), None)
-            cif_accs = self.entry.mmcif.get_unp(_chain) if _chain else []
+            cif_accs = self.entry.mmcif.get_unp(self.chain)
             for acc in cif_accs:
-                unp = get_accession(self.entry, acc, self.unp_dir)
+                unp = get_accession(self.entry, acc)
                 if unp:
                     self.accs.append(unp.accession)
 
@@ -172,10 +171,8 @@ class EntryMapping:
 
         # If we have mappings but no ranges, try to get them from the mmCIF
         if self.accs and not self.ranges:
-            _chain = next(iter(self.entity_obj.chains), None)
-            if _chain:
-                self.ranges = self.entry.mmcif.get_ranges(_chain, self.accs[0])
-                logger.info(f"Ranges come from mmCIF: {self.ranges}")
+            self.ranges = self.entry.mmcif.get_ranges(self.chain, self.accs[0])
+            logger.info(f"Ranges come from mmCIF: {self.ranges}")
 
     def set_chain_accessions(self):
         self._get_accessions()
@@ -183,12 +180,12 @@ class EntryMapping:
             logger.warning("The mmCIF doesnt have a valid UniProt accession")
             return False
 
-        logger.debug(f"Accessions [{self.entity}]: {self.accs}")
+        logger.debug(f"Accessions [{self.chain}]: {self.accs}")
         try:
-            self.entity_obj = self.entry.entities[self.entity]
+            self.chain_obj = self.entry.chains[self.chain]
         except KeyError:
             logger.warning(
-                f"The chain {self.entity} was not found in the mmCIF  or it is not a polypeptide"
+                f"The chain {self.chain} was not found in the mmCIF  or it is not a polypeptide"
             )
             return False
 
@@ -197,43 +194,28 @@ class EntryMapping:
                 return False
         return True
 
-    def update_entity_chains(self):
-        for chain_id, chain_obj in self.entity_obj.chains.items():
-            chain_obj.best = self.entity_obj.best
-            chain_obj.scores = self.entity_obj.scores
-            chain_obj.seg_scores = self.entity_obj.seg_scores
-            chain_obj.canonicals = self.entity_obj.canonicals
-            chain_obj.is_chimera = self.entity_obj.is_chimera
-            chain_obj.expression_tag_start = self.entity_obj.expression_tag_start
-            chain_obj.mappings = self.entity_obj.mappings
-            chain_obj.residue_maps = self.entity_obj.residue_maps
-            chain_obj.segments = self.entity_obj.segments
-        
-        logger.info(f"{self.entry.name}: mapping data from entity {self.entity} transfered to its chains.")
-
-
     @log_durations(logger.debug)
     def process(self):
-        self.seq_pdb = self.entity_obj.alignment_sequence
+        self.seq_pdb = self.chain_obj.alignment_sequence
         self.check_repeated_accession()
 
-        logger.info(f"Processing {self.entity}: {self.accs}")
+        logger.info(f"Processing {self.chain}: {self.accs}")
 
         for acc in set(self.accs):
             self.acc = acc
             isoforms = {}
-            unp = get_accession(self.entry, acc, self.unp_dir)
+            unp = get_accession(self.entry, acc)
             if not unp:
                 continue
             self.unp = unp
             # isoform, score, length
-            self.entity_obj.best[unp.accession] = (None, 0.0, 0)
+            self.chain_obj.best[unp.accession] = (None, 0.0, 0)
 
             # Add the canonical
-            self.entity_obj.canonicals.append(unp.accession)
+            self.chain_obj.canonicals.append(unp.accession)
 
             # Don't store isoforms if the chain is a chimera
-            if self.entity_obj.is_chimera:
+            if self.chain_obj.is_chimera:
                 isoforms[unp.accession] = unp.sequence
             elif self.nf90_mode:
                 isoforms = self.get_nf90_isoforms(unp, isoforms)
@@ -254,8 +236,7 @@ class EntryMapping:
                     )
                 )
 
-        self.entity_obj.generate_residue_maps()
-        self.update_entity_chains()
+        self.chain_obj.generate_residue_maps()
         logger.info("Segments generated")
 
     def process_each_isoform(self, row):
@@ -296,32 +277,32 @@ class EntryMapping:
             pdb_start, pdb_end = (al[1]._al_start, al[1]._al_stop)
             unp_start, unp_end = (al[0]._al_start, al[0]._al_stop)
 
-            self.entity_obj.mod_after_alignment(al)
+            self.chain_obj.mod_after_alignment(al)
 
-            # logger.debug(alignment.annotate_alignment(al[0].seq, al[1].seq))
+            logger.debug(alignment.annotate_alignment(al[0].seq, al[1].seq))
 
-            # logger.debug("PDB: [%d-%d]" % (pdb_start, pdb_end))
-            # logger.debug("UNP: [%d-%d]" % (unp_start, unp_end))
+            logger.debug("PDB: [%d-%d]" % (pdb_start, pdb_end))
+            logger.debug("UNP: [%d-%d]" % (unp_start, unp_end))
 
             pdb_ranges = [(pdb_start, pdb_end)]
             unp_ranges = [(unp_start, unp_end)]
 
-            self.entity_obj.mappings.setdefault(iso, []).append(
+            self.chain_obj.mappings.setdefault(iso, []).append(
                 (pdb_ranges, unp_ranges, al)
             )
             identity = alignment.get_identity(al[0]._seq, al[1]._seq)
             score = alignment.get_score(al[0]._seq, al[1]._seq)
 
-            self.entity_obj.scores[iso] = (identity, score)
+            self.chain_obj.scores[iso] = (identity, score)
 
-            self.entity_obj.seg_scores.setdefault(iso, {})[str(pdb_ranges)] = identity
+            self.chain_obj.seg_scores.setdefault(iso, {})[str(pdb_ranges)] = identity
 
             self._update_best_mapping(unp, iso, al, score)
 
     def get_nf90_isoforms(self, unp, isoforms):
         logger.debug(f"fetching NF90 isoforms for {unp}")
         for acc in self.NFT.get_nf90(unp.accession):
-            unp_nf90 = get_accession(self.entry, acc, self.unp_dir)
+            unp_nf90 = get_accession(self.entry, acc)
 
             if not unp_nf90:
                 continue
@@ -338,15 +319,14 @@ class EntryMapping:
         return isoforms
 
     def get_valid_accession(self, acc):
-        unp = get_accession(self.entry, acc, self.unp_dir)
+        unp = get_accession(self.entry, acc)
         if not unp:
-            _chain = next(iter(self.entity_obj.chains), None)
-            accs = self.entry.mmcif.get_unp(_chain) if _chain else []
+            accs = self.entry.mmcif.get_unp(self.chain)
             if not accs:
                 logger.warning(
                     f"The mmCIF doesnt have a UniProt accession: {self.entry.pdbid}"
                 )
-                self.entity_obj.is_chimera = False
+                self.chain_obj.is_chimera = False
                 self.repeated_acc = False
                 return
 
@@ -354,7 +334,7 @@ class EntryMapping:
                 logger.error(
                     "It is a chimera and at least one of the accessions is not valid anymore."
                 )
-                self.entity_obj.is_chimera = False
+                self.chain_obj.is_chimera = False
                 self.repeated_acc = False
                 return
 
@@ -367,27 +347,27 @@ class EntryMapping:
                 )
                 return
 
-            unp = get_accession(self.entry, accs[0], self.unp_dir)
+            unp = get_accession(self.entry, accs[0])
 
         return unp
 
     def _update_best_mapping(self, unp, iso, al, score):
         try:
-            ad_dbref_acc = self.entity_mapping[0].accession
-        except (IndexError, AttributeError):
+            ad_dbref_acc = self.chain_mapping[0].accession
+        except Exception:
             logger.warning(
-                f"Could not get the AD_DBREF accession for {self.entry.name} {self.entity}"
+                f"Could not get the AD_DBREF accession for {self.entry.pdbid} {self.chain}"
             )
             ad_dbref_acc = None
-        best_score = self.entity_obj.best[unp.accession][1]
-        best_seq_len = self.entity_obj.best[unp.accession][2]
+        best_score = self.chain_obj.best[unp.accession][1]
+        best_seq_len = self.chain_obj.best[unp.accession][2]
         if (
             score > best_score
             or (score == best_score and len(al[1]._seq) > best_seq_len)
             or (score == best_score and len(al[1]._seq) == best_seq_len)
-            and (iso in self.entity_obj.canonicals or iso == ad_dbref_acc)
+            and (iso in self.chain_obj.canonicals or iso == ad_dbref_acc)
         ):
-            self.entity_obj.best[unp.accession] = (
+            self.chain_obj.best[unp.accession] = (
                 iso,
                 score,
                 len(al[1]._seq),
@@ -395,16 +375,15 @@ class EntryMapping:
 
     def check_unp_coverage(self):
         logger.debug("Checking coverage")
-        unp = get_accession(self.entry, self.accs[0], self.unp_dir)
+        unp = get_accession(self.entry, self.accs[0])
 
         if not unp:
             return False
 
-        if self.repeated_acc or self.entity_obj.is_chimera:
+        if self.repeated_acc or self.chain_obj.is_chimera:
             logger.warning("It is a chimera so we skip it for UniRef90")
             return False
-        _chain = next(iter(self.entity_obj.chains), None)
-        coverage = self.NFC.get_coverage(self.entry.pdbid, _chain, unp.accession)
+        coverage = self.NFC.get_coverage(self.entry.pdbid, self.chain, unp.accession)
         if coverage < NF_COVERAGE:
             logger.warning(
                 f"Coverage {coverage} < {NF_COVERAGE} so we skip it for UniRef90"
@@ -419,12 +398,12 @@ class EntryMapping:
                 if out_of_order(self.ranges) or overlapping(self.ranges):
                     self.repeated_acc = True
                     logger.warning("Same accession repeats!")
-                # Large gap go here
+                # Large gap go hereƒ
                 elif large_gap(self.ranges):
                     # Calculate gap and extra aligned sequence and,
                     # if large enough, treat as a repeated_acc
                     self.repeated_acc = True
                     logger.warning("Large gap detected")
             else:
-                logger.info(f"Chain {self.entity} is Chimera!")
-                self.entity_obj.is_chimera = True
+                logger.info(f"Chain {self.chain} is Chimera!")
+                self.chain_obj.is_chimera = True

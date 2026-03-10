@@ -16,11 +16,11 @@ def get_selection_queries(entry):
     entity — regardless of how many accessions share the top sifts_score.
 
     Tie-breaking order (descending quality):
-        1. sifts_score          – composite score (adjusted + tax + dataset)
-        2. pdb_cross_references – prefer accessions with more PDB structures
-        3. adjusted_score       – alignment quality (identity × coverage)
-        4. dataset_score        – Swiss-Prot > TrEMBL
-        5. accession ASC        – deterministic alphabetic tiebreaker
+        1. sifts_score          - composite score (adjusted + tax + dataset)
+        2. pdb_cross_references - prefer accessions with more PDB structures
+        3. adjusted_score       - alignment quality (identity x coverage)
+        4. dataset_score        - Swiss-Prot > TrEMBL
+        5. accession ASC        - deterministic alphabetic tiebreaker
     """
     sql = f"""
         SELECT entry, entity, accession, target_start, target_end
@@ -45,29 +45,58 @@ def get_selection_queries(entry):
     return sql
 
 
-def get_curated_db_mappings(pdbid, entities: Iterable, conn, unp_dir):
+def get_curated_db_mappings(pdbid, chains: Iterable, conn, chain_to_entity: Mapping[str, str]):
     """Get mappings from database.
 
     Args:
         pdbid(str): PDB ID Code
-        entities(Iterable): list of entities
+        chains(Iterable): list of chains
         conn: Database connection
-        unp_dir: Directory for cached UniProt XML files
 
     Returns:
-        Mapping[str, List[SMapping]]: Mapping for each entity
+        Mapping[str, List[SMapping]]: Mapping for each chain of the sequence
     """
     sql = get_selection_queries(pdbid)
 
     rows = conn.execute(sql)
-    mappings: Mapping[str, list[SMapping]] = {}
+    entity_mappings: Mapping[str, list[SMapping]] = {}
     for key, mapping in itertools.groupby(iter(rows.fetchall()), key=itemgetter(0, 1)):
         _, entity = key
         entity_mapping: list[SMapping] = []
         for _, _, accession, target_start, target_end in mapping:
-            unp = UNP(accession, unp_dir)
-            smap = SMapping(unp.accession, target_start, target_end)
+            try:
+                if not accession:
+                    continue
+                unp = UNP(accession)
+            except Exception:
+                continue
+            try:
+                smap = SMapping(unp.ad_dbref_auto_acc, target_start, target_end)
+            except Exception:
+                smap = SMapping(unp.accession, target_start, target_end)
             entity_mapping.append(smap)
-        mappings[entity] = entity_mapping
+
+        entity_mappings[entity] = entity_mapping
+
+    # Build reverse mapping: entity_id -> [chains that share it]
+    entity_to_chains: dict[str, list[str]] = {}
+    for chain in chains:
+        entity_id = str(chain_to_entity.get(chain, ""))
+        if entity_id:
+            entity_to_chains.setdefault(entity_id, []).append(chain)
+
+    # Expand entity mappings to all chains sharing that entity
+    mappings: dict[str, list[SMapping]] = {}
+    for entity_id, smappings in entity_mappings.items():
+        for chain in entity_to_chains.get(entity_id, []):
+            mappings[chain] = smappings
+        if entity_id not in entity_to_chains:
+            logger.warning(f"DB returned entity {entity_id} for {pdbid} with no matching poly chain")
+
+    # Warn about DB chains not in our poly chain list
+    for chain in list(mappings.keys()):
+        if chain not in chains:
+            logger.warning(f"Database returned a chain {chain} that's not a poly?")
+            del mappings[chain]
 
     return mappings

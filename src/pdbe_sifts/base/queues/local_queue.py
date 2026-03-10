@@ -1,16 +1,9 @@
-"""Local multiprocessing queue backend.
-
-Uses :class:`multiprocessing.managers.SyncManager` to expose a shared list
-over TCP so that both the main process and remote LSF worker processes (which
-must reach the login node on the configured port) can share a queue.
-"""
-
 from collections import defaultdict
 from multiprocessing.managers import SyncManager
 from typing import Any
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.base.queues import IQueue
+from pdbe_sifts.base.queues.batchable_queue import IQueue
 
 
 class QueueManager(SyncManager):
@@ -18,48 +11,39 @@ class QueueManager(SyncManager):
 
 
 class LocalQueue(IQueue):
-    """Queue backed by a :class:`multiprocessing.managers.SyncManager`.
+    """A queue that can be used to communicate between processes.
 
-    The manager exposes a shared list over TCP so that multiple processes
-    (including remote LSF/Slurm jobs connecting over the network) can
-    enqueue and dequeue entries.
-
-    Args:
-        host: Hostname the manager server listens on.
-        port: TCP port the manager server listens on.
-        source_task_id: Used as the ``authkey`` for the manager (bytes-encoded).
+    The queue is implemented using a multiprocessing manager as a list.
+    This is to enable remove_item operations on the queue since the default
+    multiprocessing queue does not support this.
     """
 
     _queues: dict[str, list] = defaultdict(list)
     queue_type = "local"
 
-    def __init__(
-        self,
-        host: str = "localhost",
-        port: int = 50000,
-        source_task_id: str = "pdbe_sifts",
-    ):
+    def __init__(self, host="localhost", port=50000, source_task_id="sifts"):
         logger.info("Created LocalQueue")
         address = (host, port)
+
         self._manager = QueueManager(address, authkey=source_task_id.encode())
         logger.info(f"Starting queue manager at {address}")
 
-    def push(self, queue_name: str, val: Any) -> None:
-        """Push *val* onto *queue_name*, creating the queue if it does not exist."""
+    def push(self, queue_name: str, val: Any):
+        """Push a value to the queue. If the queue does not exist, it will be created."""
         self._register(queue_name)
         self._queues[queue_name].append(val)
 
-    def _register(self, queue_name: str) -> None:
+    def _register(self, queue_name: str):
         if queue_name not in self._queues:
             self._queues[queue_name] = self._manager.list()
 
-    def pop(self, queue_name: str) -> Any:
+    def pop(self, queue_name: str):
         try:
             return self._queues.get(queue_name, []).pop()
         except IndexError:
             return None
 
-    def pop_and_push(self, source_queue: str, target_queue: str) -> Any:
+    def pop_and_push(self, source_queue: str, target_queue: str):
         try:
             val = self._queues[source_queue].pop()
             self._queues[target_queue].append(val)
@@ -67,19 +51,19 @@ class LocalQueue(IQueue):
         except IndexError:
             return None
 
-    def length(self, queue_name: str) -> int:
+    def length(self, queue_name: str):
         return len(self._queues.get(queue_name, []))
 
-    def get_all(self, queue_name: str) -> list:
-        return list(self._queues.get(queue_name, []))
+    def get_all(self, queue_name: str):
+        return self._queues.get(queue_name, [])
 
-    def delete(self, queue_name: str) -> None:
+    def delete(self, queue_name: str):
         self._queues.pop(queue_name, None)
 
-    def rename(self, source_queue: str, target_queue: str) -> None:
+    def rename(self, source_queue: str, target_queue: str):
         self._queues[target_queue] = self._queues.pop(source_queue)
 
-    def remove_item(self, queue_name: str, item: Any) -> None:
+    def remove_item(self, queue_name: str, item: Any):
         try:
             self._queues[queue_name].remove(item)
         except ValueError:
