@@ -33,7 +33,7 @@ class SiftsAlign(Batchable):
         cif_dir,
         out_dir,
         db_conn_str,
-        dbmode=False,
+        # dbmode=False,
         nf90_mode=False,
         unp_mode=None,
     ):
@@ -51,7 +51,7 @@ class SiftsAlign(Batchable):
 
         self.cif_dir = cif_dir
         self.input = cif_dir
-        self.dbmode = dbmode
+        # self.dbmode = dbmode
         self.nf90_mode = nf90_mode
         self.failure_threshold = 0.01
         self.unp_mode = unp_mode
@@ -190,15 +190,15 @@ class SiftsAlign(Batchable):
         return {**entry_mapping, **mapp}
 
     def after_job_end(self):
-        if not self.dbmode:
-            self.conn.close()
-            return
+        # if not self.dbmode:
+        #     self.conn.close()
+        #     return
         self.conn.close()
-        conn = duckdb.connect(self.db_conn_str)
-        try:
-            SiftsDB(conn).bulk_load_from_dir(self.out_dir, 1000)
-        finally:
-            conn.close()
+        # conn = duckdb.connect(self.db_conn_str)
+        # try:
+        #     SiftsDB(conn).bulk_load_from_dir(self.out_dir, 1000)
+        # finally:
+        #     conn.close()
 
 
 @log_durations(logger.info)
@@ -251,13 +251,13 @@ def run():
         ),
     )
 
-    parser.add_argument(
-        "-w",
-        "--write-to-db",
-        action="store_true",
-        default=False,
-        help="Additionally write to database (default: False)",
-    )
+    # parser.add_argument(
+    #     "-w",
+    #     "--write-to-db",
+    #     action="store_true",
+    #     default=False,
+    #     help="Additionally write to database (default: False)",
+    # )
 
     # adding single,batch options
     args = parse_with_base_parser(parser)
@@ -267,7 +267,7 @@ def run():
         args.cif_input_dir,
         args.output_dir,
         args.duckdb,
-        dbmode=args.write_to_db,
+        # dbmode=args.write_to_db,
         nf90_mode=args.nf90,
         unp_mode=args.mapping,
     )
