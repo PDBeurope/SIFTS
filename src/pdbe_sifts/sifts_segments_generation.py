@@ -191,11 +191,12 @@ class SiftsAlign(Batchable):
 
     def after_job_end(self):
         if not self.dbmode:
+            self.conn.close()
             return
         self.conn.close()
-        self.conn = duckdb.connect(self.file_duckdb)
+        conn = duckdb.connect(self.db_conn_str)
         try:
-            SiftsDB(conn).bulk_load_from_dir(self.out_dir, self.db_batch_size)
+            SiftsDB(conn).bulk_load_from_dir(self.out_dir, 1000)
         finally:
             conn.close()
 
