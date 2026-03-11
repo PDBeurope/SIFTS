@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+
+import os
+import shutil
+import requests
+import gemmi
+from pdbe_sifts.config import load_config
+from pdbe_sifts.base.utils import download_file_from_url
+
+conf = load_config()
+URL = "https://ftp.ebi.ac.uk/pub/databases/msd/pdbechem_v2/ccd/"
+
+def get_ccd_file(threeL_res):
+
+    threeL_res = threeL_res.upper()
+
+    local_path = os.path.join(
+        conf.cache.ccd,
+        threeL_res[0],
+        threeL_res,
+        f"{threeL_res}.cif",
+    )
+
+    if os.path.exists(local_path):
+        return local_path
+
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+    url = (
+        URL
+        + threeL_res[0]
+        + "/"
+        + threeL_res
+        + "/"
+        + threeL_res
+        + ".cif"
+    )
+
+    tmp_path = local_path + ".tmp"
+
+    # Only download if another process isn't already doing it
+    try:
+        download_file_from_url(url, tmp_path)
+        os.replace(tmp_path, local_path)  # atomic move
+    except FileExistsError:
+        # another process already finished the download
+        pass
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+    return local_path
+
+def ccd_dict_builder(ccd_ters):
+    try:
+        return {
+            "N": (
+                ccd_ters["n_ter"][1]["atom_id"],
+                ccd_ters["n_ter"][1]["pdbx_ordinal"],
+            ),
+            "C": (
+                ccd_ters["c_ter"][1]["atom_id"],
+                ccd_ters["c_ter"][1]["pdbx_ordinal"],
+            ),
+        }
+    except KeyError:
+        return 0
+
+
+class CcdFile:
+    def __init__(self, threeL_res):
+        self.threeL_res = threeL_res
+        self.input_file = get_ccd_file(threeL_res)
+        self.atoms = None
+
+    def parse_ccd(self):
+        cif = gemmi.cif.read_file(self.input_file)
+        cif_block = cif.sole_block()
+        cif_loop = cif_block.find_loop_item("_chem_comp_atom.comp_id")
+        to_extract = [
+            "_chem_comp_atom.comp_id",
+            "_chem_comp_atom.atom_id",
+            "_chem_comp_atom.alt_atom_id",
+            "_chem_comp_atom.type_symbol",
+            "_chem_comp_atom.pdbx_backbone_atom_flag",
+            "_chem_comp_atom.pdbx_n_terminal_atom_flag",
+            "_chem_comp_atom.pdbx_c_terminal_atom_flag",
+            "_chem_comp_atom.pdbx_component_atom_id",
+            "_chem_comp_atom.pdbx_component_comp_id",
+            "_chem_comp_atom.pdbx_ordinal",
+        ]
+
+        columns = {col: cif_loop.loop.tags.index(col) for col in to_extract}
+        atoms = {}
+        for i in range(cif_loop.loop.length()):
+            atom = {
+                "comp_id": cif_loop.loop[i, columns["_chem_comp_atom.comp_id"]],
+                "atom_id": cif_loop.loop[i, columns["_chem_comp_atom.atom_id"]],
+                "alt_atom_id": cif_loop.loop[i, columns["_chem_comp_atom.alt_atom_id"]],
+                "type_symbol": cif_loop.loop[i, columns["_chem_comp_atom.type_symbol"]],
+                "pdbx_backbone_atom_flag": cif_loop.loop[
+                    i, columns["_chem_comp_atom.pdbx_backbone_atom_flag"]
+                ],
+                "pdbx_n_terminal_atom_flag": cif_loop.loop[
+                    i, columns["_chem_comp_atom.pdbx_n_terminal_atom_flag"]
+                ],
+                "pdbx_c_terminal_atom_flag": cif_loop.loop[
+                    i, columns["_chem_comp_atom.pdbx_c_terminal_atom_flag"]
+                ],
+                "pdbx_component_atom_id": cif_loop.loop[
+                    i, columns["_chem_comp_atom.pdbx_component_atom_id"]
+                ],
+                "pdbx_component_comp_id": cif_loop.loop[
+                    i, columns["_chem_comp_atom.pdbx_component_comp_id"]
+                ],
+                "pdbx_ordinal": cif_loop.loop[
+                    i, columns["_chem_comp_atom.pdbx_ordinal"]
+                ],
+            }
+            atoms[i] = atom
+        self.atoms = atoms
+
+    def extract_ters(self):
+        atoms_extracted = {}
+        for atom, descrip in self.atoms.items():
+            if (
+                descrip["pdbx_n_terminal_atom_flag"] == "Y"
+                and descrip["type_symbol"] == "N"
+            ):
+                atoms_extracted["n_ter"] = (atom, descrip)
+            if (
+                descrip["pdbx_c_terminal_atom_flag"] == "Y"
+                and descrip["type_symbol"] == "C"
+            ):
+                atoms_extracted["c_ter"] = (atom, descrip)
+        return atoms_extracted
+
+    def process(self):
+        self.parse_ccd()
+        return ccd_dict_builder(self.extract_ters())
