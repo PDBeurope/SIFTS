@@ -306,22 +306,6 @@ def write_res_csv(out_dir, pdbid, data):
                 sw.writerow(fix_values(item2))
 
 
-@memoize(key_func=lambda acc, conn: acc)
-def get_db_entry(acc, conn):
-    if not conn:
-        return None
-    try:
-        query = "SELECT dbentry_id FROM DBENTRY@SWPREAD WHERE accession = :1"
-        rows = conn.execute(query, (acc,))
-        rows = list(rows)[0]
-        logger.info(f"Accession for DB Entry {acc}: {rows[0]}")
-        return rows[0]
-    except Exception:
-        pass
-
-    return None
-
-
 @log_durations(logger.debug)
 def insert_residues(
     chain_obj: Chain, unp_object=None, iso_acc=None, canonical=False, conn=None
@@ -407,8 +391,6 @@ def insert_residues(
                         else True
                     )
 
-                if unp_obj:
-                    unp_obj.dbentry_id = get_db_entry(unp_obj.accession, conn)
 
                 res_id = [
                     chain_obj.pdbid,
@@ -431,11 +413,7 @@ def insert_residues(
                         r.n,
                         residue_map[r.n] if mapped else None,  # UNP_SEQ_ID
                         "Y" if r.observed else "N",
-                        (
-                            unp_obj.dbentry_id
-                            if unp_obj is not None and mapped
-                            else None
-                        ),  # DBENTRY_ID
+                        None, # Future DB ENTRY
                         iso if mapped else None,
                         (
                             unp_obj.longName if unp_obj is not None and mapped else None
@@ -504,9 +482,7 @@ def process_chromophores(
                 r.n,
                 m if mapped else None,  # UNP_SEQ_ID
                 "Y" if r.observed else "N",
-                (
-                    unp_obj.dbentry_id if unp_obj is not None and mapped else None
-                ),  # DBENTRY_ID
+                None,# DBENTRY_ID
                 iso if mapped else None,
                 unp_obj.longName if unp_obj is not None and mapped else None,  # NAME
                 r.rtype,  # TYPE

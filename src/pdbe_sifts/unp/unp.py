@@ -34,6 +34,7 @@ COLORS = {
 
 conf = load_config()
 
+@memoize
 def get_unp_object(acc):
     unp = None
     try:
@@ -179,7 +180,7 @@ class UNP:
     seq_molWeight: str
     seq_checksum: str
     comments: Mapping[str, str] = {}
-    dbentry_id: str
+    dbentry_id: str = None
     dbreferences: Mapping[str, list[str]] = {}
     features: Mapping[str, str] = {}
     dataset: str
