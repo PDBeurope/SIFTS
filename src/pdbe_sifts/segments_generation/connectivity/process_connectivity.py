@@ -43,13 +43,12 @@ def overlapping(ranges):
     return False
 
 
-# def merge_segment(seg1, seg2):
-#     """Merges two segments into a single one.A segment is represented as ((RES_BEG, RES_END), (UNP_BEG, UNP_END))."""
-#     start_pdb = seg1[0][0]
-#     end_pdb = seg2[0][1]
-#     start_unp = seg1[1][0]
-#     end_unp = seg2[1][1]
-#     return ((start_pdb, end_pdb), (start_unp, end_unp))
+def merge_segment(seg1, seg2):
+    start_pdb = seg1[0][0]
+    end_pdb = seg2[0][1]
+    start_unp = seg1[1][0]
+    end_unp = seg2[1][1]
+    return ((start_pdb, end_pdb), (start_unp, end_unp))
 
 
 def compute_atom_distance(atom1, atom2):
