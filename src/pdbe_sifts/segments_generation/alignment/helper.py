@@ -135,6 +135,7 @@ class EntryMapping:
         nf90_mode=False,
         NFT=None,
         NFC=None,
+        connectivity_mode=True,
     ):
         self.entry = entry
         self.chain = chain
@@ -146,6 +147,7 @@ class EntryMapping:
         self.ranges: list[tuple[int, int]] = []
         self.NFT: NF90TaxID = NFT
         self.NFC: NF90Coverage = NFC
+        self.connectivity_mode = connectivity_mode
 
     def _get_accessions(self):
         # Validate the provided mappings
@@ -235,7 +237,8 @@ class EntryMapping:
                         )
                     )
                 )
-
+        if self.connectivity_mode:
+            self.chain_obj.connectivity_mode = True
         self.chain_obj.generate_residue_maps()
         logger.info("Segments generated")
 

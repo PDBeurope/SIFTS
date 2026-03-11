@@ -7,6 +7,7 @@ import tqdm
 from Bio.Seq import Seq
 
 from pdbe_sifts.mmcif import mmcif_helper
+from pdbe_sifts.segments_generation.connectivity.process_connectivity import ConnectivityCheck
 
 from ..taxonomy_fix_pkl import TaxonomyFix
 from .residue import Residue
@@ -54,6 +55,7 @@ class Chain:
         self.scores = {}
         self.seg_scores = {}
         self.expression_tag_start = None
+        self.connectivity_mode = False
 
         self.ec = mmcif.get_ec(self.entity_id)
 
@@ -199,6 +201,9 @@ class Chain:
         # overriding the rest
         for m in mappings[::-1]:
             al = m[2]
+            if not self.is_chimera and self.connectivity_mode:
+                refined_al = ConnectivityCheck(self)
+                al = refined_al.alignment_refining(al, iso)
             pdb_seq = al[1]._seq
             pdb_start = al[1]._al_start
             pdb_stop = al[1]._al_stop

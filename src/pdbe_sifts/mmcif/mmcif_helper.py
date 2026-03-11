@@ -24,6 +24,29 @@ CATEGORIES = [
     "_pdbx_audit_revision_history",
 ]
 
+def extract_table(block, search_list):
+    """
+    Produces a Gemmi table based on a list of parsed column names in the _atom_site.
+    loop.
+
+    Input: Gemmi block, list of search terms
+    Returned: Gemmi table
+
+    :param mmcif: Contents of (updated) mmCIF file
+    :type mmcif: gemmi.cif.Block
+    :param search_list: Loop terms to extract
+    :type search_list: list[str]
+    :return: Values for searched loop terms
+    :rtype: gemmi.cif.Table
+    """
+
+    table = block.find(
+        "_atom_site.",
+        search_list,
+    )
+
+    return table
+
 
 class NotAPolyPeptide(Exception):
     pass
@@ -405,3 +428,70 @@ class mmCIF:
             return [x.strip() for x in out.split(",") if x not in ("?", ".")]
 
         return []
+
+    def get_ters_coordinates_of_residue(self, chain_id, res_num, ters_lab_num):
+        # function from Joseph Ellaway
+        cter_lab = ters_lab_num["C"][0]
+        nter_lab = ters_lab_num["N"][0]
+        cter_num = int(ters_lab_num["C"][1])
+        nter_num = int(ters_lab_num["N"][1])
+        block = cif.read(self.fname).sole_block()
+        res_num = str(res_num)
+
+        mmcif_table = extract_table(
+            block,
+            [
+                "group_PDB",
+                "id",
+                "type_symbol",
+                "label_atom_id",
+                "label_asym_id",
+                "label_seq_id",
+                "Cartn_x",
+                "Cartn_y",
+                "Cartn_z",
+                "pdbx_PDB_model_num",
+            ],
+        )
+
+        if len(mmcif_table) == 0:
+            # Could not parse mmCIF file
+            logger.error(
+                f"Gemmi block {block} for chain {chain_id} does not contain valid "
+                "pdbx_sifts_xref_db_num (UniProt sequence ID) column"
+            )
+
+            raise TypeError(
+                "Updated mmCIF file is missing SIFTs column headers needed for clustering. "
+                "Please repeat clustering step for this UniProt segment once mmCIFs have "
+                "been updated."
+            )
+
+        # Loop over Table and make checks
+        first_model = mmcif_table[0][9]
+        previous_residue = mmcif_table[0][5]
+        atom_ordinal = 1
+        return_dict = {"N": [], "C": []}
+        for row in mmcif_table:
+            if row[5] != previous_residue:
+                previous_residue = row[5]
+                atom_ordinal = 1
+            if row[9] != first_model:
+                break
+            atom_lab = row[3]
+            # Check: Atom is C or N in protein residue, with occupancy and in correct chain
+            if (
+                row[4] == chain_id
+                and row[5] == res_num
+                and (atom_lab == cter_lab or atom_lab == nter_lab)
+                and (atom_ordinal == cter_num or atom_ordinal == nter_num)
+            ):
+                # Add Cartesian x,y,z
+                return_dict[row[2]] = [
+                    float(row[6]),
+                    float(row[7]),
+                    float(row[8]),
+                ]
+            atom_ordinal += 1
+        return return_dict
+
