@@ -23,6 +23,7 @@ import pdbe_sifts.segments_generation.generate_xref_csv as generate_xref_csv
 from pdbe_sifts.database.sifts_db_wrapper import SiftsDB
 # from pdbe_sifts.uniref90_pkl import NF90Coverage, NF90TaxID
 from pdbe_sifts.unp.unp import UNP
+from pdbe_sifts.segments_generation.connectivity.process_connectivity import ConnectivityCheck
 
 conf = load_config()
 
@@ -33,9 +34,9 @@ class SiftsAlign(Batchable):
         cif_dir,
         out_dir,
         db_conn_str,
-        # dbmode=False,
         nf90_mode=False,
         unp_mode=None,
+        connectivity_mode = True,
     ):
         """Determine segments and related residues from a sequence alignment.
 
@@ -51,7 +52,6 @@ class SiftsAlign(Batchable):
 
         self.cif_dir = cif_dir
         self.input = cif_dir
-        # self.dbmode = dbmode
         self.nf90_mode = nf90_mode
         self.failure_threshold = 0.01
         self.unp_mode = unp_mode
@@ -61,7 +61,7 @@ class SiftsAlign(Batchable):
         self.out_dir = out_dir
         self.NFC = {}
         self.NFT = {}
-
+        self.connectivity_mode = connectivity_mode
         self.initial_memory = 8000
         self.retry_memory = 16000
         self.entry_file_path = conf.lists.entries_all
@@ -122,7 +122,13 @@ class SiftsAlign(Batchable):
             logger.info(f"Processing {entry_id} chain {chain}")
 
             em = helper.EntryMapping(
-                entry, chain, chain_mapping, self.nf90_mode, self.NFT, self.NFC
+                entry,
+                chain,
+                chain_mapping,
+                self.nf90_mode,
+                self.connectivity_mode,
+                self.NFT,
+                self.NFC,
             )
 
             if not em.set_chain_accessions():
@@ -131,6 +137,10 @@ class SiftsAlign(Batchable):
                 continue
 
             em.process()
+            if not em.chain_obj.is_chimera and self.connectivity_mode:
+                connectivity_check = ConnectivityCheck(em.chain_obj, em.repeated_acc)
+                em.chain_obj.segments = connectivity_check.check_segments_conn()
+
 
             # if self.nf90_mode:
             #     try:
@@ -233,6 +243,14 @@ def run():
     )
 
     parser.add_argument(
+        "--no-connectivity",
+        dest="connectivity",
+        action="store_false",
+        default=True,
+        help="disable connectivity mode (default: enabled)",
+    )
+
+    parser.add_argument(
         "-m",
         "--mapping",
         help=(
@@ -267,9 +285,9 @@ def run():
         args.cif_input_dir,
         args.output_dir,
         args.duckdb,
-        # dbmode=args.write_to_db,
         nf90_mode=args.nf90,
         unp_mode=args.mapping,
+        connectivity_mode=args.connectivity,
     )
     sifts_align.run(args)
 
