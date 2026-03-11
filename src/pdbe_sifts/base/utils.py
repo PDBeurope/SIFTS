@@ -198,6 +198,21 @@ def get_exc_context() -> tuple[str, str]:
         s_exc_date = now.strftime("%Y-%m-%d %H:%M:%S")
         return ("CLI", s_exc_date)
 
+def get_allocated_cpus():
+    if "SLURM_CPUS_PER_TASK" in os.environ:
+        return int(os.environ["SLURM_CPUS_PER_TASK"])
+    try:
+        return len(os.sched_getaffinity(0))
+    except AttributeError:
+        return os.cpu_count() or 1
+
+
+def get_cpu_count():
+    if "SIFTS_N_PROC" in os.environ:
+        return int(os.environ["SIFTS_N_PROC"])
+    return get_allocated_cpus()
+
+
 class SiftsAction(argparse.Action):
     def __init__(
         self, envvar=None, confvar=None, required=False, default=None, **kwargs

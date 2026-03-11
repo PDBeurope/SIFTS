@@ -6,7 +6,6 @@ An entity represents a unique sequence in a PDB structure.
 Multiple chains can share the same entity (e.g. homodimers).
 """
 
-import os
 from typing import Optional, List, Dict
 from collections.abc import Mapping
 from Bio.Seq import Seq
@@ -16,6 +15,7 @@ from itertools import groupby
 import tqdm
 
 from pdbe_sifts.base.log import logger
+from pdbe_sifts.base.utils import get_cpu_count
 from . import mmcif_helper
 from pdbe_sifts.unp.unp import UNP
 from .residue import Residue
@@ -23,10 +23,7 @@ from .chain import Chain
 from .chem_comp import ChemCompMapping
 
 
-N_PROC = int(os.environ.get(
-    "SIFTS_N_PROC",
-    os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count() or 1),
-))
+N_PROC = get_cpu_count()
 STEP_SIZE = 2000
 
 class Entity:

@@ -1,4 +1,3 @@
-import os
 from enum import Enum
 from multiprocessing.dummy import Pool
 from typing import NamedTuple
@@ -7,6 +6,7 @@ import tqdm
 from funcy.debug import log_durations
 
 from pdbe_sifts.base.log import logger
+from pdbe_sifts.base.utils import get_cpu_count
 from pdbe_sifts.segments_generation import alignment
 from pdbe_sifts.mmcif.entry import Entry
 # from segments_gen.uniref90_pkl import NF90Coverage, NF90TaxID
@@ -14,10 +14,7 @@ from pdbe_sifts.unp.unp import UNP
 from pdbe_sifts.unp.unp import get_unp_object
 
 NF_COVERAGE = 0.7
-N_PROC = int(os.environ.get(
-    "SIFTS_N_PROC",
-    os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count() or 1),
-))
+N_PROC = get_cpu_count()
 STEP_SIZE = 2000
 
 

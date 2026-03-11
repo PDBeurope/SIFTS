@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import os
 from itertools import groupby
 from multiprocessing.dummy import Pool
 from operator import itemgetter
@@ -7,16 +6,14 @@ from operator import itemgetter
 import tqdm
 from Bio.Seq import Seq
 
+from pdbe_sifts.base.utils import get_cpu_count
 from pdbe_sifts.mmcif import mmcif_helper
 from pdbe_sifts.segments_generation.connectivity.process_connectivity import ConnectivityCheck
 
 from ..taxonomy_fix_pkl import TaxonomyFix
 from .residue import Residue
 
-N_PROC = int(os.environ.get(
-    "SIFTS_N_PROC",
-    os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count() or 1),
-))
+N_PROC = get_cpu_count()
 STEP_SIZE = 2000
 
 
