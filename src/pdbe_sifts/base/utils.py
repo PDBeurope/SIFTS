@@ -214,3 +214,17 @@ class SiftsAction(argparse.Action):
 
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, values)
+
+def download_file_from_url(url: str, output_file: str) -> None:
+    """Downloads a file from a URL.
+
+    Args:
+        url (str): URL to download from.
+        output_file (str): Path to output file.
+    """
+    logger.info(f"Downloading {url} to {output_file}")
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(output_file, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
