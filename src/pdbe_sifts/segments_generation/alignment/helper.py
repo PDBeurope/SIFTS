@@ -1,3 +1,4 @@
+import os
 from enum import Enum
 from multiprocessing.dummy import Pool
 from typing import NamedTuple
@@ -13,7 +14,10 @@ from pdbe_sifts.unp.unp import UNP
 from pdbe_sifts.unp.unp import get_unp_object
 
 NF_COVERAGE = 0.7
-N_PROC = 64
+N_PROC = int(os.environ.get(
+    "SIFTS_N_PROC",
+    os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count() or 1),
+))
 STEP_SIZE = 2000
 
 

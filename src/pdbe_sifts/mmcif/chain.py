@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 from itertools import groupby
 from multiprocessing.dummy import Pool
 from operator import itemgetter
@@ -12,7 +13,10 @@ from pdbe_sifts.segments_generation.connectivity.process_connectivity import Con
 from ..taxonomy_fix_pkl import TaxonomyFix
 from .residue import Residue
 
-N_PROC = 64
+N_PROC = int(os.environ.get(
+    "SIFTS_N_PROC",
+    os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count() or 1),
+))
 STEP_SIZE = 2000
 
 

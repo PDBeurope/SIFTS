@@ -25,7 +25,7 @@ from .chem_comp import ChemCompMapping
 
 N_PROC = int(os.environ.get(
     "SIFTS_N_PROC",
-    os.environ.get("SLURM_CPUS_PER_TASK", min(64, os.cpu_count() or 1)),
+    os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count() or 1),
 ))
 STEP_SIZE = 2000
 
