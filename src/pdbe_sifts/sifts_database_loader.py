@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""Load segment/residue CSV files produced by sifts_segments_generation into DuckDB.
-
-Run this once after all batch jobs have completed:
-
-    python sifts_load_segments_db.py \
-        -o /path/to/output_dir \
-        -db /path/to/sifts_xref.duckdb \
-        [--batch-size 1000]
-"""
 
 import argparse
 
@@ -22,29 +13,23 @@ def run():
         description="Bulk-load segment/residue CSVs from sifts_segments_generation into DuckDB."
     )
     parser.add_argument(
-        "-o",
-        "--output-dir",
+        "-i",
+        "--input-dir",
         required=True,
-        help="Root directory containing *_seg.csv.gz and *_res.csv.gz files.",
+        help="Root directory containing per-entry sifts/ subdirectories with CSV files.",
     )
     parser.add_argument(
-        "-db",
+        "-d",
         "--duckdb",
         required=True,
-        help="Path to the output DuckDB file (created if it does not exist).",
-    )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=1000,
-        help="Number of CSV files per DuckDB transaction (default: 1000).",
+        help="Path to the DuckDB file. Entries are read from sifts_xref_segment and reloaded.",
     )
     args = parser.parse_args()
 
-    logger.info("Connecting to %s", args.duckdb)
     conn = duckdb.connect(args.duckdb)
+    logger.info("Connected to %s", args.duckdb)
     try:
-        SiftsDB(conn).bulk_load_from_dir(args.output_dir, args.batch_size)
+        SiftsDB(conn).bulk_load_from_entries(args.input_dir)
     finally:
         conn.close()
     logger.info("Done.")

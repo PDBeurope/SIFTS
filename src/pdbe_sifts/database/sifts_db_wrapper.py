@@ -1,8 +1,10 @@
 from pathlib import Path
+
 import duckdb
 import pandas as pd
 
 from pdbe_sifts.base.log import logger
+
 
 def segment_to_dict(seg):
     return {
@@ -33,6 +35,7 @@ def segment_to_dict(seg):
         "reference_acc": seg.reference_acc,
         "chimera": bool(seg.chimera),
     }
+
 
 def residue_to_dict(r):
     return {
@@ -71,7 +74,6 @@ class SiftsDB:
         self.create_sifts_xref_residue_table()
         self.create_sifts_xref_segment_table()
 
-
     def create_sifts_xref_residue_table(self):
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS sifts_xref_residue (
@@ -86,7 +88,7 @@ class SiftsDB:
                 pdb_seq_id              INTEGER,
                 unp_seq_id              INTEGER,
                 observed                VARCHAR,
-                dbentry_id              INTEGER,
+                dbentry_id              BIGINT,
                 accession               VARCHAR,
                 name                    VARCHAR,
                 type                    VARCHAR,
@@ -101,7 +103,6 @@ class SiftsDB:
                 residue_id              VARCHAR
                 );
             """)
-
 
     def create_sifts_xref_segment_table(self):
         self.conn.execute("""
@@ -135,7 +136,6 @@ class SiftsDB:
             );
         """)
 
-
     def clean_segments(self, entry_ids):
         entry_id = [entry.lower() for entry in entry_ids]
         self.conn.execute(
@@ -146,12 +146,11 @@ class SiftsDB:
             [entry_ids]
         )
 
-
     def clean_residues(self, entry_ids):
         entry_id = [entry.lower() for entry in entry_ids]
         self.conn.execute(
             """
-            DELETE FROM sifts_xref_residue 
+            DELETE FROM sifts_xref_residue
             WHERE entry_id IN ?
             """,
             [entry_ids]
@@ -166,14 +165,13 @@ class SiftsDB:
         entries = df['entry_id'].to_list()
         self.clean_segments(entries)
 
-
         self.conn.register("tmp_segments", df)
         self.conn.execute("""
             INSERT INTO sifts_xref_segment
             SELECT * FROM tmp_segments
         """)
         self.conn.unregister("tmp_segments")
-    
+
     def insert_xref_residues(self, residues):
         if not residues:
             return
@@ -189,79 +187,44 @@ class SiftsDB:
             SELECT * FROM tmp_residues
         """)
         self.conn.unregister("tmp_residues")
-    
+
     def clean_by_entry(self, entry):
         pass
 
-    def bulk_load_from_dir(self, out_dir, batch_size: int = 1000) -> None:
-        """Bulk-load all segment and residue CSV files from out_dir into DuckDB.
-
-        Scans out_dir recursively for *_seg.csv.gz and *_res.csv.gz files,
-        then loads them in batches. Each batch is idempotent: existing rows
-        for those entry_ids are deleted before inserting the new ones.
-
-        Args:
-            out_dir: Root directory to scan for CSV files.
-            batch_size: Number of CSV files to load per DuckDB transaction.
-        """
-        out_path = Path(out_dir)
-        seg_files = sorted(out_path.rglob("*_seg.csv.gz"))
-        res_files = sorted(out_path.rglob("*_res.csv.gz"))
-
-        if not seg_files and not res_files:
-            logger.warning("bulk_load_from_dir: no CSV files found in %s", out_dir)
-            return
-
-        logger.info(
-            "Bulk loading %d segment files and %d residue files from %s",
-            len(seg_files), len(res_files), out_dir,
+    def bulk_load_from_entries(self, input_dir: str) -> None:
+        base = str(Path(input_dir) / '*' / '*' / 'sifts')
+        # self._bulk_load_table(
+        #     "sifts_xref_segment", f"{base}/*_seg.csv.gz", "%_nf90_seg.csv.gz"
+        # )
+        self._bulk_load_table(
+            "sifts_xref_residue", f"{base}/*_res.csv.gz", "%_nf90_res.csv.gz"
         )
-        self._bulk_load_table("sifts_xref_segment", seg_files, batch_size)
-        self._bulk_load_table("sifts_xref_residue", res_files, batch_size)
         logger.info("DuckDB bulk load complete.")
 
-    def _bulk_load_table(self, table: str, files: list, batch_size: int) -> None:
-        """Load a list of gzipped CSV files into a DuckDB table in batches.
+    def _bulk_load_table(self, table: str, glob_pattern: str, exclude: str) -> None:
+        files = self.conn.execute(
+            "SELECT list(file) FROM glob(?) WHERE NOT file LIKE ?",
+            [glob_pattern, exclude],
+        ).fetchone()[0]
 
-        For each batch:
-          - entry_ids are extracted from filenames (e.g. 1abc_seg.csv.gz → 1abc)
-          - existing rows for those entry_ids are deleted first (idempotent)
-          - new rows are inserted via DuckDB's read_csv_auto()
-
-        Args:
-            table: Target table name in DuckDB.
-            files: List of Path objects pointing to gzipped CSV files.
-            batch_size: Number of files per batch.
-        """
-        total = len(files)
-        if not total:
+        if not files:
+            logger.warning("No files found for %s", table)
             return
 
-        logger.info("Loading %d files into %s...", total, table)
+        logger.info("%d files found for %s", len(files), table)
 
-        # Fetch the ordered column names from the table schema so that
-        # read_csv_auto does not try to infer them from the first data row.
         schema = self.conn.execute(
-            "SELECT column_name FROM information_schema.columns "
+            "SELECT column_name, data_type FROM information_schema.columns "
             "WHERE table_name = ? ORDER BY ordinal_position",
             [table],
         ).fetchall()
-        col_names_sql = "[" + ", ".join(f"'{row[0]}'" for row in schema) + "]"
+        col_names = [row[0] for row in schema]
+        col_types = [row[1] for row in schema]
 
-        for i in range(0, total, batch_size):
-            batch = files[i : i + batch_size]
-
-            entry_ids = [f.name.split("_")[0] for f in batch]
-            entry_ids_sql = ", ".join(f"'{e}'" for e in entry_ids)
-            file_list_sql = "[" + ", ".join(f"'{f}'" for f in batch) + "]"
-
-            self.conn.execute(
-                f"DELETE FROM {table} WHERE entry_id IN ({entry_ids_sql})"
-            )
-            self.conn.execute(
-                f"INSERT INTO {table} SELECT * FROM read_csv_auto("
-                f"{file_list_sql}, header=false, column_names={col_names_sql})"
-            )
-
-            loaded = min(i + batch_size, total)
-            logger.info("  %s: %d/%d files loaded", table, loaded, total)
+        self.conn.execute(f"DELETE FROM {table}")
+        self.conn.execute(
+            f"INSERT INTO {table} SELECT * FROM read_csv("
+            f"?, header=false, column_names=?, column_types=?)",
+            [files, col_names, col_types],
+        )
+        logger.info("Loaded into %s", table)
