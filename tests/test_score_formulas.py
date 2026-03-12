@@ -39,6 +39,7 @@ _ADJUSTED_SQL = """
         CASE
             WHEN identity IS NULL
             OR coverage IS NULL
+            OR mismatch IS NULL
             OR query_len IS NULL
             OR query_len = 0
             THEN 0
