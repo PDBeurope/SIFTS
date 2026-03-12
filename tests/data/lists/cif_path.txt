@@ -1,0 +1,2 @@
+/hps/software/users/pdbe/user/adamb/pdbe_sifts/tests/data/cif/1cbs.cif
+/hps/software/users/pdbe/user/adamb/pdbe_sifts/tests/data/cif/1vyc.cif
