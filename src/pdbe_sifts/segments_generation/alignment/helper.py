@@ -37,12 +37,14 @@ class CustomSequenceAccession:
     and generate_xref_csv.py.
     """
 
-    def __init__(self, accession: str, sequence: str):
+    def __init__(self, accession: str, sequence: str, name: str = ""):
         self.accession = accession
         self.ad_dbref_auto_acc = accession  # used in get_curated_db_mappings
         self.sequence = sequence
         self.seq_isoforms = {accession: sequence}
         self.taxonomy = []  # no taxonomy info for custom sequences
+        self.longName = name or accession  # fallback: use accession as name
+        self.date_seq_update = ["", "0"]  # [modified_date, version] — no versioning for custom seqs
 
     def getAllIsoforms(self):  # noqa: N802 — matches UNP method name
         return {self.accession: self.sequence}

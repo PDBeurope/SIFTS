@@ -175,8 +175,9 @@ class SiftsAlign:
             parts = header.split("|")
             chain_id = parts[0]
             accession = parts[1] if len(parts) > 1 else chain_id
+            name = parts[2] if len(parts) > 2 else ""  # optional: >{chain}|{acc}|{name}
             sequence = "".join(seq_parts)
-            self.custom_sequences[chain_id] = CustomSequenceAccession(accession, sequence)
+            self.custom_sequences[chain_id] = CustomSequenceAccession(accession, sequence, name)
             mapp.setdefault(chain_id, []).append(helper.SMapping(accession, 0, 0))
 
         current_header = None
