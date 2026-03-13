@@ -51,17 +51,3 @@ def get_conf_data_entry_dir():
     return conf.location.work.data_entry_dir
 
 
-def get_conf_logging_destination() -> str:
-    return conf.logging.destination
-
-
-def get_conf_logging_file_path():
-    return conf.logging.file_path
-
-
-def get_conf_logging_max_bytes():
-    return conf.logging.max_bytes
-
-
-def get_conf_logging_elastic_file():
-    return conf.logging.elastic.local_file
