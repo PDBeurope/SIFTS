@@ -11,19 +11,19 @@ from gemmi import cif
 from pdbe_sifts.base.exceptions import EntryFailedException
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.config import load_config
-from pdbe_sifts.sifts_to_mmcif_test import comm_utils
-from pdbe_sifts.sifts_to_mmcif_test.def_mmcif_cat import (
+from pdbe_sifts.sifts_to_mmcif import comm_utils
+from pdbe_sifts.sifts_to_mmcif.def_mmcif_cat import (
     NEW_MMCIF_CAT,
     PRIMARY_KEYS,
     SIFTS_ATOMSITE_ITEM,
     SIFTS_NEW_CAT,
 )
-from pdbe_sifts.sifts_to_mmcif_test.delta_mappings import (
+from pdbe_sifts.sifts_to_mmcif.delta_mappings import (
     FindMappingChanges,
     get_delta_csv_suffix,
     read_sifts_segments,
 )
-from pdbe_sifts.sifts_to_mmcif_test.read_sifts_csv import get_unp_segments, get_unpres_mapping
+from pdbe_sifts.sifts_to_mmcif.read_sifts_csv import get_unp_segments, get_unpres_mapping
 
 conf = load_config()
 
