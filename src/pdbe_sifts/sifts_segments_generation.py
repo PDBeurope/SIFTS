@@ -88,13 +88,14 @@ class SiftsAlign:
         logger.debug(f"Chains: {chain_lst}")
         chain_to_entity = {chain: entry.chains[chain].entity_id for chain in chain_lst}
 
-        # Inject custom FASTA sequences so get_accession() finds them before calling UNP()
+        mappings = self.get_mappings(entry_id, chain_lst, chain_to_entity)
+        logger.info(mappings)
+
+        # Inject AFTER get_mappings: _parse_fasta_mapping() populates self.custom_sequences
+        # inside get_mappings. Key by accession ("BLOOD"), not chain_id ("A"), because
         # get_accession(entry, acc) looks up entry.accessions[acc].
         if self.custom_sequences:
             entry.accessions.update({v.accession: v for v in self.custom_sequences.values()})
-
-        mappings = self.get_mappings(entry_id, chain_lst, chain_to_entity)
-        logger.info(mappings)
 
         for chain, chain_mapping in mappings.items():
             logger.info(f"Processing {entry_id} chain {chain}")
