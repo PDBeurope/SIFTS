@@ -10,7 +10,6 @@ from gemmi import cif
 
 from pdbe_sifts.base.exceptions import EntryFailedException, NoSegmentsError
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.config import load_config
 from pdbe_sifts.sifts_to_mmcif import comm_utils
 from pdbe_sifts.sifts_to_mmcif.def_mmcif_cat import (
     NEW_MMCIF_CAT,
@@ -24,8 +23,6 @@ from pdbe_sifts.sifts_to_mmcif.delta_mappings import (
     read_sifts_segments,
 )
 from pdbe_sifts.sifts_to_mmcif.read_sifts_csv import get_unp_segments, get_unpres_mapping
-
-conf = load_config()
 
 
 

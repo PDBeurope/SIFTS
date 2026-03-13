@@ -21,9 +21,12 @@ import os
 import platform
 import re
 
-from pdbe_sifts.config import load_config
-
-conf = load_config()
+from pdbe_sifts.base.paths import (
+    get_conf_logging_destination,
+    get_conf_logging_elastic_file,
+    get_conf_logging_file_path,
+    get_conf_logging_max_bytes,
+)
 
 LOG_FORMAT = (
     "{hostname}: {username}: {asctime}: {module}: {lineno} {levelname}: {message}"
@@ -66,20 +69,18 @@ def _get_handler():
         logging.Handler: The handler to use for logging.
     """
 
-    log_destination = os.getenv("SIFTS_LOG_DESTINATION", conf.logging.destination)
+    log_destination = os.getenv("SIFTS_LOG_DESTINATION", get_conf_logging_destination())
 
     if log_destination == "file":
-        # OmegaConf adaptation: config used conf.logging.file as a special
-        # object (path + attributes). Here we use conf.logging.file_path + conf.logging.max_bytes.
         handler = logging.RotatingFileHandler(
-            conf.logging.file_path, backupCount=10, maxBytes=conf.logging.max_bytes
+            get_conf_logging_file_path(), backupCount=10, maxBytes=get_conf_logging_max_bytes()
         )
         handler.setFormatter(SensitiveFormatter(LOG_FORMAT, style="{"))
     elif log_destination == "syslog":
         handler = logging.handlers.SysLogHandler()
         handler.setFormatter(SensitiveFormatter(LOG_FORMAT, style="{"))
     elif log_destination == "elastic":
-        handler = logging.FileHandler(conf.logging.elastic.local_file)
+        handler = logging.FileHandler(get_conf_logging_elastic_file())
         handler.setFormatter(SensitiveFormatter(LOG_FORMAT, style="{"))
 
     else:

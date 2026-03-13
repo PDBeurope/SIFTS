@@ -4,9 +4,6 @@ from pathlib import Path
 from gemmi import cif
 
 from pdbe_sifts.base.exceptions import NotAPolyPeptide
-from pdbe_sifts.config import load_config
-
-conf = load_config()
 
 # mmCIF categories used in SIFTS
 CATEGORIES = [

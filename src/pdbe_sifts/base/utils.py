@@ -11,10 +11,7 @@ import funcy
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.exceptions import ObsoleteUniProtError, AccessionNotFound
-from pdbe_sifts.config import load_config
 from pdbe_sifts.base.paths import uniprot_cache_dir as get_uniprot_cache_dir
-
-conf = load_config()
 
 UNIPROT_REGEX = r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}"
 UNIPROT_API_BASE_URL = "https://rest.uniprot.org/uniprotkb"

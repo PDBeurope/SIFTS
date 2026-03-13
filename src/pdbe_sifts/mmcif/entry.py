@@ -5,13 +5,10 @@ import pickle as pickle
 from collections.abc import Mapping
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.config import load_config
 from pdbe_sifts.unp.unp import UNP
 
 from . import mmcif_helper
 from .chain import Chain
-
-conf = load_config()
 
 
 class Entry:

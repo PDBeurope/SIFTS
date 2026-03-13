@@ -2,11 +2,15 @@ import argparse
 from pathlib import Path
 
 from pdbe_sifts.base.log import logger
+from pdbe_sifts.base.paths import (
+    get_conf_data_entry_dir,
+    get_conf_uniprot_cache_base,
+    get_conf_user_base_dir,
+    get_conf_user_target_db,
+)
 from pdbe_sifts.config import init_config, load_config, _USER_CONFIG_FILE
 from pdbe_sifts.sifts_global_mappings import SiftsGlobalMappings
 from pdbe_sifts.global_mappings.target_database import TargetDb
-
-conf = load_config()
 
 
 def main():
@@ -96,11 +100,11 @@ def main():
         ),
     )
     global_parser.add_argument(
-        "-o", "--output-dir", required=False, default=conf.user.base_dir,
+        "-o", "--output-dir", required=False, default=get_conf_user_base_dir(),
         help="Directory where all results will be written."
     )
     global_parser.add_argument(
-        "-d", "--db-file", required=False, default=conf.user.target_db,
+        "-d", "--db-file", required=False, default=get_conf_user_target_db(),
         help="Path to the preformatted sequence database (MMseqs or BLAST)."
     )
     global_parser.add_argument(
@@ -152,7 +156,7 @@ def main():
     )
     segments_parser.add_argument(
         "-i", "--input-dir",
-        default=conf.location.work.data_entry_dir,
+        default=get_conf_data_entry_dir(),
         help="Base directory containing mmCIF files.",
     )
     segments_parser.add_argument(
@@ -161,12 +165,12 @@ def main():
     )
     segments_parser.add_argument(
         "-o", "--output-dir",
-        default=conf.location.work.data_entry_dir,
+        default=get_conf_data_entry_dir(),
         help="Base directory for output CSV files.",
     )
     segments_parser.add_argument(
         "--unp-dir",
-        default=conf.cache.uniprot,
+        default=get_conf_uniprot_cache_base(),
         help="Base directory for UniProt cache files.",
     )
     segments_parser.add_argument(

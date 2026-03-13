@@ -7,9 +7,6 @@ from Bio.Seq import Seq
 
 from pdbe_sifts.segments_generation.connectivity.ccd_parser import CcdFile
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.config import load_config
-
-conf = load_config()
 
 PEPTIDE_BOND_LEN = 1.42
 GAP_ALIGNMENT_PATTERN = r"(?<=-)([A-Z]{1,5})(?=-)"
