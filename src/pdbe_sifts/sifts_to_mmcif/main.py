@@ -9,7 +9,7 @@ from pathlib import Path
 
 from gemmi import cif
 
-from pdbe_sifts.base import pdbe_path
+from pdbe_sifts.base.paths import entry_dir, sifts_updated_cif_path, updated_cif_path
 from pdbe_sifts.base.batchable import Batchable
 from pdbe_sifts.base.exceptions import EntryFailedException
 from pdbe_sifts.base.log import logger
@@ -239,9 +239,7 @@ class ExportSIFTSTommCIF(Batchable):
             )
             new_seg_data, new_seg_list = read_sifts_segments(self.d_block)
             if self.prev_run_dir:
-                old_sifts_csv_dir = pdbe_path.get_entry_dir(
-                    self.entry_id, base_dir=self.prev_run_dir, suffix="sifts"
-                )
+                old_sifts_csv_dir = entry_dir(self.entry_id, self.prev_run_dir, "sifts")
                 old_sifts_cif = Path(
                     Path(old_sifts_csv_dir), f"{self.entry_id}_sifts_only.cif.gz"
                 )
@@ -274,11 +272,9 @@ class ExportSIFTSTommCIF(Batchable):
     def process_entry(self, entry_id):
         sifts_csv_dir = None
         if self.sifts_csv_base:
-            sifts_csv_dir = pdbe_path.get_entry_dir(
-                entry_id, base_dir=self.sifts_csv_base, suffix="sifts"
-            )
+            sifts_csv_dir = entry_dir(entry_id, self.sifts_csv_base, "sifts")
         self.sifts_updated_cif = Path(
-            pdbe_path.get_sifts_updated_cif(entry_id, base_dir=self.output_path)
+            sifts_updated_cif_path(entry_id, self.output_path)
         )
         self.sifts_only_cif = Path(
             Path(self.sifts_updated_cif).parent, f"{entry_id}_sifts_only.cif.gz"
@@ -303,7 +299,7 @@ class ExportSIFTSTommCIF(Batchable):
         )
         sifts_segments = [item for item in sifts_segments if item != []]
 
-        orig_updated_cif = Path(pdbe_path.get_updated_cif(entry_id, self.cif_dir))
+        orig_updated_cif = Path(updated_cif_path(entry_id, self.cif_dir))
 
         if not Path(orig_updated_cif).exists():
             raise FileNotFoundError(orig_updated_cif)

@@ -11,19 +11,19 @@ from gemmi import cif
 from pdbe_sifts.base.exceptions import EntryFailedException
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.config import load_config
-from pdbe_sifts.sifts_to_mmcif import comm_utils
-from pdbe_sifts.sifts_to_mmcif.def_mmcif_cat import (
+from pdbe_sifts.sifts_to_mmcif_test import comm_utils
+from pdbe_sifts.sifts_to_mmcif_test.def_mmcif_cat import (
     NEW_MMCIF_CAT,
     PRIMARY_KEYS,
     SIFTS_ATOMSITE_ITEM,
     SIFTS_NEW_CAT,
 )
-from pdbe_sifts.sifts_to_mmcif.delta_mappings import (
+from pdbe_sifts.sifts_to_mmcif_test.delta_mappings import (
     FindMappingChanges,
     get_delta_csv_suffix,
     read_sifts_segments,
 )
-from pdbe_sifts.sifts_to_mmcif.read_sifts_csv import get_unp_segments, get_unpres_mapping
+from pdbe_sifts.sifts_to_mmcif_test.read_sifts_csv import get_unp_segments, get_unpres_mapping
 
 conf = load_config()
 
@@ -33,10 +33,12 @@ class NoSegmentsError(Exception):
 
 
 class ExportSIFTSTommCIF:
+    """Write the updated mmcif file with sifts_data."""
+
     def __init__(
         self,
         input_cif,
-        output_cif,
+        output_dir,
         sifts_csv_dir,
         duckdb_file,
         track_changes,
@@ -44,7 +46,7 @@ class ExportSIFTSTommCIF:
         delta_file,
     ):
         self.input_cif = input_cif
-        self.output_cif = output_cif
+        self.output_dir = output_dir
         self.duckdb_file = duckdb_file
         self.sifts_csv_base = sifts_csv_dir
         self.conn = duckdb.connect(self.duckdb_file, read_only=True)
@@ -69,6 +71,7 @@ class ExportSIFTSTommCIF:
             raise EntryFailedException(f"Output {outfile} file not found for {outfile}")
 
     def _check_clean_mmcif(self, outfile):
+        """Check that the output clean mmcif file has no null values in primary keys."""
         block = cif.read(str(outfile)).sole_block()
         category_list = [f"_{item}" for item in SIFTS_NEW_CAT]
         required_fields = PRIMARY_KEYS
@@ -184,7 +187,7 @@ class ExportSIFTSTommCIF:
             base_sifts_dir = Path(self.sifts_updated_cif).parent
             delta_suff = get_delta_csv_suffix(base_sifts_dir)
             self.sifts_delta_csv = Path(
-                Path(self.sifts_updated_cif).parent,
+                base_sifts_dir,
                 f"{self.entry_id}_delta_{delta_suff}.csv.gz",
             )
             new_seg_data, new_seg_list = read_sifts_segments(self.d_block)
@@ -217,20 +220,18 @@ class ExportSIFTSTommCIF:
                 ).find_mapping_changes()
 
     def process_entry(self, entry_id):
-        sifts_csv_dir = self.sifts_csv_base or None
-        self.sifts_updated_cif = Path(self.output_cif)
-        self.sifts_only_cif = Path(
-            self.sifts_updated_cif.parent, f"{entry_id}_sifts_only.cif.gz"
-        )
-        self.sifts_updated_cif.parent.mkdir(parents=True, exist_ok=True)
+        out = Path(self.output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        self.sifts_updated_cif = out / f"{entry_id}_sifts_updated.cif.gz"
+        self.sifts_only_cif = out / f"{entry_id}_sifts_only.cif.gz"
 
-        if sifts_csv_dir:
+        if self.sifts_csv_base:
             seg_cursor = None
-            sifts_seg_csv = Path(sifts_csv_dir, f"{entry_id}_seg.csv.gz")
+            sifts_seg_csv = Path(self.sifts_csv_base) / f"{entry_id}_seg.csv.gz"
             if not sifts_seg_csv.exists():
                 logger.error(f"{sifts_seg_csv} does not exist")
 
-            sifts_res_csv = Path(sifts_csv_dir, f"{entry_id}_res.csv.gz")
+            sifts_res_csv = Path(self.sifts_csv_base) / f"{entry_id}_res.csv.gz"
             if not sifts_res_csv.exists():
                 logger.error(f"{sifts_res_csv} does not exist")
         else:
@@ -244,7 +245,7 @@ class ExportSIFTSTommCIF:
 
         orig_updated_cif = Path(self.input_cif)
 
-        if not Path(orig_updated_cif).exists():
+        if not orig_updated_cif.exists():
             raise FileNotFoundError(orig_updated_cif)
 
         self.d_block = cif.read(str(orig_updated_cif)).sole_block()
@@ -327,22 +328,25 @@ def run():
         help="PDB entry ID to process. If omitted, derived from _entry.id in the CIF.",
     )
     parser.add_argument(
-        "-o",
-        "--output-cif",
-        required=True,
-        help="Output CIF file path",
-    )
-    parser.add_argument(
         "-i",
         "--input-cif",
         required=True,
         help="Input CIF file to process (*_updated.cif.gz)",
     )
     parser.add_argument(
+        "-o",
+        "--output-dir",
+        required=True,
+        help="Output directory where SIFTS mmcif files will be written",
+    )
+    parser.add_argument(
         "-s",
         "--sifts-csv-dir",
         required=False,
-        help="Flat directory containing {entry_id}_seg.csv.gz / _res.csv.gz files. If not given, data is read from the database.",
+        help=(
+            "Flat directory containing {entry_id}_seg.csv.gz / _res.csv.gz files. "
+            "If not given, data is read from the database."
+        ),
     )
     parser.add_argument(
         "-d",
@@ -380,16 +384,15 @@ def run():
     if not Path(args.input_cif).is_file():
         parser.error(f"-i must be a CIF file, got: {args.input_cif}")
 
-    if args.entry:
-        entry_id = args.entry
-    else:
+    entry_id = args.entry
+    if not entry_id:
         block = cif.read(str(args.input_cif)).sole_block()
         entry_id = block.find_value("_entry.id").strip('"').lower()
 
     track_changes = not args.no_track_changes
     obj = ExportSIFTSTommCIF(
         args.input_cif,
-        args.output_cif,
+        args.output_dir,
         args.sifts_csv_dir,
         args.db_conn_str,
         track_changes,

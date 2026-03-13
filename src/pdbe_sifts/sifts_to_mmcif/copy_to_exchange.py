@@ -11,7 +11,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from pdbe_sifts.base import pdbe_path
+from pdbe_sifts.base.paths import sifts_updated_cif_path
 from pdbe_sifts.base.batchable import Batchable
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.config import load_config
@@ -31,7 +31,7 @@ class CopyToExchange(Batchable):
 
     def process_entry(self, entry_id: str):
         sifts_dir = Path(
-            pdbe_path.get_sifts_updated_cif(entry_id, self.input_dir)
+            sifts_updated_cif_path(entry_id, self.input_dir)
         ).parent
 
         sifts_only_file = f"{sifts_dir}/{entry_id}_sifts_only.cif.gz"
