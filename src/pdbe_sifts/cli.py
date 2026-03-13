@@ -189,20 +189,23 @@ def main():
     ######### SIFTS → mmCIF
     sifts2mmcif_parser = subparsers.add_parser(
         "sifts2mmcif",
-        help="Inject SIFTS mappings into mmCIF files.",
+        help="Inject SIFTS mappings into a mmCIF file.",
+    )
+    sifts2mmcif_parser.add_argument(
+        "--entry", required=False, default=None,
+        help="PDB entry ID. If omitted, derived from _entry.id in the CIF.",
+    )
+    sifts2mmcif_parser.add_argument(
+        "-i", "--input-cif", required=True,
+        help="Input CIF file (*_updated.cif.gz).",
     )
     sifts2mmcif_parser.add_argument(
         "-o", "--output-dir", required=True,
-        help="Directory where output mmCIF files will be stored.",
-    )
-    sifts2mmcif_parser.add_argument(
-        "-i", "--input-dir",
-        default=conf.location.work.data_entry_dir,
-        help="Base directory containing input mmCIF files.",
+        help="Output directory where SIFTS mmCIF files will be written.",
     )
     sifts2mmcif_parser.add_argument(
         "-s", "--sifts-csv-dir", required=False,
-        help="SIFTS CSV base directory. If not given, data is read from the database.",
+        help="Flat directory with {entry}_seg.csv.gz / _res.csv.gz. If not given, read from DB.",
     )
     sifts2mmcif_parser.add_argument(
         "-d", "--db-file", required=True,
@@ -215,19 +218,6 @@ def main():
     sifts2mmcif_parser.add_argument(
         "-p", "--prev-run-dir", required=False,
         help="Compare sifts_only.mmcif from this directory for delta tracking.",
-    )
-    sifts2mmcif_parser.add_argument(
-        "-l", "--delta-sifts-file",
-        default=conf.lists.sifts_mapping_changes,
-        help="Output file for delta mapping changes (batch mode only).",
-    )
-    sifts2mmcif_parser.add_argument(
-        "--log-dir", required=False, default=None,
-        help="Log directory for generating the delta mapping list in teardown().",
-    )
-    sifts2mmcif_parser.add_argument(
-        "run_args", nargs=argparse.REMAINDER,
-        help="Batchable subcommand: 'single --entry <id>' or 'batch --list <file> [--workers N]'.",
     )
 
     args = parser.parse_args()
@@ -299,17 +289,23 @@ def main():
 
     elif args.command == "sifts2mmcif":
         from pdbe_sifts.sifts_to_mmcif.main import ExportSIFTSTommCIF
+        from gemmi import cif as gcif
+        entry_id = args.entry
+        if not entry_id:
+            block = gcif.read(str(args.input_cif)).sole_block()
+            entry_id = block.find_value("_entry.id").strip('"').lower()
         obj = ExportSIFTSTommCIF(
-            output_path=args.output_dir,
-            cif_dir=args.input_dir,
-            sifts_csv_dir=args.sifts_csv_dir,
-            duckdb_file=args.db_file,
-            track_changes=not args.no_track_changes,
-            prev_run_dir=args.prev_run_dir,
-            delta_file=args.delta_sifts_file,
-            log_dir=args.log_dir,
+            args.input_cif,
+            args.output_dir,
+            args.sifts_csv_dir,
+            args.db_file,
+            not args.no_track_changes,
+            args.prev_run_dir,
         )
-        obj.main(args.run_args)
+        try:
+            obj.process_entry(entry_id)
+        finally:
+            obj.conn.close()
 
     else:
         parser.print_help()

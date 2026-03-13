@@ -43,7 +43,6 @@ class ExportSIFTSTommCIF:
         duckdb_file,
         track_changes,
         prev_run_dir,
-        delta_file,
     ):
         self.input_cif = input_cif
         self.output_dir = output_dir
@@ -52,7 +51,6 @@ class ExportSIFTSTommCIF:
         self.conn = duckdb.connect(self.duckdb_file, read_only=True)
         self.track_changes = track_changes
         self.prev_run_dir = prev_run_dir
-        self.delta_file = delta_file
 
     def _check_mmcif_output(self, infile, outfile):
         logger.debug("Checking if the output file is more/equal to input file")
@@ -371,14 +369,6 @@ def run():
             "If not given, looks in the output directory for the previous run file."
         ),
     )
-    parser.add_argument(
-        "-l",
-        "--delta-sifts-file",
-        required=False,
-        default=conf.lists.sifts_mapping_changes,
-        help="Path for the delta_sifts.list output file.",
-    )
-
     args = parser.parse_args()
 
     if not Path(args.input_cif).is_file():
@@ -397,7 +387,6 @@ def run():
         args.db_conn_str,
         track_changes,
         args.prev_run_dir,
-        args.delta_sifts_file,
     )
     try:
         obj.process_entry(entry_id)
