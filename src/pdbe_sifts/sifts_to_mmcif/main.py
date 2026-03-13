@@ -8,7 +8,7 @@ from pathlib import Path
 
 from gemmi import cif
 
-from pdbe_sifts.base.exceptions import EntryFailedException
+from pdbe_sifts.base.exceptions import EntryFailedException, NoSegmentsError
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.config import load_config
 from pdbe_sifts.sifts_to_mmcif import comm_utils
@@ -27,9 +27,6 @@ from pdbe_sifts.sifts_to_mmcif.read_sifts_csv import get_unp_segments, get_unpre
 
 conf = load_config()
 
-
-class NoSegmentsError(Exception):
-    pass
 
 
 class ExportSIFTSTommCIF:

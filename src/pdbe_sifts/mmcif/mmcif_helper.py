@@ -3,6 +3,7 @@ from pathlib import Path
 
 from gemmi import cif
 
+from pdbe_sifts.base.exceptions import NotAPolyPeptide
 from pdbe_sifts.config import load_config
 
 conf = load_config()
@@ -45,10 +46,6 @@ def extract_table(block, search_list):
     )
 
     return table
-
-
-class NotAPolyPeptide(Exception):
-    pass
 
 
 class mmCIF:

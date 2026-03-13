@@ -14,7 +14,7 @@ from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.utils import SiftsAction
 from pdbe_sifts.mmcif.chem_comp import ChemCompMapping
 from pdbe_sifts.mmcif.entry import Entry
-from pdbe_sifts.mmcif.mmcif_helper import NotAPolyPeptide
+from pdbe_sifts.base.exceptions import NotAPolyPeptide
 import pdbe_sifts.segments_generation.generate_xref_csv as generate_xref_csv
 from pdbe_sifts.segments_generation.alignment import helper
 from pdbe_sifts.segments_generation.alignment.helper import CustomSequenceAccession

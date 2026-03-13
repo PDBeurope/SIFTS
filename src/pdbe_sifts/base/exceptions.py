@@ -49,3 +49,15 @@ class SplitAccessionError(Exception):
     """Raised when an accession cannot be split or resolved during segment generation."""
 
     pass
+
+
+class NoSegmentsError(Exception):
+    """Raised when no SIFTS segments are written to mmCIF output."""
+
+    pass
+
+
+class NotAPolyPeptide(Exception):
+    """Raised when a mmCIF entry contains no polypeptide chain."""
+
+    pass
