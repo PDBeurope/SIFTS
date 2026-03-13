@@ -89,8 +89,9 @@ class SiftsAlign:
         chain_to_entity = {chain: entry.chains[chain].entity_id for chain in chain_lst}
 
         # Inject custom FASTA sequences so get_accession() finds them before calling UNP()
+        # get_accession(entry, acc) looks up entry.accessions[acc].
         if self.custom_sequences:
-            entry.accessions.update(self.custom_sequences)
+            entry.accessions.update({v.accession: v for v in self.custom_sequences.values()})
 
         mappings = self.get_mappings(entry_id, chain_lst, chain_to_entity)
         logger.info(mappings)
