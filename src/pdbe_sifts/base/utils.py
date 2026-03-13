@@ -2,16 +2,12 @@
 
 import os
 import argparse
-import dateparser
 import requests
-import shutil
 from pathlib import Path
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from dateutil.relativedelta import WE, relativedelta
-from typing import Optional, List
 from xml.etree import ElementTree
 import funcy
-from funcy.calc import memoize
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.exceptions import ObsoleteUniProtError, AccessionNotFound
@@ -132,44 +128,6 @@ def get_date():
     timestamp = now.strftime("%H_%d_%m_%Y")
     return timestamp
 
-def make_path(base_dir: Path, id: str, sub_dir: str, filename: str, now: str = None) -> Path:
-    """
-    Creates a path with a timestamp, creates the parent folders,
-    deletes the file if it exists, and returns the Path.
-    """
-    if now is None:
-        now = get_date()
-
-    dir_path = base_dir / f'{sub_dir}_{id}_{now}'
-    full_path = dir_path / filename
-
-    if dir_path.exists():
-        shutil.rmtree(dir_path)
-
-    dir_path.mkdir(parents=True, exist_ok=True)
-
-    return full_path
-
-def parse_extra_args(args: Optional[List[str]]) -> dict:
-    kwargs = {}
-    if not args:
-        return kwargs
-
-    i = 0
-    while i < len(args):
-        if args[i].startswith("-"):
-            key = args[i].lstrip("-").replace("-", "_")
-            # Handle flags without value (i.e., boolean flags)
-            if i + 1 >= len(args) or args[i + 1].startswith("-"):
-                kwargs[key] = True
-                i += 1
-            else:
-                kwargs[key] = args[i + 1]
-                i += 2
-        else:
-            i += 1
-    return kwargs
-
 def get_next_release_date() -> date:
     """Returns the next PDBe release date.
 
@@ -177,26 +135,6 @@ def get_next_release_date() -> date:
     in which case it returns same as `date.today()`.
     """
     return date.today() + relativedelta(weekday=WE(+1))
-
-def utc_to_local(utc_dt):
-    return utc_dt.replace(tzinfo=timezone.utc).astimezone(tz=None)
-
-def get_exc_context() -> tuple[str, str]:
-    """Returns the data and execution source of the module.
-
-    Checks if a task is run from airflow or from CLI and returns the time of execution.
-
-    Returns:
-        Tuple[str,str]: Airflow/CLI and execution_date
-    """
-    if "AIRFLOW_CTX_EXECUTION_DATE" in os.environ:
-        exc_date = dateparser.parse(os.environ["AIRFLOW_CTX_EXECUTION_DATE"])
-
-        return ("Airflow", utc_to_local(exc_date).strftime("%Y-%m-%d %H:%M:%S"))
-    else:
-        now = datetime.now()
-        s_exc_date = now.strftime("%Y-%m-%d %H:%M:%S")
-        return ("CLI", s_exc_date)
 
 def get_allocated_cpus():
     if "SLURM_CPUS_PER_TASK" in os.environ:
