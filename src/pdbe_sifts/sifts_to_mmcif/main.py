@@ -2,31 +2,28 @@
 import argparse
 import gzip
 import shutil
-import subprocess
 import tempfile
 import duckdb
 from pathlib import Path
 
 from gemmi import cif
 
-from pdbe_sifts.base.paths import entry_dir, sifts_updated_cif_path, updated_cif_path
-from pdbe_sifts.base.batchable import Batchable
 from pdbe_sifts.base.exceptions import EntryFailedException
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.config import load_config
-from pdbe_sifts.sifts_to_mmcif import comm_utils, fetch_xref_data
-from pdbe_sifts.sifts_to_mmcif.def_mmcif_cat import (
+from pdbe_sifts.sifts_to_mmcif_test import comm_utils
+from pdbe_sifts.sifts_to_mmcif_test.def_mmcif_cat import (
     NEW_MMCIF_CAT,
     PRIMARY_KEYS,
     SIFTS_ATOMSITE_ITEM,
     SIFTS_NEW_CAT,
 )
-from pdbe_sifts.sifts_to_mmcif.delta_mappings import (
+from pdbe_sifts.sifts_to_mmcif_test.delta_mappings import (
     FindMappingChanges,
     get_delta_csv_suffix,
     read_sifts_segments,
 )
-from pdbe_sifts.sifts_to_mmcif.read_sifts_csv import get_unp_segments, get_unpres_mapping
+from pdbe_sifts.sifts_to_mmcif_test.read_sifts_csv import get_unp_segments, get_unpres_mapping
 
 conf = load_config()
 
@@ -35,65 +32,27 @@ class NoSegmentsError(Exception):
     pass
 
 
-class ExportSIFTSTommCIF(Batchable):
+class ExportSIFTSTommCIF:
     """Write the updated mmcif file with sifts_data."""
 
     def __init__(
         self,
-        output_path,
-        cif_dir,
+        input_cif,
+        output_dir,
         sifts_csv_dir,
         duckdb_file,
         track_changes,
         prev_run_dir,
         delta_file,
-        log_dir=None,
     ):
-        self.output_path = output_path
-        self.cif_dir = cif_dir
+        self.input_cif = input_cif
+        self.output_dir = output_dir
         self.duckdb_file = duckdb_file
         self.sifts_csv_base = sifts_csv_dir
-        # self.conn is NOT opened here — opened per-worker in worker_setup()
-
+        self.conn = duckdb.connect(self.duckdb_file, read_only=True)
         self.track_changes = track_changes
         self.prev_run_dir = prev_run_dir
-        self.entry_file_path = conf.lists.entries_all
-
         self.delta_file = delta_file
-        self.log_dir = log_dir
-
-    def worker_setup(self):
-        """Open a read-only DuckDB connection in each worker process.
-
-        Read-only allows multiple workers to query the DB concurrently without
-        locking issues. ExportSIFTSTommCIF never writes to DuckDB.
-        """
-        self.conn = duckdb.connect(self.duckdb_file, read_only=True)
-
-    def worker_teardown(self):
-        """Close DuckDB connection."""
-        self.conn.close()
-
-    def teardown(self):
-        """Generate delta mapping list from log files (batch mode only).
-
-        Requires log_dir to be set. If not set, a warning is logged and the
-        step is skipped.
-        """
-        if not (self.track_changes and self.delta_file):
-            return
-        if not self.log_dir:
-            logger.warning(
-                "track_changes=True but log_dir not set — skipping delta file generation."
-            )
-            return
-        logger.info("Batching all pdb entries whose mapping changed from the logs")
-        cmd = (
-            f"grep Mapping {self.log_dir}/* "
-            f"|cut -d']' -f2 |cut -d' ' -f6,7 >{self.delta_file}"
-        )
-        subprocess.check_call(cmd, shell=True)
-        logger.info(f"DELTA_MAPPING_LIST: {self.delta_file}")
 
     def _check_mmcif_output(self, infile, outfile):
         logger.debug("Checking if the output file is more/equal to input file")
@@ -169,11 +128,6 @@ class ExportSIFTSTommCIF(Batchable):
             all_ent, all_res = comm_utils.get_ent_chains(
                 my_ent, my_ch, my_seq_id, my_mon_id
             )
-            xref_segments, xref_res_info = [], {}
-
-            self.UpdateFlag = self.write_data(
-                d_block, "_pdbx_sifts_xref_db_segments", xref_segments
-            )
 
             if sifts_res_csv:
                 res_cursor = None
@@ -185,7 +139,6 @@ class ExportSIFTSTommCIF(Batchable):
             xref_resmap = comm_utils.get_xref_db(
                 all_res,
                 sifts_res_info,
-                xref_res_info,
                 sifts_seg_inst,
                 my_obs_res,
                 my_mh_id,
@@ -234,15 +187,12 @@ class ExportSIFTSTommCIF(Batchable):
             base_sifts_dir = Path(self.sifts_updated_cif).parent
             delta_suff = get_delta_csv_suffix(base_sifts_dir)
             self.sifts_delta_csv = Path(
-                Path(self.sifts_updated_cif).parent,
+                base_sifts_dir,
                 f"{self.entry_id}_delta_{delta_suff}.csv.gz",
             )
             new_seg_data, new_seg_list = read_sifts_segments(self.d_block)
             if self.prev_run_dir:
-                old_sifts_csv_dir = entry_dir(self.entry_id, self.prev_run_dir, "sifts")
-                old_sifts_cif = Path(
-                    Path(old_sifts_csv_dir), f"{self.entry_id}_sifts_only.cif.gz"
-                )
+                old_sifts_cif = Path(self.prev_run_dir) / f"{self.entry_id}_sifts_only.cif.gz"
             else:
                 old_sifts_cif = self.sifts_only_cif
 
@@ -270,24 +220,18 @@ class ExportSIFTSTommCIF(Batchable):
                 ).find_mapping_changes()
 
     def process_entry(self, entry_id):
-        sifts_csv_dir = None
-        if self.sifts_csv_base:
-            sifts_csv_dir = entry_dir(entry_id, self.sifts_csv_base, "sifts")
-        self.sifts_updated_cif = Path(
-            sifts_updated_cif_path(entry_id, self.output_path)
-        )
-        self.sifts_only_cif = Path(
-            Path(self.sifts_updated_cif).parent, f"{entry_id}_sifts_only.cif.gz"
-        )
-        Path(self.sifts_updated_cif).parent.mkdir(parents=True, exist_ok=True)
+        out = Path(self.output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        self.sifts_updated_cif = out / f"{entry_id}_sifts_updated.cif.gz"
+        self.sifts_only_cif = out / f"{entry_id}_sifts_only.cif.gz"
 
-        if sifts_csv_dir:
+        if self.sifts_csv_base:
             seg_cursor = None
-            sifts_seg_csv = Path(sifts_csv_dir, f"{entry_id}_seg.csv.gz")
+            sifts_seg_csv = Path(self.sifts_csv_base) / f"{entry_id}_seg.csv.gz"
             if not sifts_seg_csv.exists():
                 logger.error(f"{sifts_seg_csv} does not exist")
 
-            sifts_res_csv = Path(sifts_csv_dir, f"{entry_id}_res.csv.gz")
+            sifts_res_csv = Path(self.sifts_csv_base) / f"{entry_id}_res.csv.gz"
             if not sifts_res_csv.exists():
                 logger.error(f"{sifts_res_csv} does not exist")
         else:
@@ -299,9 +243,9 @@ class ExportSIFTSTommCIF(Batchable):
         )
         sifts_segments = [item for item in sifts_segments if item != []]
 
-        orig_updated_cif = Path(updated_cif_path(entry_id, self.cif_dir))
+        orig_updated_cif = Path(self.input_cif)
 
-        if not Path(orig_updated_cif).exists():
+        if not orig_updated_cif.exists():
             raise FileNotFoundError(orig_updated_cif)
 
         self.d_block = cif.read(str(orig_updated_cif)).sole_block()
@@ -376,27 +320,33 @@ class ExportSIFTSTommCIF(Batchable):
 def run():
     parser = argparse.ArgumentParser(
         "Given a clean mmcif file, add sifts_data",
-        add_help=False,
+    )
+    parser.add_argument(
+        "--entry",
+        required=False,
+        default=None,
+        help="PDB entry ID to process. If omitted, derived from _entry.id in the CIF.",
+    )
+    parser.add_argument(
+        "-i",
+        "--input-cif",
+        required=True,
+        help="Input CIF file to process (*_updated.cif.gz)",
     )
     parser.add_argument(
         "-o",
         "--output-dir",
-        help="Directory where output mmcif files will be stored",
-        default=conf.sifts_to_mmcif.clean_output_path,
         required=True,
-    )
-    parser.add_argument(
-        "-i",
-        "--input-cif-dir",
-        required=False,
-        default=conf.location.work.data_entry_dir,
-        help="Input CIF base directory",
+        help="Output directory where SIFTS mmcif files will be written",
     )
     parser.add_argument(
         "-s",
         "--sifts-csv-dir",
         required=False,
-        help="SIFTS CSV base directory. If not given, data is read from the database.",
+        help=(
+            "Flat directory containing {entry_id}_seg.csv.gz / _res.csv.gz files. "
+            "If not given, data is read from the database."
+        ),
     )
     parser.add_argument(
         "-d",
@@ -426,35 +376,33 @@ def run():
         "--delta-sifts-file",
         required=False,
         default=conf.lists.sifts_mapping_changes,
-        help=(
-            "Path for the delta_sifts.list output file (batch mode only). "
-            "Contains PDB entries whose mappings changed."
-        ),
-    )
-    parser.add_argument(
-        "--log-dir",
-        required=False,
-        default=None,
-        help=(
-            "Directory containing log files. Required to generate the delta "
-            "mapping list in teardown() when track-changes is enabled."
-        ),
+        help="Path for the delta_sifts.list output file.",
     )
 
-    custom_args, remaining = parser.parse_known_args()
+    args = parser.parse_args()
 
-    track_changes = not custom_args.no_track_changes
+    if not Path(args.input_cif).is_file():
+        parser.error(f"-i must be a CIF file, got: {args.input_cif}")
+
+    entry_id = args.entry
+    if not entry_id:
+        block = cif.read(str(args.input_cif)).sole_block()
+        entry_id = block.find_value("_entry.id").strip('"').lower()
+
+    track_changes = not args.no_track_changes
     obj = ExportSIFTSTommCIF(
-        custom_args.output_dir,
-        custom_args.input_cif_dir,
-        custom_args.sifts_csv_dir,
-        custom_args.db_conn_str,
+        args.input_cif,
+        args.output_dir,
+        args.sifts_csv_dir,
+        args.db_conn_str,
         track_changes,
-        custom_args.prev_run_dir,
-        custom_args.delta_sifts_file,
-        log_dir=custom_args.log_dir,
+        args.prev_run_dir,
+        args.delta_sifts_file,
     )
-    obj.main(remaining)
+    try:
+        obj.process_entry(entry_id)
+    finally:
+        obj.conn.close()
 
 
 if __name__ == "__main__":

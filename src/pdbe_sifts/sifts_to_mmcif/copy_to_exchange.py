@@ -1,25 +1,15 @@
-"""Copy SIFTS-only files to exchange server.
-
-Also copies the list of changed entries to the exchange server.
-Allows direct copy to remote server via rsync or copy to a local staging area (default).
-The use of local staging area is recommended since the exchange server does not
-scale well for multiple rsync processes running in parallel.
-"""
-
 import argparse
 import shutil
 import subprocess
 from pathlib import Path
 
-from pdbe_sifts.base.paths import sifts_updated_cif_path
-from pdbe_sifts.base.batchable import Batchable
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.config import load_config
 
 conf = load_config()
 
 
-class CopyToExchange(Batchable):
+class CopyToExchange:
     def __init__(self, input_dir, output_dir, remote=False) -> None:
         self.input_dir = input_dir
         self.output_dir = output_dir
@@ -27,14 +17,9 @@ class CopyToExchange(Batchable):
         if remote:
             self.remote_server = conf.exchange.server
             self.username = conf.exchange.username
-        self.entry_file_path = conf.lists.entries_all
 
     def process_entry(self, entry_id: str):
-        sifts_dir = Path(
-            sifts_updated_cif_path(entry_id, self.input_dir)
-        ).parent
-
-        sifts_only_file = f"{sifts_dir}/{entry_id}_sifts_only.cif.gz"
+        sifts_only_file = str(Path(self.input_dir) / f"{entry_id}_sifts_only.cif.gz")
         div_output_dir = f"{self.output_dir}/{entry_id[1:3]}"
 
         if not Path(sifts_only_file).exists():
@@ -56,7 +41,7 @@ class CopyToExchange(Batchable):
             Path(div_output_dir).mkdir(parents=True, exist_ok=True)
             shutil.copy(sifts_only_file, div_output_dir)
 
-    def teardown(self):
+    def copy_changes_list(self):
         if self.remote:
             logger.info("Copying list of changes to remote server")
             dest = f"{self.username}@{self.remote_server}:{self.output_dir}/"
@@ -71,8 +56,13 @@ class CopyToExchange(Batchable):
 
 
 def run():
-    parser = argparse.ArgumentParser(add_help=False)
+    parser = argparse.ArgumentParser()
 
+    parser.add_argument(
+        "--entry",
+        required=True,
+        help="PDB entry ID to process",
+    )
     parser.add_argument(
         "-i",
         "--input-dir",
@@ -95,16 +85,16 @@ def run():
         ),
     )
 
-    custom_args, remaining = parser.parse_known_args()
+    args = parser.parse_args()
 
-    output_dir = custom_args.output_dir
+    output_dir = args.output_dir
     if not output_dir:
         output_dir = conf.sifts_to_mmcif.staging_dir
-        if custom_args.remote:
+        if args.remote:
             output_dir = conf.sifts_to_mmcif.exchange_dir
 
-    obj = CopyToExchange(custom_args.input_dir, output_dir, custom_args.remote)
-    obj.main(remaining)
+    obj = CopyToExchange(args.input_dir, output_dir, args.remote)
+    obj.process_entry(args.entry)
 
 
 if __name__ == "__main__":

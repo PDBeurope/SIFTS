@@ -127,43 +127,6 @@ def modify_atomsite(atom_site: dict[str, list], sifts_data):
     return atom_site
 
 
-def expand_xref_seg_to_resi(my_res, xref_data):
-    """expand xref_db segments mapping to every residue"""
-    my_xref_db = ["Pfam", "CATH", "SCOP2"]
-    exp_resi = {}
-    for entity in sorted(my_res):
-        for chain in my_res[entity]:
-            # get boundaries for pfam,scop2,cath
-            all_res = my_res[entity][chain].keys()
-            if entity in xref_data and chain in xref_data[entity]:
-                for xref_db in my_xref_db:
-                    if xref_db in xref_data[entity][chain]:
-                        for start in xref_data[entity][chain][xref_db]:
-                            for region in xref_data[entity][chain][xref_db][start]:
-                                end, acc, name, seg_id, inst_id = (
-                                    region[0],
-                                    region[1],
-                                    region[2],
-                                    region[3],
-                                    region[4],
-                                )
-                                # print(start,end,acc,name)
-                                xref_res = [
-                                    item for item in all_res if start <= item <= end
-                                ]
-                                for resi in xref_res:
-                                    exp_resi.setdefault(entity, {}).setdefault(
-                                        chain, {}
-                                    ).setdefault(resi, {}).setdefault(xref_db, {})[
-                                        acc
-                                    ] = [
-                                        name,
-                                        seg_id,
-                                        inst_id,
-                                    ]
-    return exp_resi
-
-
 def expand_unp_seg_to_resi(my_res, sifts_seg_inst):
     """expand unp segments mapping to every residue"""
     my_unp = {}
@@ -190,58 +153,17 @@ def expand_unp_seg_to_resi(my_res, sifts_seg_inst):
     return my_unp
 
 
-def get_xref_db(
-    my_res, sifts_data, xref_data, sifts_seg_inst, my_obs, my_mh_id, my_mon_info
-):
-    """
-    Merge sifts_res_csv and xref_res_data
-    @data sorted here based on _poly_seq_schema
-    """
-
-    mega_list = [
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-    ]
-
-    expa_xref = expand_xref_seg_to_resi(my_res, xref_data)
+def get_xref_db(my_res, sifts_data, sifts_seg_inst, my_obs, my_mh_id, my_mon_info):
+    mega_list = [[] for _ in range(19)]
     expa_sifts = expand_unp_seg_to_resi(my_res, sifts_seg_inst)
-    # order in which xref_db are written
-    my_xref_db = ["Pfam", "CATH", "SCOP2"]
 
     for entity in sorted(my_res):
         for chain in my_res[entity]:
             for res in sorted(my_res[entity][chain]):
                 mon_id = my_res[entity][chain][res]["mon_id"]
-                unp_res, unp_num, unp_acc = None, None, None
-                res_type, mh_id, observed = None, None, None
-                unp_seg_id, unp_inst_id = None, None
-                db_acc, db_name, db, db_segment, db_instance = (
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                )
                 observed = my_obs[chain][res]
                 mh_id = my_mh_id[res][mon_id]
-                boo = 1  # seq_id_instance/ordinal
+                boo = 1
 
                 if (
                     entity in sifts_data
@@ -249,136 +171,21 @@ def get_xref_db(
                     and res in sifts_data[entity][chain]
                 ):
                     for tag in sifts_data[entity][chain][res]:
-                        # mon_id        =   tag[0]
                         mon_oneLetter = make_opt(tag[1])
                         unp_res = make_opt(tag[2])
                         unp_acc = make_opt(tag[3])
                         unp_num = make_opt(tag[4])
                         res_type = make_opt(tag[5])
                         mh_id = make_opt(tag[6])
-                        unp_seg_id, unp_inst_id = expa_sifts[entity][chain][res][
-                            unp_acc
+                        unp_seg_id, unp_inst_id = expa_sifts[entity][chain][res][unp_acc]
+                        xx = [
+                            entity, chain, boo, res, mon_id, mon_oneLetter,
+                            unp_res, unp_num, unp_acc, unp_seg_id, unp_inst_id,
+                            res_type, observed, mh_id,
+                            None, None, None, None, None,
                         ]
-                        if (
-                            (
-                                entity in expa_xref
-                                and chain in expa_xref[entity]
-                                and res not in expa_xref[entity][chain]
-                            )
-                            or (expa_xref == {})
-                            or (entity not in expa_xref)
-                            or (entity in expa_xref and chain not in expa_xref[entity])
-                        ):
-                            xx = [
-                                entity,
-                                chain,
-                                boo,
-                                res,
-                                mon_id,
-                                mon_oneLetter,
-                                unp_res,
-                                unp_num,
-                                unp_acc,
-                                unp_seg_id,
-                                unp_inst_id,
-                                res_type,
-                                observed,
-                                mh_id,
-                                db_name,
-                                db_acc,
-                                db,
-                                db_segment,
-                                db_instance,
-                            ]
-                            [
-                                my_list.append(my_val)
-                                for my_list, my_val in zip(mega_list, xx)
-                            ]
-                            boo = boo + 1
-
-                        else:
-                            for xref_db in my_xref_db:
-                                if (
-                                    entity in expa_xref
-                                    and chain in expa_xref[entity]
-                                    and res in expa_xref[entity][chain]
-                                    and xref_db in expa_xref[entity][chain][res]
-                                ):
-                                    # print(pfam[res])
-                                    for acc in expa_xref[entity][chain][res][xref_db]:
-                                        name, seg_id, inst_id = expa_xref[entity][
-                                            chain
-                                        ][res][xref_db][acc]
-                                        xx = [
-                                            entity,
-                                            chain,
-                                            boo,
-                                            res,
-                                            mon_id,
-                                            mon_oneLetter,
-                                            unp_res,
-                                            unp_num,
-                                            unp_acc,
-                                            unp_seg_id,
-                                            unp_inst_id,
-                                            res_type,
-                                            observed,
-                                            mh_id,
-                                            xref_db,
-                                            acc,
-                                            name,
-                                            seg_id,
-                                            inst_id,
-                                        ]
-                                        [
-                                            my_list.append(my_val)
-                                            for my_list, my_val in zip(mega_list, xx)
-                                        ]
-                                        boo = boo + 1
-
-                else:
-                    try:
-                        mon_oneLetter = my_mon_info[entity][chain][res][mon_id]
-                    except KeyError:
-                        mon_oneLetter = None
-                    for xref_db in my_xref_db:
-                        if (
-                            entity in expa_xref
-                            and chain in expa_xref[entity]
-                            and res in expa_xref[entity][chain]
-                            and xref_db in expa_xref[entity][chain][res]
-                        ):
-                            # print(pfam[res])
-                            for acc in expa_xref[entity][chain][res][xref_db]:
-                                name, seg_id, inst_id = expa_xref[entity][chain][res][
-                                    xref_db
-                                ][acc]
-                                xx = [
-                                    entity,
-                                    chain,
-                                    boo,
-                                    res,
-                                    mon_id,
-                                    mon_oneLetter,
-                                    unp_res,
-                                    unp_num,
-                                    unp_acc,
-                                    unp_seg_id,
-                                    unp_inst_id,
-                                    res_type,
-                                    observed,
-                                    mh_id,
-                                    xref_db,
-                                    acc,
-                                    name,
-                                    seg_id,
-                                    inst_id,
-                                ]
-                                [
-                                    my_list.append(my_val)
-                                    for my_list, my_val in zip(mega_list, xx)
-                                ]
-                                boo = boo + 1
+                        [my_list.append(my_val) for my_list, my_val in zip(mega_list, xx)]
+                        boo += 1
 
     return mega_list
 
