@@ -17,11 +17,9 @@ conf = load_config()
 class Entry:
     """Docstring for Entry."""
 
-    def __init__(self, pdbid, chem_comp_dict, cif_dir):
-        self.cif_dir = cif_dir or conf.location.work.data_entry_dir
-
+    def __init__(self, pdbid, chem_comp_dict, cif_file: str):
         self.pdbid = pdbid
-        self.mmcif = mmcif_helper.mmCIF(pdbid, cif_dir, chem_comp_dict)
+        self.mmcif = mmcif_helper.mmCIF(pdbid, chem_comp_dict, cif_file)
         self.chains: Mapping[str, Chain] = {}
 
         # map entity -> sequence

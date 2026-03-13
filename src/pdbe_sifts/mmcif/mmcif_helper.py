@@ -3,7 +3,6 @@ from pathlib import Path
 
 from gemmi import cif
 
-from pdbe_sifts.base import pdbe_path
 from pdbe_sifts.config import load_config
 
 conf = load_config()
@@ -55,10 +54,9 @@ class NotAPolyPeptide(Exception):
 class mmCIF:
     """Docstring for mmCIF."""
 
-    def __init__(self, pdbid, cif_dir, chem_comp_dict):
+    def __init__(self, pdbid, chem_comp_dict, cif_file: str):
         self.pdbid = pdbid
-        self.cif_dir = cif_dir
-        self.fname = self.__get_fname()
+        self.fname = cif_file
         if not Path(self.fname).exists():
             raise FileNotFoundError(f"The mmcif file {self.fname} does not exists.")
 
@@ -84,9 +82,6 @@ class mmCIF:
         self.rev_date = block.get_mmcif_category("_pdbx_audit_revision_history")
         self.features = self.__get_features()
         del block
-
-    def __get_fname(self):
-        return pdbe_path.get_clean_mmcif(self.pdbid, self.cif_dir)
 
     def get_unp(self, chain):
         """Fetches uniprot accessions from CIF for a particular entity, where available."""

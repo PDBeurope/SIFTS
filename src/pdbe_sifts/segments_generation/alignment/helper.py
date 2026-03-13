@@ -28,6 +28,26 @@ class SMapping(NamedTuple):
     range_stop: int
 
 
+class CustomSequenceAccession:
+    """Minimal UNP-like object for user-provided FASTA sequences.
+
+    Allows arbitrary protein sequences to be used in the SIFTS alignment
+    pipeline without requiring a UniProt accession.  The interface mirrors
+    the subset of UNP attributes that are actually accessed by helper.py
+    and generate_xref_csv.py.
+    """
+
+    def __init__(self, accession: str, sequence: str):
+        self.accession = accession
+        self.ad_dbref_auto_acc = accession  # used in get_curated_db_mappings
+        self.sequence = sequence
+        self.seq_isoforms = {accession: sequence}
+        self.taxonomy = []  # no taxonomy info for custom sequences
+
+    def getAllIsoforms(self):  # noqa: N802 — matches UNP method name
+        return {self.accession: self.sequence}
+
+
 class SiftsMode(Enum):
     ISOFORM = 1
     NF90 = 2

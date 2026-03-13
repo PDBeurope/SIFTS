@@ -19,9 +19,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from funcy.calc import memoize
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.base.pdbe_path import get_uniprot_cache_dir
+from pdbe_sifts.base.paths import uniprot_cache_dir as get_uniprot_cache_dir
 from pdbe_sifts.base.utils import fetch_uniprot_file
-from pdbe_sifts.config import load_config
 from pdbe_sifts.base.exceptions import ObsoleteUniProtError, AccessionNotFound
 
 COLORS = {
@@ -32,7 +31,6 @@ COLORS = {
     "blue": 34,
 }
 
-conf = load_config()
 
 @memoize
 def get_unp_object(acc):

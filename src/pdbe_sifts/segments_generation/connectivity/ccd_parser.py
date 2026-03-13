@@ -4,22 +4,16 @@ import os
 import shutil
 import requests
 import gemmi
-from pdbe_sifts.config import load_config
+from pdbe_sifts.base.paths import ccd_cache_path
 from pdbe_sifts.base.utils import download_file_from_url
 
-conf = load_config()
 URL = "https://ftp.ebi.ac.uk/pub/databases/msd/pdbechem_v2/ccd/"
 
 def get_ccd_file(threeL_res):
 
     threeL_res = threeL_res.upper()
 
-    local_path = os.path.join(
-        conf.cache.ccd,
-        threeL_res[0],
-        threeL_res,
-        f"{threeL_res}.cif",
-    )
+    local_path = ccd_cache_path(threeL_res)
 
     if os.path.exists(local_path):
         return local_path
