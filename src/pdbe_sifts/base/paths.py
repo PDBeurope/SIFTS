@@ -35,10 +35,6 @@ def ccd_cache_path(three_letter_code: str, base_dir: str | None = None) -> str:
 
 # ── Configuration getters ─────────────────────────────────────────────────────
 
-def get_conf_uniprot_cache_base() -> str:
-    return conf.cache.uniprot
-
-
 def get_conf_user_base_dir():
     return conf.user.base_dir
 

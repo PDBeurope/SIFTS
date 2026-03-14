@@ -3,8 +3,6 @@ from pathlib import Path
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.paths import (
-    get_conf_data_entry_dir,
-    get_conf_uniprot_cache_base,
     get_conf_user_base_dir,
     get_conf_user_target_db,
 )
@@ -149,45 +147,44 @@ def main():
     ######### SEGMENTS GENERATION
     segments_parser = subparsers.add_parser(
         "segments",
-        help=(
-            "Generate SIFTS segments via local sequence alignment (lalign36). "
-            "Append 'single --entry <id>' or 'batch --list <file> [--workers N]'."
-        ),
+        help="Generate SIFTS segments for a single mmCIF entry.",
     )
     segments_parser.add_argument(
-        "-i", "--input-dir",
-        default=get_conf_data_entry_dir(),
-        help="Base directory containing mmCIF files.",
+        "-i", "--input-cif", required=True,
+        help="Input CIF file (.cif / .cif.gz).",
     )
     segments_parser.add_argument(
-        "-d", "--db-file", required=True,
-        help="DuckDB file path.",
+        "-o", "--output-dir", required=True,
+        help="Output directory for CSV files.",
     )
     segments_parser.add_argument(
-        "-o", "--output-dir",
-        default=get_conf_data_entry_dir(),
-        help="Base directory for output CSV files.",
-    )
-    segments_parser.add_argument(
-        "--unp-dir",
-        default=get_conf_uniprot_cache_base(),
-        help="Base directory for UniProt cache files.",
+        "-d", "--db-file", required=False, default=None,
+        help="DuckDB file path. Optional when -m/--mapping is provided.",
     )
     segments_parser.add_argument(
         "--nf90", action="store_true", default=False,
         help="Enable UniRef90 mode (default: False).",
     )
     segments_parser.add_argument(
-        "-w", "--write-to-db", action="store_true", default=False,
-        help="Also write results to the DuckDB file (default: False).",
+        "--no-connectivity", dest="connectivity", action="store_false", default=True,
+        help="Disable connectivity mode (default: enabled).",
     )
     segments_parser.add_argument(
         "-m", "--mapping",
-        help="User-defined UniProt accessions, e.g. A:P00963,B:P00963.",
+        help=(
+            "User-defined mapping: UniProt accessions 'A:P00963,B:P00963' "
+            "or path to a FASTA file with headers >{auth_asym_id}|{sequence_id}."
+        ),
     )
     segments_parser.add_argument(
-        "run_args", nargs=argparse.REMAINDER,
-        help="Batchable subcommand: 'single --entry <id>' or 'batch --list <file> [--workers N]'.",
+        "--entry", required=False, default=None,
+        help="PDB entry ID. If omitted, derived from _entry.id in the CIF.",
+    )
+
+    ######### UPDATE NCBI
+    subparsers.add_parser(
+        "update_ncbi",
+        help="Update the local NCBI taxonomy database (ete4).",
     )
 
     ######### SIFTS → mmCIF
@@ -239,6 +236,13 @@ def main():
         if args.force and _USER_CONFIG_FILE.exists():
             _USER_CONFIG_FILE.unlink()
         init_config(dest=args.dest)
+        logger.info("Initializing NCBI taxonomy database (first run may download ~70 MB)...")
+        try:
+            from ete4 import NCBITaxa
+            NCBITaxa()
+            logger.info("NCBI taxonomy database ready.")
+        except Exception as e:
+            logger.warning(f"NCBI taxonomy initialization failed: {e}")
 
     elif args.command == "show":
         cfg = load_config(args.config)
@@ -280,16 +284,34 @@ def main():
 
     elif args.command == "segments":
         from pdbe_sifts.sifts_segments_generation import SiftsAlign
+        from gemmi import cif as gcif
+
+        if not args.db_file and not args.mapping:
+            segments_parser.error("At least one of -d/--db-file or -m/--mapping is required.")
+
+        entry_id = args.entry
+        if not entry_id:
+            block = gcif.read(str(args.input_cif)).sole_block()
+            entry_id = block.find_value("_entry.id").strip('"').lower()
+
         sifts_align = SiftsAlign(
-            cif_dir=args.input_dir,
-            out_dir=args.output_dir,
-            file_duckdb=args.db_file,
-            unp_dir=args.unp_dir,
+            args.input_cif,
+            args.output_dir,
+            args.db_file,
             nf90_mode=args.nf90,
             unp_mode=args.mapping,
-            dbmode=args.write_to_db,
+            connectivity_mode=args.connectivity,
         )
-        sifts_align.main(args.run_args)
+        sifts_align.process_entry(entry_id)
+        if sifts_align.conn:
+            sifts_align.conn.close()
+
+    elif args.command == "update_ncbi":
+        logger.info("Updating NCBI taxonomy database...")
+        from ete4 import NCBITaxa
+        ncbi = NCBITaxa()
+        ncbi.update_taxonomy_database()
+        logger.info("NCBI taxonomy database updated.")
 
     elif args.command == "sifts2mmcif":
         from pdbe_sifts.sifts_to_mmcif.main import ExportSIFTSTommCIF
