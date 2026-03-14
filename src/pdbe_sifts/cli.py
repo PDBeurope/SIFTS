@@ -181,6 +181,40 @@ def main():
         help="PDB entry ID. If omitted, derived from _entry.id in the CIF.",
     )
 
+    ######### SEGMENTS BATCH
+    batch_parser = subparsers.add_parser(
+        "segments_batch",
+        help="Generate SIFTS segments for multiple entries in parallel.",
+    )
+    batch_parser.add_argument(
+        "-l", "--list", required=True,
+        help="Text file listing CIF file paths, one per line.",
+    )
+    batch_parser.add_argument(
+        "-o", "--output-dir", required=True,
+        help="Output directory for CSV files.",
+    )
+    batch_parser.add_argument(
+        "-d", "--db-file", required=False, default=None,
+        help="DuckDB file path. Optional when -m/--mapping is provided.",
+    )
+    batch_parser.add_argument(
+        "-n", "--workers", type=int, default=1,
+        help="Number of parallel worker processes (default: 1).",
+    )
+    batch_parser.add_argument(
+        "--nf90", action="store_true", default=False,
+        help="Enable UniRef90 mode.",
+    )
+    batch_parser.add_argument(
+        "--no-connectivity", dest="connectivity", action="store_false", default=True,
+        help="Disable connectivity mode.",
+    )
+    batch_parser.add_argument(
+        "-m", "--mapping",
+        help="User-defined mapping (applies to all entries).",
+    )
+
     ######### UPDATE NCBI
     subparsers.add_parser(
         "update_ncbi",
@@ -305,6 +339,25 @@ def main():
         sifts_align.process_entry(entry_id)
         if sifts_align.conn:
             sifts_align.conn.close()
+
+    elif args.command == "segments_batch":
+        from pdbe_sifts.sifts_batch_segments import run_batch
+
+        with open(args.list, encoding="utf-8") as f:
+            cif_files = [line.strip() for line in f if line.strip()]
+
+        if not cif_files:
+            logger.error("No CIF files found in list file.")
+        else:
+            run_batch(
+                cif_files=cif_files,
+                out_dir=args.output_dir,
+                db_conn_str=args.db_file,
+                nf90_mode=args.nf90,
+                unp_mode=args.mapping,
+                connectivity_mode=args.connectivity,
+                workers=args.workers,
+            )
 
     elif args.command == "update_ncbi":
         logger.info("Updating NCBI taxonomy database...")
