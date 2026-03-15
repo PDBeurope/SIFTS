@@ -20,6 +20,7 @@ from typing import Union
 from pathlib import Path
 
 from pdbe_sifts.base.log import logger
+from pdbe_sifts.base.paths import get_conf_blastp_evalue
 from pdbe_sifts.global_mappings.base_alignment_search import AlignmentSearch
 
 class BlastP(AlignmentSearch):
@@ -49,13 +50,13 @@ class BlastP(AlignmentSearch):
         target_path: Union[str, Path],
         output_path: Union[str, Path],
         outfmt: str = "6 qseqid sseqid length mismatch qstart qend sstart send evalue bitscore qseq sseq qlen staxid pident qcovs",
-        evalue: float = 10.0,
+        evalue: float = None,
         threads: int = 1,
     ):
         """Initialize the BlastP instance with search configuration."""
         super().__init__(query_path, target_path, output_path)
         self.outfmt = outfmt
-        self.evalue = evalue
+        self.evalue = evalue if evalue is not None else get_conf_blastp_evalue()
         self.threads = threads
 
     def _process(self):

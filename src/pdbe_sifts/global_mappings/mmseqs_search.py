@@ -18,6 +18,12 @@ from pathlib import Path
 
 from pymmseqs.config.easy_search_config import EasySearchConfig
 from pdbe_sifts.base.log import logger
+from pdbe_sifts.base.paths import (
+    get_conf_mmseqs_alignment_mode,
+    get_conf_mmseqs_db_load_mode,
+    get_conf_mmseqs_min_seq_id,
+    get_conf_mmseqs_sensitivity,
+)
 from pdbe_sifts.global_mappings.base_alignment_search import AlignmentSearch
 
 class MmSearch(AlignmentSearch):
@@ -69,13 +75,13 @@ class MmSearch(AlignmentSearch):
                                   self.outtmp_path,
                                   format_mode=0,
                                   a=True,
-                                  alignment_mode = 3,
+                                  alignment_mode=get_conf_mmseqs_alignment_mode(),
                                   format_output=self.format_string,
                                   v=0,
-                                  threads = self.threads,
-                                  db_load_mode=2,
-                                  s=5.7,
-                                  min_seq_id = 0.9)
+                                  threads=self.threads,
+                                  db_load_mode=get_conf_mmseqs_db_load_mode(),
+                                  s=get_conf_mmseqs_sensitivity(),
+                                  min_seq_id=get_conf_mmseqs_min_seq_id())
         result.run()
 
 
