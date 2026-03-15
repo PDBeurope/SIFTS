@@ -1,77 +1,35 @@
 user:
   base_dir: null
   nobackup_dir: null
-
-  entries_all: null
-  entries_this_week: null
-  sifts_mapping_changes: null
-  sifts_modified_entries: null
-
   target_db: null
-
-  exchange_server: null
-  exchange_username: null
-
-  log_destination: console
-
-
-logging:
-  destination: ${user.log_destination}
 
 
 location:
   base: ${user.base_dir}
   nobackup_dir: ${user.nobackup_dir}
-  nobackup_data_dir: ${location.nobackup_dir}/release/data
 
   work:
     base_dir: ${location.base}/release
     data_dir: ${location.work.base_dir}/data
     data_entry_dir: ${location.work.data_dir}/entry
-    pickle_dir: null           # Serialised Batchable objects for LSF/Slurm jobs
 
 
 cache:
-  base: ${location.nobackup_dir}/release_data_cache/
-  uniprot: ${cache.base}/uniprot
-
-
-sifts_to_mmcif:
-  clean_output_path: ${location.work.data_dir}/clean_mmcif_files/
-  staging_dir: ${location.nobackup_data_dir}/sifts_only_cifs
-  exchange_dir: null
-
-
-lists:
-  entries_all: ${user.entries_all}
-  entries_this_week: ${user.entries_this_week}
-  sifts_mapping_changes: ${user.sifts_mapping_changes}
-  sifts_modified_entries: ${user.sifts_modified_entries}
-
-
-exchange:
-  server: ${user.exchange_server}
-  username: ${user.exchange_username}
+  base: ${location.nobackup_dir}/sifts_data_cache/
+  uniprot: ${cache.base}/uniprot/
 
 
 # ---------------------------------------------------------------------------
-# Cluster execution (LSF / Slurm)
-# Only needed when using pdbe_sifts segments batch --cluster lsf/slurm
+# Alignment tool parameters
+# Modify here to tune sensitivity/speed trade-offs without touching the code.
 # ---------------------------------------------------------------------------
 
-farm:
-  cluster_queue: normal          # Default LSF/Slurm queue/partition name
+alignment:
+  mmseqs:
+    sensitivity: 5.7        # float, 1–7.5  (higher = more sensitive, slower)
+    min_seq_id: 0.9         # float, 0–1    (minimum sequence identity threshold)
+    alignment_mode: 3       # int, 0–4      (3 = backtrack; required for qaln/taln)
+    db_load_mode: 2         # int, 0–3      (2 = memory-mapped, fastest for repeated searches)
 
-executor:
-  type: lsf                      # Cluster type: "lsf" or "slurm"
-  log_base_dir: null             # Root directory for bsub/sbatch stdout logs
-                                 # e.g. /hps/software/users/pdbe/sifts/bsub_logs
-  default_queue: normal          # Fallback queue if not overridden on CLI
-  default_cores: 1               # CPU cores per job
-  default_memory: 4096           # Memory per job in MB
-  default_timeout: 120           # Wall-clock limit per job in minutes
-
-queue:
-  type: local                    # Queue backend: "local" (multiprocessing) or "redis"
-  host: localhost                # Queue manager hostname
-  port: 50000                    # Queue manager TCP port
+  blastp:
+    evalue: 10.0            # float         (e-value cut-off for saving hits)
