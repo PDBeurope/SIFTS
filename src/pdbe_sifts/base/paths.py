@@ -47,3 +47,23 @@ def get_conf_data_entry_dir():
     return conf.location.work.data_entry_dir
 
 
+def get_conf_mmseqs_sensitivity() -> float:
+    return conf.alignment.mmseqs.sensitivity
+
+
+def get_conf_mmseqs_min_seq_id() -> float:
+    return conf.alignment.mmseqs.min_seq_id
+
+
+def get_conf_mmseqs_alignment_mode() -> int:
+    return conf.alignment.mmseqs.alignment_mode
+
+
+def get_conf_mmseqs_db_load_mode() -> int:
+    return conf.alignment.mmseqs.db_load_mode
+
+
+def get_conf_blastp_evalue() -> float:
+    return conf.alignment.blastp.evalue
+
+
