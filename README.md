@@ -16,6 +16,8 @@ SIFTS provides residue-level mappings between PDB protein structures and UniProt
 4. **Store** results in a DuckDB database and per-entry CSV files
 5. **Export** mappings back into annotated mmCIF files
 
+The whole pipeline can work on non-UniProt or non-PDB entries. However, it will use only the adjusted score to rank the hits.
+
 ---
 
 ## Installation
@@ -56,7 +58,7 @@ pdbe_sifts init
 # → downloads the NCBI taxonomy database (~70 MB, first run only)
 ```
 
-Edit the config to set your paths (`base_dir`, `nobackup_dir`, `target_db`, etc.).
+Edit the config to set your paths (`base_dir`, `nobackup_dir`, `target_db` (after building it), etc.).
 
 ### 2 — Build a reference database
 
@@ -77,33 +79,47 @@ pdbe_sifts global_mappings -i 1abc.cif -o ./results -d ./my_db/target_db
 pdbe_sifts global_mappings -i entries.txt -o ./results -d ./my_db/target_db --threads 8
 ```
 
-Produces `hits.duckdb` — a scored table of UniProt accession candidates per PDB entity.
+Produces `hits.duckdb` and `hits.tsv`  — a scored table of UniProt accession candidates per PDB entity.
 
 ### 4 — Generate SIFTS segments and residue mappings
 
 ```bash
 # Single entry
-pdbe_sifts segments -i 1abc_updated.cif.gz -o ./segments -d hits.duckdb
-
-# Batch (parallel, 12 workers — recommended for 12-core machines)
-pdbe_sifts segments_batch \
-  -l cif_paths.txt \
-  -o ./segments \
-  -d hits.duckdb \
-  -n 12 > out.log 2>&1
+pdbe_sifts segments -i 1abc.cif(.gz) -o ./segments -d hits.duckdb
 ```
+
+or 
+
+```bash
+# Single entry
+pdbe_sifts segments -i 1abc.cif(.gz) -o ./segments -m mymappings.fasta
+```
+For -m: either UniProt accessions 'A:P00963,B:P00963', or a path to a FASTA file with headers >{auth_asym_id}|{sequence_id}.
 
 Produces per-entry gzip-compressed CSV files under `{output_dir}/`.
 
-### 5 — Annotate mmCIF files with SIFTS data
+### 5 — Load data into your duckdb file
+
+```bash
+to add 
+```
+
+### 6 — Annotate mmCIF files with SIFTS data
 
 ```bash
 pdbe_sifts sifts2mmcif \
-  -i 1abc_updated.cif.gz \
+  -i 1abc.cif(.gz) \
   -o ./sifts_mmcif \
   -d hits.duckdb
 ```
+or 
 
+```bash
+pdbe_sifts sifts2mmcif \
+  -i 1abc.cif(.gz) \
+  -o ./sifts_mmcif \
+  -s mysiftscsv/
+```
 ---
 
 ## CLI Reference
@@ -117,7 +133,6 @@ pdbe_sifts sifts2mmcif \
 | `pdbe_sifts fasta_build` | Extract entity sequences from mmCIF files and write a FASTA |
 | `pdbe_sifts global_mappings` | Align PDB sequences against the reference DB; score and store hits in DuckDB |
 | `pdbe_sifts segments` | Generate SIFTS mappings for a **single** mmCIF entry |
-| `pdbe_sifts segments_batch` | Generate SIFTS mappings for **multiple** entries in parallel |
 | `pdbe_sifts sifts2mmcif` | Inject SIFTS mappings into an annotated mmCIF file |
 
 ### `segments` key options
@@ -130,17 +145,6 @@ pdbe_sifts sifts2mmcif \
 --entry           PDB entry ID (derived from CIF if omitted)
 --no-connectivity Disable connectivity mode
 ```
-
-### `segments_batch` key options
-
-```
--l  LIST          Text file listing CIF paths, one per line  [required]
--o  OUTPUT_DIR    Output directory for CSV files              [required]
--d  DB_FILE       DuckDB hits file                           [optional if -m given]
--n  WORKERS       Number of parallel worker processes         [default: 1]
---no-connectivity Disable connectivity mode
-```
-
 ---
 
 ## Outputs
