@@ -134,6 +134,12 @@ def get_next_release_date() -> date:
     return date.today() + relativedelta(weekday=WE(+1))
 
 def get_allocated_cpus():
+    """Return the number of CPUs available to this process.
+
+    Environment variables (checked in order):
+        SLURM_CPUS_PER_TASK — set automatically by SLURM; used on HPC clusters.
+        Falls back to os.sched_getaffinity (Linux) or os.cpu_count().
+    """
     if "SLURM_CPUS_PER_TASK" in os.environ:
         return int(os.environ["SLURM_CPUS_PER_TASK"])
     try:
@@ -143,6 +149,12 @@ def get_allocated_cpus():
 
 
 def get_cpu_count():
+    """Return the number of parallel threads to use for internal alignment jobs.
+
+    Environment variables (checked in order):
+        SIFTS_N_PROC — override the CPU count (set by segments_batch per worker).
+        Falls back to get_allocated_cpus().
+    """
     if "SIFTS_N_PROC" in os.environ:
         return int(os.environ["SIFTS_N_PROC"])
     return get_allocated_cpus()
