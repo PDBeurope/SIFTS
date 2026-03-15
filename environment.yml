@@ -3,13 +3,17 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - python
+  - python>=3.10
   - pip
   - ipython
   - setuptools
-  - mmseqs2
-  - blast
-  - fasta3
+
+  # ── System binaries ───────────────────────────────────────────────────────
+  - mmseqs2    # Global sequence search (pdbe_sifts build_db / global_mappings)
+  - blast      # Optional alternative to MMseqs2 (--tool blastp)
+  - fasta3     # Provides lalign36 for local pairwise alignment (segments step)
+
+  # ── Python packages ───────────────────────────────────────────────────────
   - pip:
     - tqdm
     - biopython
@@ -17,13 +21,13 @@ dependencies:
     - lxml
     - requests
     - pandas
-    - pymmseqs
-    - coloredlogs
+    - pymmseqs          # Python wrapper for MMseqs2
+    - coloredlogs       # Coloured terminal logging (optional but installed)
     - pyyaml
     - scikit-learn
-    - ete4
-    - omegaconf
-    - gemmi
-    - duckdb
-    - dateparser
-    - platformdirs
+    - ete4              # NCBI taxonomy database (init / update_ncbi commands)
+    - omegaconf         # YAML configuration with interpolation
+    - gemmi             # mmCIF parsing and writing
+    - duckdb            # Embedded database for hits and segment data
+    - platformdirs      # Cross-platform config directory resolution
+    - python-dateutil   # Date arithmetic (get_next_release_date)

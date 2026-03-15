@@ -53,9 +53,10 @@ pip install pdbe_sifts
 ```bash
 pdbe_sifts init
 # → creates ~/.config/pdbe_sifts/config.yaml
+# → downloads the NCBI taxonomy database (~70 MB, first run only)
 ```
 
-Edit the config to set your paths (`cif_dir`, `unp_dir`, `target_db`, etc.).
+Edit the config to set your paths (`base_dir`, `nobackup_dir`, `target_db`, etc.).
 
 ### 2 — Build a reference database
 
@@ -69,11 +70,11 @@ pdbe_sifts build_db \
 ### 3 — Run global mappings
 
 ```bash
-# Single entry
-pdbe_sifts global_mappings -i 1abc.cif -od ./results -db ./my_db/target_db
+# Single CIF entry
+pdbe_sifts global_mappings -i 1abc.cif -o ./results -d ./my_db/target_db
 
 # Batch (one mmCIF path per line)
-pdbe_sifts global_mappings -i entries.txt -od ./results -db ./my_db/target_db -threads 8
+pdbe_sifts global_mappings -i entries.txt -o ./results -d ./my_db/target_db --threads 8
 ```
 
 Produces `hits.duckdb` — a scored table of UniProt accession candidates per PDB entity.
@@ -82,20 +83,25 @@ Produces `hits.duckdb` — a scored table of UniProt accession candidates per PD
 
 ```bash
 # Single entry
-pdbe_sifts segments -d hits.duckdb -o ./segments single --entry 1abc
+pdbe_sifts segments -i 1abc_updated.cif.gz -o ./segments -d hits.duckdb
 
-# Batch (parallel, 4 workers)
-pdbe_sifts segments -d hits.duckdb -o ./segments batch \
-  --list entries.txt --workers 4 > segments.log 2>&1
+# Batch (parallel, 12 workers — recommended for 12-core machines)
+pdbe_sifts segments_batch \
+  -l cif_paths.txt \
+  -o ./segments \
+  -d hits.duckdb \
+  -n 12 > out.log 2>&1
 ```
 
-Produces per-entry gzip-compressed CSV files under `{output_dir}/{entry_id}/sifts/`.
+Produces per-entry gzip-compressed CSV files under `{output_dir}/`.
 
 ### 5 — Annotate mmCIF files with SIFTS data
 
 ```bash
-pdbe_sifts sifts2mmcif -d hits.duckdb -i ./mmcif -o ./mmcif_annotated batch \
-  --list entries.txt --workers 4
+pdbe_sifts sifts2mmcif \
+  -i 1abc_updated.cif.gz \
+  -o ./sifts_mmcif \
+  -d hits.duckdb
 ```
 
 ---
@@ -104,19 +110,35 @@ pdbe_sifts sifts2mmcif -d hits.duckdb -i ./mmcif -o ./mmcif_annotated batch \
 
 | Command | Description |
 |---------|-------------|
-| `pdbe_sifts init` | Copy default config template to `~/.config/pdbe_sifts/config.yaml` |
+| `pdbe_sifts init` | Copy default config to `~/.config/pdbe_sifts/config.yaml` and init NCBI taxonomy DB |
 | `pdbe_sifts show` | Print the fully resolved configuration |
+| `pdbe_sifts update_ncbi` | Force-update the local NCBI taxonomy database (ete4) |
 | `pdbe_sifts build_db` | Build a reference sequence database (MMseqs2 or BLASTP) from a UniProt FASTA |
 | `pdbe_sifts fasta_build` | Extract entity sequences from mmCIF files and write a FASTA |
 | `pdbe_sifts global_mappings` | Align PDB sequences against the reference DB; score and store hits in DuckDB |
-| `pdbe_sifts segments` | Generate residue- and segment-level SIFTS mappings via local alignment (`lalign36`) |
-| `pdbe_sifts sifts2mmcif` | Inject SIFTS mappings into annotated mmCIF files |
+| `pdbe_sifts segments` | Generate SIFTS mappings for a **single** mmCIF entry |
+| `pdbe_sifts segments_batch` | Generate SIFTS mappings for **multiple** entries in parallel |
+| `pdbe_sifts sifts2mmcif` | Inject SIFTS mappings into an annotated mmCIF file |
 
-`segments` and `sifts2mmcif` accept `single` or `batch` sub-commands:
+### `segments` key options
 
 ```
-single --entry <pdb_id>
-batch  --list <file>  --workers <N>  [--timeout <secs>]  [--no-retry]  [--failure-threshold <f>]
+-i  INPUT_CIF     Input CIF file (.cif / .cif.gz)           [required]
+-o  OUTPUT_DIR    Output directory for CSV files              [required]
+-d  DB_FILE       DuckDB hits file                           [optional if -m given]
+-m  MAPPING       Manual mapping: 'A:P00963' or FASTA file
+--entry           PDB entry ID (derived from CIF if omitted)
+--no-connectivity Disable connectivity mode
+```
+
+### `segments_batch` key options
+
+```
+-l  LIST          Text file listing CIF paths, one per line  [required]
+-o  OUTPUT_DIR    Output directory for CSV files              [required]
+-d  DB_FILE       DuckDB hits file                           [optional if -m given]
+-n  WORKERS       Number of parallel worker processes         [default: 1]
+--no-connectivity Disable connectivity mode
 ```
 
 ---
@@ -147,9 +169,10 @@ When `--write-to-db` is set, results are also loaded into DuckDB tables `sifts_x
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SIFTS_MAXTASKS_PER_CHILD` | `25` | Worker processes are recycled after this many entries to limit memory accumulation |
-| `SIFTS_LALIGN_TIMEOUT` | `350` | Per-entry timeout in seconds for `lalign36` alignments |
-| `SIFTS_LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `SIFTS_LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `SIFTS_N_PROC` | auto | Number of internal threads per worker (lalign36 jobs). Set automatically by `segments_batch` based on `-n` workers; override manually to cap CPU use. |
+| `SIFTS_NO_CACHE_ALL` | unset | If set (any value), disables the UniProt pickle cache and always fetches from the REST API. |
+| `SLURM_CPUS_PER_TASK` | unset | Detected automatically on SLURM clusters. Used by `get_allocated_cpus()` to set the thread count when running under a SLURM job allocation. |
 
 ---
 
@@ -159,13 +182,16 @@ When `--write-to-db` is set, results are also loaded into DuckDB tables `sifts_x
 src/pdbe_sifts/
 ├── cli.py                         # CLI entry point (pdbe_sifts command)
 ├── sifts_global_mappings.py       # Global mapping pipeline
-├── sifts_segments_generation.py   # Segment generation (SiftsAlign, Batchable subclass)
+├── sifts_segments_generation.py   # Single-entry segment generation (SiftsAlign)
+├── sifts_batch_segments.py        # Multi-entry parallel segment generation
+├── sifts_fasta_builder.py         # Extract sequences from mmCIF → FASTA
+├── sifts_multi_segments.py        # Standalone batch script (multiprocessing)
 ├── config/                        # OmegaConf configuration loading
 ├── base/
-│   ├── batchable.py               # Parallel processing base class (Pool + imap_unordered)
-│   ├── utils.py                   # UniProt fetch, identity/coverage helpers
-│   ├── log.py                     # Logging setup
-│   └── exceptions.py              # Custom exceptions
+│   ├── paths.py                   # Single load_config() + all configuration getters
+│   ├── utils.py                   # UniProt fetch, CPU helpers, SiftsAction
+│   ├── log.py                     # Logging setup (StreamHandler, coloredlogs)
+│   └── exceptions.py              # All custom exceptions (centralised)
 ├── mmcif/                         # mmCIF parsing (Entry, Chain, Entity, Residue, ChemComp)
 ├── global_mappings/
 │   ├── target_database.py         # Build MMseqs2 / BLAST reference database
@@ -175,12 +201,10 @@ src/pdbe_sifts/
 ├── segments_generation/
 │   └── alignment/                 # lalign36 wrapper, isoform alignment, residue mapping
 ├── sifts_to_mmcif/                # Inject SIFTS data back into mmCIF files
-├── database/
-│   └── sifts_db_wrapper.py        # DuckDB schema and bulk-load helpers
 ├── unp/
-│   └── unp.py                     # UniProt REST client, isoform handling
+│   └── unp.py                     # UniProt REST client, pickle cache, isoform handling
 └── data/
-    └── default_config.yaml        # Default configuration template
+    └── default_config.yaml        # Default configuration template (all tuneable params)
 ```
 
 ---

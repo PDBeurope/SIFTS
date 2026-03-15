@@ -33,8 +33,8 @@ dependencies = [
     "omegaconf",
     "gemmi",
     "duckdb",
-    "dateparser",
-    "platformdirs"
+    "platformdirs",
+    "python-dateutil"
 ]
 
 classifiers = [
