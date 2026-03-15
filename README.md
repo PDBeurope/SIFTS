@@ -79,47 +79,48 @@ pdbe_sifts global_mappings -i 1abc.cif -o ./results -d ./my_db/target_db
 pdbe_sifts global_mappings -i entries.txt -o ./results -d ./my_db/target_db --threads 8
 ```
 
-Produces `hits.duckdb` and `hits.tsv`  — a scored table of UniProt accession candidates per PDB entity.
+Produces `hits.duckdb` and `hits.tsv` — a scored table of UniProt accession candidates per PDB entity.
 
 ### 4 — Generate SIFTS segments and residue mappings
 
 ```bash
-# Single entry
-pdbe_sifts segments -i 1abc.cif(.gz) -o ./segments -d hits.duckdb
-```
+# With DuckDB hits (from global_mappings step)
+pdbe_sifts segments -i 1abc.cif.gz -o ./segments -d hits.duckdb
 
-or 
+# Manual UniProt accession mapping (chain:accession)
+pdbe_sifts segments -i 1abc.cif.gz -o ./segments -m "A:P00963,B:P00963"
 
-```bash
-# Single entry
-pdbe_sifts segments -i 1abc.cif(.gz) -o ./segments -m mymappings.fasta
+# Custom FASTA mapping (headers: >{auth_asym_id}|{sequence_id})
+pdbe_sifts segments -i 1abc.cif.gz -o ./segments -m custom_seqs.fasta
 ```
-For -m: either UniProt accessions 'A:P00963,B:P00963', or a path to a FASTA file with headers >{auth_asym_id}|{sequence_id}.
 
 Produces per-entry gzip-compressed CSV files under `{output_dir}/`.
 
-### 5 — Load data into your duckdb file
+### 5 — Load segment data into DuckDB
 
 ```bash
-to add 
+pdbe_sifts db_load -i ./segments/ -d hits.duckdb
 ```
+
+Bulk-loads the segment and residue CSVs produced in step 4 into the `sifts_xref_segment` and `sifts_xref_residue` tables of the DuckDB file.
 
 ### 6 — Annotate mmCIF files with SIFTS data
 
 ```bash
+# Reading segment data from DuckDB (after step 5)
 pdbe_sifts sifts2mmcif \
-  -i 1abc.cif(.gz) \
+  -i 1abc.cif.gz \
   -o ./sifts_mmcif \
   -d hits.duckdb
-```
-or 
 
-```bash
+# Or reading segment CSVs directly from the output directory (skip step 5)
 pdbe_sifts sifts2mmcif \
-  -i 1abc.cif(.gz) \
+  -i 1abc.cif.gz \
   -o ./sifts_mmcif \
-  -s mysiftscsv/
+  -d hits.duckdb \
+  -s ./segments/
 ```
+
 ---
 
 ## CLI Reference
@@ -133,18 +134,111 @@ pdbe_sifts sifts2mmcif \
 | `pdbe_sifts fasta_build` | Extract entity sequences from mmCIF files and write a FASTA |
 | `pdbe_sifts global_mappings` | Align PDB sequences against the reference DB; score and store hits in DuckDB |
 | `pdbe_sifts segments` | Generate SIFTS mappings for a **single** mmCIF entry |
+| `pdbe_sifts db_load` | Bulk-load segment/residue CSVs from segments generation into DuckDB |
 | `pdbe_sifts sifts2mmcif` | Inject SIFTS mappings into an annotated mmCIF file |
 
 ### `segments` key options
 
 ```
--i  INPUT_CIF     Input CIF file (.cif / .cif.gz)           [required]
--o  OUTPUT_DIR    Output directory for CSV files              [required]
--d  DB_FILE       DuckDB hits file                           [optional if -m given]
--m  MAPPING       Manual mapping: 'A:P00963' or FASTA file
+-i  INPUT_CIF     Input CIF file (.cif / .cif.gz)                      [required]
+-o  OUTPUT_DIR    Output directory for CSV files                         [required]
+-d  DB_FILE       DuckDB hits file from global_mappings                 [optional if -m given]
+-m  MAPPING       Manual mapping: 'A:P00963' or path to a FASTA file
 --entry           PDB entry ID (derived from CIF if omitted)
 --no-connectivity Disable connectivity mode
 ```
+
+### `db_load` key options
+
+```
+-i  INPUT_DIR     Root directory with per-entry sifts/ subdirectories   [required]
+-d  DUCKDB        Path to the DuckDB file                               [required]
+```
+
+---
+
+## Useful Classes
+
+The pipeline classes can be used directly in Python scripts without going through the CLI.
+
+### `TargetDb` — Build a reference sequence database
+
+```python
+from pdbe_sifts.global_mappings.target_database import TargetDb
+
+TargetDb(
+    input_path="uniprot_sprot.fasta",
+    output_path="./my_db/target_db",
+    tax_mapping_file="taxonomy.tsv",
+    tool="mmseqs",   # or "blastp"
+    threads=8,
+).run()
+```
+
+### `FastaBuilder` — Extract sequences from mmCIF files
+
+```python
+from pdbe_sifts.sifts_fasta_builder import FastaBuilder
+
+fasta_path = FastaBuilder(
+    input_path="1abc.cif",   # or .cif.gz, or a .txt file listing CIF paths
+    out_dir="./fasta/",
+    threads=4,
+).build()
+```
+
+### `SiftsGlobalMappings` — Run the alignment and scoring pipeline
+
+```python
+from pdbe_sifts.sifts_global_mappings import SiftsGlobalMappings
+
+SiftsGlobalMappings(
+    input_file="1abc.cif",   # or .fasta, or a .txt list of CIF paths
+    out_dir="./results/",
+    db_file="./my_db/target_db",
+    tool="mmseqs",           # or "blastp"
+    threads=8,
+).process()
+# → writes hits.duckdb and hits_<entry>.tsv to out_dir
+```
+
+### `SiftsAlign` — Generate per-entry segment and residue mappings
+
+```python
+from pdbe_sifts.sifts_segments_generation import SiftsAlign
+
+# Mode 1: use scored hits from global_mappings
+sa = SiftsAlign(
+    cif_file="1abc.cif",
+    out_dir="./segments/",
+    db_conn_str="hits.duckdb",
+)
+
+# Mode 2: provide a manual mapping (accessions or custom FASTA)
+sa = SiftsAlign(
+    cif_file="1abc.cif",
+    out_dir="./segments/",
+    unp_mode="A:P00963,B:P00963",   # or path to a FASTA file
+)
+
+sa.process_entry("1abc")
+if sa.conn:
+    sa.conn.close()
+# → writes {out_dir}/1abc/sifts/sifts_segment_mapping.csv.gz
+#           {out_dir}/1abc/sifts/sifts_residue_mapping.csv.gz
+```
+
+### `SiftsDB` — Bulk-load segment CSVs into DuckDB
+
+```python
+import duckdb
+from pdbe_sifts.database.sifts_db_wrapper import SiftsDB
+
+conn = duckdb.connect("hits.duckdb")
+SiftsDB(conn).bulk_load_from_entries("./segments/")
+conn.close()
+```
+
 ---
 
 ## Outputs
@@ -165,7 +259,7 @@ Per entry, under `{output_dir}/{entry_id}/sifts/`:
 | `sifts_segment_mapping.csv.gz` | CSV (gzip) | One row per contiguous aligned range (PDB ↔ UniProt positions, identity, conflicts, chimera flag) |
 | `sifts_residue_mapping.csv.gz` | CSV (gzip) | One row per mapped PDB residue (auth seq id, UniProt position, one-letter codes, observed flag) |
 
-When `--write-to-db` is set, results are also loaded into DuckDB tables `sifts_xref_segment` and `sifts_xref_residue`.
+After running `db_load`, results are available in DuckDB tables `sifts_xref_segment` and `sifts_xref_residue`.
 
 ---
 
@@ -174,7 +268,7 @@ When `--write-to-db` is set, results are also loaded into DuckDB tables `sifts_x
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SIFTS_LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
-| `SIFTS_N_PROC` | auto | Number of internal threads per worker (lalign36 jobs). Set automatically by `segments_batch` based on `-n` workers; override manually to cap CPU use. |
+| `SIFTS_N_PROC` | auto | Number of internal threads per worker (lalign36 jobs). Override manually to cap CPU use. |
 | `SIFTS_NO_CACHE_ALL` | unset | If set (any value), disables the UniProt pickle cache and always fetches from the REST API. |
 | `SLURM_CPUS_PER_TASK` | unset | Detected automatically on SLURM clusters. Used by `get_allocated_cpus()` to set the thread count when running under a SLURM job allocation. |
 
@@ -185,10 +279,10 @@ When `--write-to-db` is set, results are also loaded into DuckDB tables `sifts_x
 ```
 src/pdbe_sifts/
 ├── cli.py                         # CLI entry point (pdbe_sifts command)
-├── sifts_global_mappings.py       # Global mapping pipeline
+├── sifts_global_mappings.py       # Global mapping pipeline (SiftsGlobalMappings)
 ├── sifts_segments_generation.py   # Single-entry segment generation (SiftsAlign)
-├── sifts_batch_segments.py        # Multi-entry parallel segment generation
-├── sifts_fasta_builder.py         # Extract sequences from mmCIF → FASTA
+├── sifts_fasta_builder.py         # Extract sequences from mmCIF → FASTA (FastaBuilder)
+├── sifts_database_loader.py       # Standalone bulk-loader script (wraps SiftsDB)
 ├── sifts_multi_segments.py        # Standalone batch script (multiprocessing)
 ├── config/                        # OmegaConf configuration loading
 ├── base/
@@ -196,9 +290,11 @@ src/pdbe_sifts/
 │   ├── utils.py                   # UniProt fetch, CPU helpers, SiftsAction
 │   ├── log.py                     # Logging setup (StreamHandler, coloredlogs)
 │   └── exceptions.py              # All custom exceptions (centralised)
+├── database/
+│   └── sifts_db_wrapper.py        # SiftsDB: DuckDB schema + bulk loader
 ├── mmcif/                         # mmCIF parsing (Entry, Chain, Entity, Residue, ChemComp)
 ├── global_mappings/
-│   ├── target_database.py         # Build MMseqs2 / BLAST reference database
+│   ├── target_database.py         # Build MMseqs2 / BLAST reference database (TargetDb)
 │   ├── mmseqs_search.py           # MMseqs2 easy-search wrapper
 │   ├── blastp.py                  # BLASTP wrapper
 │   └── global_mappings_parser.py  # Parse TSV hits, score, store in DuckDB

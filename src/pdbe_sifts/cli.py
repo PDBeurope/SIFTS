@@ -181,6 +181,20 @@ def main():
         help="PDB entry ID. If omitted, derived from _entry.id in the CIF.",
     )
 
+    ######### DB LOAD
+    db_load_parser = subparsers.add_parser(
+        "db_load",
+        help="Bulk-load segment/residue CSVs from segments generation into DuckDB.",
+    )
+    db_load_parser.add_argument(
+        "-i", "--input-dir", required=True,
+        help="Root directory containing per-entry sifts/ subdirectories with CSV files.",
+    )
+    db_load_parser.add_argument(
+        "-d", "--duckdb", required=True,
+        help="Path to the DuckDB file.",
+    )
+
     ######### UPDATE NCBI
     subparsers.add_parser(
         "update_ncbi",
@@ -305,6 +319,16 @@ def main():
         sifts_align.process_entry(entry_id)
         if sifts_align.conn:
             sifts_align.conn.close()
+
+    elif args.command == "db_load":
+        import duckdb as _duckdb
+        from pdbe_sifts.database.sifts_db_wrapper import SiftsDB
+        conn = _duckdb.connect(args.duckdb)
+        try:
+            SiftsDB(conn).bulk_load_from_entries(args.input_dir)
+        finally:
+            conn.close()
+        logger.info("Done.")
 
     elif args.command == "update_ncbi":
         logger.info("Updating NCBI taxonomy database...")
