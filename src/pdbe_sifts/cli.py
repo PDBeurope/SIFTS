@@ -282,7 +282,7 @@ def main():
             tool=args.tool,
             threads=args.threads,
         )
-        db_b._process()
+        db_b.run()
 
     elif args.command == "fasta_build":
         from pdbe_sifts.sifts_fasta_builder import FastaBuilder

@@ -75,7 +75,7 @@ class TargetDb(ToolDatabase):
                 self.target_db = createindex(self.target_db.to_path(), threads=self.threads)
             case 'blastp':
                 self.target_db = MakeBlastDb(self.input_path, self.output_path, self.tax_mapping_file)
-                self.target_db._process()
+                self.target_db.run()
 
 def run():
     """Command-line entry point for creating a MMseqs2 or BLAST target database."""

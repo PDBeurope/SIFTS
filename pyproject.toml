@@ -34,7 +34,8 @@ dependencies = [
     "gemmi",
     "duckdb",
     "platformdirs",
-    "python-dateutil"
+    "python-dateutil",
+    "numpy",
 ]
 
 classifiers = [
