@@ -33,6 +33,26 @@ class SiftsAlign:
         unp_mode=None,
         connectivity_mode=True,
     ):
+        """Initialise the per-entry SIFTS segment and residue mapping pipeline.
+
+        Args:
+            cif_file: Path to the mmCIF file to process (``.cif`` or ``.cif.gz``).
+            out_dir: Root output directory; per-entry CSVs are written to
+                ``{out_dir}/{entry_id}/sifts/``.
+            db_conn_str: Path to a DuckDB file produced by ``global_mappings``.
+                Used to retrieve the best UniProt accession per chain.
+                Mutually exclusive with *unp_mode*.
+            nf90_mode: When ``True``, disables the ≥ 90 % identity filter and
+                keeps all alignment hits regardless of sequence identity.
+            unp_mode: Manual mapping override.  Either a comma-separated
+                ``auth_asym_id:accession`` string (e.g. ``"A:P00963,B:P00963"``)
+                or a path to a custom FASTA file whose headers follow the
+                ``>{auth_asym_id}|{sequence_id}`` convention.
+                Mutually exclusive with *db_conn_str*.
+            connectivity_mode: When ``True`` (default), applies the connectivity
+                correction step that reassigns gap residues to adjacent segments
+                when a covalent peptide bond is detected.
+        """
         self.cif_file = str(cif_file)
 
         self.nf90_mode = nf90_mode
