@@ -17,6 +17,7 @@ location:
 cache:
   base: ${location.nobackup_dir}/sifts_data_cache/
   uniprot: ${cache.base}/uniprot/
+  ccd: ${cache.base}/ccd/
 
 
 # ---------------------------------------------------------------------------
