@@ -1,0 +1,83 @@
+site_name: pdbe_sifts
+site_description: Run the SIFTS pipeline locally — EMBL-EBI PDBe
+repo_url: https://github.com/PDBe-KB/pdbe_sifts
+repo_name: PDBe-KB/pdbe_sifts
+copyright: "MIT License — EMBL-EBI PDBe team"
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - toc.follow
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            docstring_options:
+              ignore_init_summary: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_source: true
+            show_bases: true
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            merge_init_into_class: true
+            heading_level: 2
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quick Start: quickstart.md
+  - CLI Reference: cli.md
+  - API Reference:
+      - Overview: api/index.md
+      - SiftsGlobalMappings: api/sifts_global_mappings.md
+      - SiftsAlign: api/sifts_segments_generation.md
+      - FastaBuilder: api/sifts_fasta_builder.md
+      - TargetDb: api/target_database.md
+      - SiftsDB: api/sifts_db_wrapper.md
+      - ExportSIFTSTommCIF: api/sifts_to_mmcif.md
+      - UniProt client: api/unp.md
+      - Base utilities: api/base.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets:
+      base_path: ["."]
+  - toc:
+      permalink: true

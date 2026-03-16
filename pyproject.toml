@@ -58,6 +58,12 @@ pdbe_sifts = "pdbe_sifts.cli:main"
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-mock>=3"]
 redis = ["redis>=4"]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.25",
+    "mkdocs-autorefs>=1.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
