@@ -205,16 +205,15 @@ class SiftsAlign:
         return {**entry_mapping, **mapp}
 
     def _parse_fasta_mapping(self, entry_mapping, fasta_path: Path):
-        """FASTA mode: -m sequences.fasta with headers >{auth_asym_id}|{sequence_id}."""
+        """FASTA mode: -m sequences.fasta with headers >{entry_id}|{auth_asym_id}|{sequence_id}."""
         mapp: dict = {}
 
         def _flush(header: str, seq_parts: list):
             parts = header.split("|")
-            chain_id = parts[0]
-            accession = parts[1] if len(parts) > 1 else chain_id
-            name = (
-                parts[2] if len(parts) > 2 else ""
-            )  # optional: >{chain}|{acc}|{name}
+            # parts[0] = entry_id (ignored in single-entry mode — entry already known)
+            chain_id = parts[1] if len(parts) > 1 else ""
+            accession = parts[2] if len(parts) > 2 else chain_id
+            name = parts[3] if len(parts) > 3 else ""
             sequence = "".join(seq_parts)
             self.custom_sequences[chain_id] = CustomSequenceAccession(
                 accession, sequence, name
@@ -340,7 +339,7 @@ def run():
         "--mapping",
         help=(
             "User-defined mapping. Either UniProt accessions 'A:P00963,B:P00963', "
-            "or a path to a FASTA file with headers >{auth_asym_id}|{sequence_id}."
+            "or a path to a FASTA file with headers >{entry_id}|{auth_asym_id}|{sequence_id}."
         ),
     )
 
