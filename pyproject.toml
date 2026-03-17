@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdbe_sifts"
-version = "1.0"
+version = "0.1.0"
 description = "Python package to run SIFTS from EMBL-EBI locally."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "Apache-2.0"
 
 authors = [
     { name = "Adam Bellaiche", email = "adamb@ebi.ac.uk" },
@@ -39,9 +39,19 @@ dependencies = [
 ]
 
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent"
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Operating System :: OS Independent",
 ]
+
+[project.urls]
+Repository = "https://github.com/PDBeurope/SIFTS/"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
