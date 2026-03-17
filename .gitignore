@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+.env
+.venv/
+site/
+
+# pre-commit cache (local, not shared)
+.pre-commit-cache/
+
+# ruff cache
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# pytest
+.pytest_cache/
+
+# macOS
+.DS_Store
