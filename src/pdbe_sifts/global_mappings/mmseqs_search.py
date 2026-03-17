@@ -133,7 +133,11 @@ def run():
 
     logger.info(vars(args))
     mm_search = MmSearch(
-        args.query_path, args.target_path, args.output_path, args.outtmp_path, threads=args.threads
+        args.query_path,
+        args.target_path,
+        args.output_path,
+        args.outtmp_path,
+        threads=args.threads,
     )
     mm_search.run()
 

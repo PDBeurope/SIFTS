@@ -54,13 +54,17 @@ class mmCIF:
         self.pdbid = pdbid
         self.fname = cif_file
         if not Path(self.fname).exists():
-            raise FileNotFoundError(f"The mmcif file {self.fname} does not exists.")
+            raise FileNotFoundError(
+                f"The mmcif file {self.fname} does not exists."
+            )
 
         block = cif.read(self.fname).sole_block()
         self.poly_seq = block.get_mmcif_category("_pdbx_poly_seq_scheme")
 
         if not self.poly_seq:
-            raise NotAPolyPeptide("it is not a polypeptide! no poly_seq, only hetatms presents")
+            raise NotAPolyPeptide(
+                "it is not a polypeptide! no poly_seq, only hetatms presents"
+            )
         self.cc = chem_comp_dict
         self.entity_poly = block.get_mmcif_category("_entity_poly")
         self.mod_residue = block.get_mmcif_category("_pdbx_struct_mod_residue")
@@ -150,12 +154,16 @@ class mmCIF:
     def get_tax(self, chain):
         entity = self.get_entity_id(chain)
 
-        tax = self.__get_tax_helper(self.src_nat, "pdbx_ncbi_taxonomy_id", entity)
+        tax = self.__get_tax_helper(
+            self.src_nat, "pdbx_ncbi_taxonomy_id", entity
+        )
 
         if tax is not None:
             return tax
 
-        tax = self.__get_tax_helper(self.src_gen, "pdbx_gene_src_ncbi_taxonomy_id", entity)
+        tax = self.__get_tax_helper(
+            self.src_gen, "pdbx_gene_src_ncbi_taxonomy_id", entity
+        )
 
         if tax is not None:
             return tax

@@ -95,12 +95,16 @@ def _build_sequence(poly_seq, entity_id, cc):
 def _get_taxonomy_id(entity_id, src_nat, src_gen, src_syn):
     """Get taxonomy ID for an entity from various sources."""
     # Try natural source first
-    tax_id = _extract_tax_from_category(src_nat, "pdbx_ncbi_taxonomy_id", entity_id)
+    tax_id = _extract_tax_from_category(
+        src_nat, "pdbx_ncbi_taxonomy_id", entity_id
+    )
     if tax_id is not None:
         return tax_id
 
     # Try genetically manipulated source
-    tax_id = _extract_tax_from_category(src_gen, "pdbx_gene_src_ncbi_taxonomy_id", entity_id)
+    tax_id = _extract_tax_from_category(
+        src_gen, "pdbx_gene_src_ncbi_taxonomy_id", entity_id
+    )
     if tax_id is not None:
         return tax_id
 

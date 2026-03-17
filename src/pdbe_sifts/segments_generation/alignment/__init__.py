@@ -23,7 +23,10 @@ def do_alignment_lalign36(seq1, seq2, gap_open=GAP_OPEN, gap_extend=GAP_EXTEND):
     if len(seq2) < 10:
         seq2 += "X" * (10 - len(seq2))
 
-    with tempfile.NamedTemporaryFile(mode="wt") as f1, tempfile.NamedTemporaryFile(mode="wt") as f2:
+    with (
+        tempfile.NamedTemporaryFile(mode="wt") as f1,
+        tempfile.NamedTemporaryFile(mode="wt") as f2,
+    ):
         f1.write(f">unp\n{seq1}")
         f2.write(f">pdb\n{seq2}")
 
@@ -43,7 +46,9 @@ def do_alignment_lalign36(seq1, seq2, gap_open=GAP_OPEN, gap_extend=GAP_EXTEND):
             f2.name,
         ]
         logger.debug(cmd)
-        output = subprocess.check_output(cmd, encoding="utf8", stderr=subprocess.DEVNULL)
+        output = subprocess.check_output(
+            cmd, encoding="utf8", stderr=subprocess.DEVNULL
+        )
 
         return AlignIO.parse(io.StringIO(output), "fasta-m10")
 
@@ -71,7 +76,9 @@ def annotate_alignment(seq1, seq2):
         else:
             star[idx] = ":"
 
-    for b, m, e in zip(hard_wrap(seq1), hard_wrap("".join(star)), hard_wrap(seq2), strict=False):
+    for b, m, e in zip(
+        hard_wrap(seq1), hard_wrap("".join(star)), hard_wrap(seq2), strict=False
+    ):
         out.append(f"UNP: {b}\nALG: {m}\nPDB: {e}\n")
 
     return "\n".join(out)
@@ -119,7 +126,9 @@ def get_conflicts(seq1, seq2):
 
 def get_identity(seq1, seq2):
     return round(
-        sum(aa1 == aa2 for aa1, aa2 in zip(seq1, seq2, strict=False)) / float(len(seq2)), 2
+        sum(aa1 == aa2 for aa1, aa2 in zip(seq1, seq2, strict=False))
+        / float(len(seq2)),
+        2,
     )
 
 

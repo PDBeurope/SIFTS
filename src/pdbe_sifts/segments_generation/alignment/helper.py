@@ -41,7 +41,10 @@ class CustomSequenceAccession:
         self.seq_isoforms = {accession: sequence}
         self.taxonomy = []  # no taxonomy info for custom sequences
         self.longName = name or accession  # fallback: use accession as name
-        self.date_seq_update = ["", "0"]  # [modified_date, version] — no versioning for custom seqs
+        self.date_seq_update = [
+            "",
+            "0",
+        ]  # [modified_date, version] — no versioning for custom seqs
 
     def getAllIsoforms(self):  # noqa: N802 — matches UNP method name
         return {self.accession: self.sequence}
@@ -246,7 +249,11 @@ class EntryMapping:
                 my_list = list(isoforms.items())
                 list(
                     tqdm.tqdm(
-                        pool.imap_unordered(self.process_each_isoform, my_list, chunksize=STEP_SIZE)
+                        pool.imap_unordered(
+                            self.process_each_isoform,
+                            my_list,
+                            chunksize=STEP_SIZE,
+                        )
                     )
                 )
         if self.connectivity_mode:
@@ -257,7 +264,11 @@ class EntryMapping:
     def process_each_isoform(self, row):
         iso, seq = row
         # Don't repeat the canonical
-        if not self.nf90_mode and seq == self.unp.sequence and iso != self.unp.accession:
+        if (
+            not self.nf90_mode
+            and seq == self.unp.sequence
+            and iso != self.unp.accession
+        ):
             logger.info(f"{iso} is the canonical. Skipping...")
             return iso
 
@@ -296,13 +307,17 @@ class EntryMapping:
             pdb_ranges = [(pdb_start, pdb_end)]
             unp_ranges = [(unp_start, unp_end)]
 
-            self.chain_obj.mappings.setdefault(iso, []).append((pdb_ranges, unp_ranges, al))
+            self.chain_obj.mappings.setdefault(iso, []).append(
+                (pdb_ranges, unp_ranges, al)
+            )
             identity = alignment.get_identity(al[0]._seq, al[1]._seq)
             score = alignment.get_score(al[0]._seq, al[1]._seq)
 
             self.chain_obj.scores[iso] = (identity, score)
 
-            self.chain_obj.seg_scores.setdefault(iso, {})[str(pdb_ranges)] = identity
+            self.chain_obj.seg_scores.setdefault(iso, {})[str(pdb_ranges)] = (
+                identity
+            )
 
             self._update_best_mapping(unp, iso, al, score)
 
@@ -330,7 +345,9 @@ class EntryMapping:
         if not unp:
             accs = self.entry.mmcif.get_unp(self.chain)
             if not accs:
-                logger.warning(f"The mmCIF doesnt have a UniProt accession: {self.entry.pdbid}")
+                logger.warning(
+                    f"The mmCIF doesnt have a UniProt accession: {self.entry.pdbid}"
+                )
                 self.chain_obj.is_chimera = False
                 self.repeated_acc = False
                 return
@@ -343,9 +360,13 @@ class EntryMapping:
                 self.repeated_acc = False
                 return
 
-            logger.warning(f"The accession {acc} is not valid. Got {accs[0]} from mmCIF")
+            logger.warning(
+                f"The accession {acc} is not valid. Got {accs[0]} from mmCIF"
+            )
             if acc == accs[0]:
-                logger.warning(f"CIF has same invalid obsolete accession {acc}. Doing nothing")
+                logger.warning(
+                    f"CIF has same invalid obsolete accession {acc}. Doing nothing"
+                )
                 return
 
             unp = get_accession(self.entry, accs[0])
@@ -384,9 +405,13 @@ class EntryMapping:
         if self.repeated_acc or self.chain_obj.is_chimera:
             logger.warning("It is a chimera so we skip it for UniRef90")
             return False
-        coverage = self.NFC.get_coverage(self.entry.pdbid, self.chain, unp.accession)
+        coverage = self.NFC.get_coverage(
+            self.entry.pdbid, self.chain, unp.accession
+        )
         if coverage < NF_COVERAGE:
-            logger.warning(f"Coverage {coverage} < {NF_COVERAGE} so we skip it for UniRef90")
+            logger.warning(
+                f"Coverage {coverage} < {NF_COVERAGE} so we skip it for UniRef90"
+            )
             return False
         return True
 

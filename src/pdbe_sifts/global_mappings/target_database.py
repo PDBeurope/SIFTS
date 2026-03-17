@@ -78,7 +78,9 @@ class TargetDb(ToolDatabase):
                     tax_mapping_file=self.tax_mapping_file,
                     threads=self.threads,
                 ).run()
-                self.target_db = createindex(self.target_db.to_path(), threads=self.threads)
+                self.target_db = createindex(
+                    self.target_db.to_path(), threads=self.threads
+                )
             case "blastp":
                 self.target_db = MakeBlastDb(
                     self.input_path, self.output_path, self.tax_mapping_file

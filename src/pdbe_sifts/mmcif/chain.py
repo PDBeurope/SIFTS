@@ -8,7 +8,9 @@ from Bio.Seq import Seq
 
 from pdbe_sifts.base.utils import get_cpu_count
 from pdbe_sifts.mmcif import mmcif_helper
-from pdbe_sifts.segments_generation.connectivity.process_connectivity import ConnectivityCheck
+from pdbe_sifts.segments_generation.connectivity.process_connectivity import (
+    ConnectivityCheck,
+)
 
 from ..taxonomy_fix_pkl import TaxonomyFix
 from .residue import Residue
@@ -68,7 +70,9 @@ class Chain:
 
         for k, v in mmcif.get_residues(self.auth_asym_id):
             if isinstance(v, tuple):
-                tmp = Residue(k, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8])
+                tmp = Residue(
+                    k, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8]
+                )
             else:
                 tmp = []
                 for v_sub in v:
@@ -126,7 +130,10 @@ class Chain:
             #   Linker
             #   Expression Tag
 
-            if r.rtype == "Expression tag" and self.expression_tag_start is None:
+            if (
+                r.rtype == "Expression tag"
+                and self.expression_tag_start is None
+            ):
                 self.expression_tag_start = r.n
 
             if r.rtype in ("Insertion", "Linker", "Expression tag"):
@@ -137,8 +144,14 @@ class Chain:
             #   Conflict
             #   Cloning artifact
 
-            elif r.rtype in ("Engineered mutation", "Conflict", "Cloning artifact"):
-                self.alignment_sequence.append(r.oneL_original if r.oneL_original else "X")
+            elif r.rtype in (
+                "Engineered mutation",
+                "Conflict",
+                "Cloning artifact",
+            ):
+                self.alignment_sequence.append(
+                    r.oneL_original if r.oneL_original else "X"
+                )
 
             # unfold the chromophores
             elif r.is_chromophore:
@@ -213,7 +226,9 @@ class Chain:
             unp_i = 0
             pdb_shift = 0
             unp_shift = 0
-            while pdb_i + pdb_start <= pdb_stop and unp_i + unp_start <= unp_stop:
+            while (
+                pdb_i + pdb_start <= pdb_stop and unp_i + unp_start <= unp_stop
+            ):
                 pdb_r = pdb_seq[pdb_i + pdb_shift]
                 unp_r = unp_seq[unp_i + unp_shift]
                 r = self.residues[pdb_i + pdb_start - 1]
@@ -240,7 +255,9 @@ class Chain:
                 if len(r.oneL) > 1 and pdb_r != "-" and unp_r != "-":
                     residue_map[pdb_i + pdb_start] = []
                     for x in range(len(r.oneL)):
-                        residue_map[pdb_i + pdb_start].append(unp_i + unp_start + x)
+                        residue_map[pdb_i + pdb_start].append(
+                            unp_i + unp_start + x
+                        )
                     unp_i += 1
                     pdb_i += 1
                 elif pdb_r != "-" and unp_r != "-":
@@ -266,7 +283,13 @@ class Chain:
         with Pool(N_PROC) as pool:
             # call the function for each item in parallel, get results as tasks complete
             my_list = list(self.mappings.items())
-            list(tqdm.tqdm(pool.imap_unordered(self.get_each_resmap, my_list, chunksize=STEP_SIZE)))
+            list(
+                tqdm.tqdm(
+                    pool.imap_unordered(
+                        self.get_each_resmap, my_list, chunksize=STEP_SIZE
+                    )
+                )
+            )
 
         # remove the residues which map to more than one accession
         # keeping the ones that benefit continuity
@@ -292,8 +315,12 @@ class Chain:
                         # The mapping without conflict has preference
                         pdb_r = self.sequence[key - 1]
                         try:
-                            unp1_r = self.parent.accessions[iso1].seq_isoforms[iso1][maps1[key] - 1]
-                            unp2_r = self.parent.accessions[iso2].seq_isoforms[iso2][maps2[key] - 1]
+                            unp1_r = self.parent.accessions[iso1].seq_isoforms[
+                                iso1
+                            ][maps1[key] - 1]
+                            unp2_r = self.parent.accessions[iso2].seq_isoforms[
+                                iso2
+                            ][maps2[key] - 1]
 
                             # If one is a conflict and the other one is not
                             if unp1_r != unp2_r and pdb_r in (unp1_r, unp2_r):
@@ -319,7 +346,9 @@ class Chain:
 
         for _, g in groupby(enumerate(lst), lambda i_x: i_x[0] - i_x[1][0]):
             group = list(map(itemgetter(1), g))
-            ranges.append(((group[0][0], group[-1][0]), (group[0][1], group[-1][1])))
+            ranges.append(
+                ((group[0][0], group[-1][0]), (group[0][1], group[-1][1]))
+            )
 
         # get only the min/max if there is a 1 to many mapping
         for idx, r in enumerate(ranges):

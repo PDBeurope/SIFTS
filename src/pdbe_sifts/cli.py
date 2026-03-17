@@ -12,7 +12,9 @@ from pdbe_sifts.sifts_global_mappings import SiftsGlobalMappings
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="pdbe_sifts", description="PDBe SIFTS mapping pipeline")
+    parser = argparse.ArgumentParser(
+        prog="pdbe_sifts", description="PDBe SIFTS mapping pipeline"
+    )
 
     # Global flag: applies to every subcommand.
     # Falls back to the SIFTS_LOG_LEVEL environment variable (default: INFO).
@@ -33,7 +35,8 @@ def main():
 
     #########  INIT — copies the YAML template to user config dir
     init_parser = subparsers.add_parser(
-        "init", help="Copy the config template to ~/.config/pdbe_sifts/config.yaml"
+        "init",
+        help="Copy the config template to ~/.config/pdbe_sifts/config.yaml",
     )
     init_parser.add_argument(
         "--dest",
@@ -41,12 +44,19 @@ def main():
         default=None,
         help="Custom destination path (default: ~/.config/pdbe_sifts/config.yaml)",
     )
-    init_parser.add_argument("--force", action="store_true", help="Overwrite existing config file.")
+    init_parser.add_argument(
+        "--force", action="store_true", help="Overwrite existing config file."
+    )
 
     #########  SHOW — display resolved config
-    show_parser = subparsers.add_parser("show", help="Display the resolved configuration.")
+    show_parser = subparsers.add_parser(
+        "show", help="Display the resolved configuration."
+    )
     show_parser.add_argument(
-        "--config", type=Path, default=None, help="Path to a custom config file."
+        "--config",
+        type=Path,
+        default=None,
+        help="Path to a custom config file.",
     )
 
     ######### BUILD DATABASE
@@ -83,7 +93,8 @@ def main():
 
     ######### RUN sifts_global_mappings
     global_parser = subparsers.add_parser(
-        "global_mappings", help="Run alignment and scoring to generate global SIFTS mappings."
+        "global_mappings",
+        help="Run alignment and scoring to generate global SIFTS mappings.",
     )
     global_parser.add_argument(
         "-i",
@@ -302,7 +313,9 @@ def main():
         if args.force and _USER_CONFIG_FILE.exists():
             _USER_CONFIG_FILE.unlink()
         init_config(dest=args.dest)
-        logger.info("Initializing NCBI taxonomy database (first run may download ~70 MB)...")
+        logger.info(
+            "Initializing NCBI taxonomy database (first run may download ~70 MB)..."
+        )
         try:
             from ete4 import NCBITaxa
 
@@ -356,7 +369,9 @@ def main():
         from pdbe_sifts.sifts_segments_generation import SiftsAlign
 
         if not args.db_file and not args.mapping:
-            segments_parser.error("At least one of -d/--db-file or -m/--mapping is required.")
+            segments_parser.error(
+                "At least one of -d/--db-file or -m/--mapping is required."
+            )
 
         entry_id = args.entry
         if not entry_id:

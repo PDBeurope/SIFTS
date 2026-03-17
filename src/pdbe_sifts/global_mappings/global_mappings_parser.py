@@ -183,7 +183,11 @@ def score_taxonomy_pair(args):
 
     try:
         score = get_tax_weight(query_taxid, target_taxid)
-        return {"query_tax_id": query_taxid, "target_tax_id": target_taxid, "tax_score": score}
+        return {
+            "query_tax_id": query_taxid,
+            "target_tax_id": target_taxid,
+            "tax_score": score,
+        }
     except Exception as e:
         logger.error(f"Error getting tax_weight for {pair}: {e}")
         return None
@@ -240,11 +244,13 @@ class GlobMappingsParser:
         # Insert data with identity filter
         if self.format == "mmseqs":
             sql = INSERT_MMSEQS_TABLE_HITS.format(
-                tsv_path=str(self.result_file_path), identity_cutoff=self.identity_cutoff
+                tsv_path=str(self.result_file_path),
+                identity_cutoff=self.identity_cutoff,
             )
         elif self.format == "blastp":
             sql = INSERT_BLASTP_TABLE_HITS.format(
-                tsv_path=str(self.result_file_path), identity_cutoff=self.identity_cutoff
+                tsv_path=str(self.result_file_path),
+                identity_cutoff=self.identity_cutoff,
             )
         else:
             raise ValueError(f"Unsupported format: {self.format}")
@@ -346,7 +352,13 @@ class GlobMappingsParser:
         if missing:
             rows = fetch_accessions(missing)
             df = pd.DataFrame(
-                rows, columns=["accession", "provenance", "pdb_xref", "annotation_score"]
+                rows,
+                columns=[
+                    "accession",
+                    "provenance",
+                    "pdb_xref",
+                    "annotation_score",
+                ],
             )
             conn.register("tmp_accession_info", df)
             conn.execute("""
@@ -442,7 +454,9 @@ class GlobMappingsParser:
 
         conn.close()
 
-        logger.info(f"Scoring {len(pairs)} taxonomy id pairs using {self.max_workers} workers")
+        logger.info(
+            f"Scoring {len(pairs)} taxonomy id pairs using {self.max_workers} workers"
+        )
 
         # Batch size for database updates
         DB_UPDATE_BATCH_SIZE = 5000
@@ -450,7 +464,9 @@ class GlobMappingsParser:
 
         with ProcessPoolExecutor(max_workers=self.max_workers) as pool:
             # Submit all tasks
-            futures = {pool.submit(score_taxonomy_pair, pair): pair for pair in pairs}
+            futures = {
+                pool.submit(score_taxonomy_pair, pair): pair for pair in pairs
+            }
 
             # Process results as they complete
             for i, fut in enumerate(as_completed(futures), 1):
@@ -467,7 +483,9 @@ class GlobMappingsParser:
                         all_updates = []
 
                     if i % 1000 == 0:
-                        logger.info(f"[{i}/{len(pairs)}] processed taxonomy pairs")
+                        logger.info(
+                            f"[{i}/{len(pairs)}] processed taxonomy pairs"
+                        )
 
                 except Exception as e:
                     logger.error(f"Error processing pair {pair}: {e}")
@@ -499,7 +517,9 @@ class GlobMappingsParser:
                 AND hits.target_tax_id = tmp_tax_updates.target_tax_id
             """)
 
-            logger.info(f"Updated {len(updates)} taxonomy score mappings in database")
+            logger.info(
+                f"Updated {len(updates)} taxonomy score mappings in database"
+            )
 
         except Exception as e:
             logger.error(f"Error in batch update: {e}")

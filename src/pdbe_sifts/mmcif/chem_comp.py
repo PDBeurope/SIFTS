@@ -34,7 +34,9 @@ class ChemCompMapping:
     _dictionary: Mapping[str, str] = {}
 
     def __init__(self):
-        cc_file = files("pdbe_sifts.data").joinpath("three_to_one_letter_mapping.csv")
+        cc_file = files("pdbe_sifts.data").joinpath(
+            "three_to_one_letter_mapping.csv"
+        )
 
         self.hydrate(cc_file)
 
@@ -48,7 +50,9 @@ class ChemCompMapping:
                 self._dictionary[three] = one_letter
 
         if not self._dictionary:
-            raise ValueError(f"Error in chemp_comp file/pkl, its empty!Please check file {cc_file}")
+            raise ValueError(
+                f"Error in chemp_comp file/pkl, its empty!Please check file {cc_file}"
+            )
 
         logger.debug(f"Loaded {len(self._dictionary)} mapping entries")
         self.__dict__ = self._dictionary
@@ -59,7 +63,10 @@ class ChemCompMapping:
         """
         not_found = []
         for res in STANDARD_AA:
-            if res in self._dictionary and self._dictionary[res] == STANDARD_AA[res]:
+            if (
+                res in self._dictionary
+                and self._dictionary[res] == STANDARD_AA[res]
+            ):
                 continue
             else:
                 if res in self._dictionary:

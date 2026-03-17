@@ -16,9 +16,15 @@ from pdbe_sifts.base.utils import SiftsAction
 from pdbe_sifts.mmcif.chem_comp import ChemCompMapping
 from pdbe_sifts.mmcif.entry import Entry
 from pdbe_sifts.segments_generation.alignment import helper
-from pdbe_sifts.segments_generation.alignment.helper import CustomSequenceAccession
-from pdbe_sifts.segments_generation.connectivity.process_connectivity import ConnectivityCheck
-from pdbe_sifts.segments_generation.get_list_of_mappings import get_curated_db_mappings
+from pdbe_sifts.segments_generation.alignment.helper import (
+    CustomSequenceAccession,
+)
+from pdbe_sifts.segments_generation.connectivity.process_connectivity import (
+    ConnectivityCheck,
+)
+from pdbe_sifts.segments_generation.get_list_of_mappings import (
+    get_curated_db_mappings,
+)
 from pdbe_sifts.unp.unp import UNP
 
 
@@ -78,7 +84,11 @@ class SiftsAlign:
             "pdbx_audit_revision_history",
         ]
         # DB connection is optional: only required when no -m FASTA is given
-        self.conn = duckdb.connect(self.db_conn_str, read_only=True) if db_conn_str else None
+        self.conn = (
+            duckdb.connect(self.db_conn_str, read_only=True)
+            if db_conn_str
+            else None
+        )
         logger.info("Loading chem comp three-letter to one-letter mapping")
         self.cc = ChemCompMapping()
 
@@ -86,14 +96,18 @@ class SiftsAlign:
     def process_entry(self, entry_id):
         cif_file = self.cif_file
         if self.no_used_cif_category_modified(cif_file):
-            logger.info(f"{entry_id}: Modification in non-used cif category detected. Skipping.")
+            logger.info(
+                f"{entry_id}: Modification in non-used cif category detected. Skipping."
+            )
             return
 
         try:
             logger.info(f"Processing [{entry_id}]")
             entry = Entry(entry_id, self.cc, cif_file)
         except NotAPolyPeptide:
-            logger.warning(f"No pdbx_poly_seq_scheme category found for {entry_id}. Skipping")
+            logger.warning(
+                f"No pdbx_poly_seq_scheme category found for {entry_id}. Skipping"
+            )
             return
 
         chain_lst = list(entry.chains.keys())
@@ -101,7 +115,9 @@ class SiftsAlign:
             logger.warning(f"No polypeptide chains found for entry {entry_id}")
             return
         logger.debug(f"Chains: {chain_lst}")
-        chain_to_entity = {chain: entry.chains[chain].entity_id for chain in chain_lst}
+        chain_to_entity = {
+            chain: entry.chains[chain].entity_id for chain in chain_lst
+        }
 
         mappings = self.get_mappings(entry_id, chain_lst, chain_to_entity)
         logger.info(mappings)
@@ -110,7 +126,9 @@ class SiftsAlign:
         # inside get_mappings. Key by accession ("BLOOD"), not chain_id ("A"), because
         # get_accession(entry, acc) looks up entry.accessions[acc].
         if self.custom_sequences:
-            entry.accessions.update({v.accession: v for v in self.custom_sequences.values()})
+            entry.accessions.update(
+                {v.accession: v for v in self.custom_sequences.values()}
+            )
 
         for chain, chain_mapping in mappings.items():
             logger.info(f"Processing {entry_id} chain {chain}")
@@ -132,11 +150,15 @@ class SiftsAlign:
 
             em.process()
             if not em.chain_obj.is_chimera and self.connectivity_mode:
-                connectivity_check = ConnectivityCheck(em.chain_obj, em.repeated_acc)
+                connectivity_check = ConnectivityCheck(
+                    em.chain_obj, em.repeated_acc
+                )
                 em.chain_obj.segments = connectivity_check.check_segments_conn()
 
         Path(self.out_dir).mkdir(parents=True, exist_ok=True)
-        generate_xref_csv.insert_mappings(self.out_dir, entry, self.nf90_mode, self.conn)
+        generate_xref_csv.insert_mappings(
+            self.out_dir, entry, self.nf90_mode, self.conn
+        )
         logger.info(f"Processed [{entry_id}]")
 
     def remove_existing_files(self, entry_id):
@@ -150,7 +172,9 @@ class SiftsAlign:
         if self.conn:
             mappings = {
                 **mappings,
-                **get_curated_db_mappings(entry_id, chain_lst, self.conn, chain_to_entity),
+                **get_curated_db_mappings(
+                    entry_id, chain_lst, self.conn, chain_to_entity
+                ),
             }
         mappings = self._parse_user_mapping(mappings)
         return mappings
@@ -170,7 +194,9 @@ class SiftsAlign:
             chain, acc = chain.split(":")
             try:
                 unp = UNP(acc)
-                mapp.setdefault(chain, []).append(helper.SMapping(unp.accession, 0, 0))
+                mapp.setdefault(chain, []).append(
+                    helper.SMapping(unp.accession, 0, 0)
+                )
             except ObsoleteUniProtError:
                 logger.warning(
                     f"Obsolete UniProt accession provided by user: {acc}. Will be ignored"
@@ -186,10 +212,16 @@ class SiftsAlign:
             parts = header.split("|")
             chain_id = parts[0]
             accession = parts[1] if len(parts) > 1 else chain_id
-            name = parts[2] if len(parts) > 2 else ""  # optional: >{chain}|{acc}|{name}
+            name = (
+                parts[2] if len(parts) > 2 else ""
+            )  # optional: >{chain}|{acc}|{name}
             sequence = "".join(seq_parts)
-            self.custom_sequences[chain_id] = CustomSequenceAccession(accession, sequence, name)
-            mapp.setdefault(chain_id, []).append(helper.SMapping(accession, 0, 0))
+            self.custom_sequences[chain_id] = CustomSequenceAccession(
+                accession, sequence, name
+            )
+            mapp.setdefault(chain_id, []).append(
+                helper.SMapping(accession, 0, 0)
+            )
 
         current_header = None
         current_seq: list[str] = []
@@ -217,38 +249,60 @@ class SiftsAlign:
             logger.debug("No categories to check for modifications")
             return False
 
-        self.used_cif_categories = {cat.lstrip("_") for cat in self.used_cif_categories}
+        self.used_cif_categories = {
+            cat.lstrip("_") for cat in self.used_cif_categories
+        }
 
         block = gemmi.cif.read(str(cif_file)).sole_block()
-        history = block.find("_pdbx_audit_revision_history.", ["ordinal", "revision_date"])
-        ordinals = [row["ordinal"] for row in history if self._is_future_date(row["revision_date"])]
+        history = block.find(
+            "_pdbx_audit_revision_history.", ["ordinal", "revision_date"]
+        )
+        ordinals = [
+            row["ordinal"]
+            for row in history
+            if self._is_future_date(row["revision_date"])
+        ]
 
         if not ordinals:
             logger.info("No future revisions found")
             return False
 
-        categories = block.find("_pdbx_audit_revision_category.", ["revision_ordinal", "category"])
+        categories = block.find(
+            "_pdbx_audit_revision_category.", ["revision_ordinal", "category"]
+        )
         if not categories:
             logger.info("No pdbx_audit_revision_category found")
             return False
 
         modified_categories = {
-            row["category"] for row in categories if row["revision_ordinal"] in ordinals
+            row["category"]
+            for row in categories
+            if row["revision_ordinal"] in ordinals
         }
-        modified_used_categories = modified_categories.intersection(self.used_cif_categories)
+        modified_used_categories = modified_categories.intersection(
+            self.used_cif_categories
+        )
         if not modified_used_categories:
-            logger.debug(f"Modified categories: {', '.join(modified_categories)}")
-            logger.debug(f"Used categories: {', '.join(self.used_cif_categories)}")
+            logger.debug(
+                f"Modified categories: {', '.join(modified_categories)}"
+            )
+            logger.debug(
+                f"Used categories: {', '.join(self.used_cif_categories)}"
+            )
             logger.info("None of the modified categories are used.")
             return True
 
-        logger.info(f"Modified categories found: {', '.join(modified_used_categories)}")
+        logger.info(
+            f"Modified categories found: {', '.join(modified_used_categories)}"
+        )
         return False
 
 
 @log_durations(logger.info)
 def run():
-    parser = argparse.ArgumentParser("Segment generation in SIFTS, generates seg_csv, res_csv")
+    parser = argparse.ArgumentParser(
+        "Segment generation in SIFTS, generates seg_csv, res_csv"
+    )
 
     parser.add_argument(
         "-i",
@@ -295,7 +349,9 @@ def run():
         "--duckdb",
         required=False,
         default=None,
-        help=("DuckDB hits file to query mappings from. Optional when -m/--mapping is provided."),
+        help=(
+            "DuckDB hits file to query mappings from. Optional when -m/--mapping is provided."
+        ),
     )
 
     parser.add_argument(

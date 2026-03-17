@@ -22,7 +22,10 @@ from pdbe_sifts.sifts_to_mmcif.delta_mappings import (
     get_delta_csv_suffix,
     read_sifts_segments,
 )
-from pdbe_sifts.sifts_to_mmcif.read_sifts_csv import get_unp_segments, get_unpres_mapping
+from pdbe_sifts.sifts_to_mmcif.read_sifts_csv import (
+    get_unp_segments,
+    get_unpres_mapping,
+)
 
 
 class ExportSIFTSTommCIF:
@@ -59,7 +62,9 @@ class ExportSIFTSTommCIF:
                 comm_utils.check_output_mmcif(infile, outfile)
 
         else:
-            raise EntryFailedException(f"Output {outfile} file not found for {outfile}")
+            raise EntryFailedException(
+                f"Output {outfile} file not found for {outfile}"
+            )
 
     def _check_clean_mmcif(self, outfile):
         """Check that the output clean mmcif file has no null values in primary keys."""
@@ -77,7 +82,9 @@ class ExportSIFTSTommCIF:
         for cat in category_list:
             cols = required_fields[cat]
             for col in cols:
-                if any(cif.is_null(x) for x in block.find_values(f"{cat}.{col}")):
+                if any(
+                    cif.is_null(x) for x in block.find_values(f"{cat}.{col}")
+                ):
                     raise Exception(
                         f"Data error invalid value (? or .) for required item: {cat}.{col}"
                     )
@@ -86,17 +93,25 @@ class ExportSIFTSTommCIF:
         logger.debug("Checking sifts mmcif output is not empty")
         if sifts_only_cif.exists():
             if sifts_only_cif.stat().st_size <= 40:
-                raise EntryFailedException(f"Empty sifts output file {sifts_only_cif}")
+                raise EntryFailedException(
+                    f"Empty sifts output file {sifts_only_cif}"
+                )
         else:
-            raise EntryFailedException(f"file not found sifts mmcif file {sifts_only_cif}")
+            raise EntryFailedException(
+                f"file not found sifts mmcif file {sifts_only_cif}"
+            )
 
-    def _process_cif_file(self, d_block, sifts_segments, sifts_seg_inst, sifts_res_csv, pdb_id):
+    def _process_cif_file(
+        self, d_block, sifts_segments, sifts_seg_inst, sifts_res_csv, pdb_id
+    ):
         self.UpdateFlag = False
         self.UnpDataFlag = False
 
         sifts_res_info = {}
 
-        self.UpdateFlag = self.write_data(d_block, "_pdbx_sifts_unp_segments", sifts_segments)
+        self.UpdateFlag = self.write_data(
+            d_block, "_pdbx_sifts_unp_segments", sifts_segments
+        )
 
         cat = d_block.get_mmcif_category("_pdbx_poly_seq_scheme")
         if cat:
@@ -105,18 +120,24 @@ class ExportSIFTSTommCIF:
             my_seq_id = cat["seq_id"]
             my_mon_id = cat["mon_id"]
             my_observed = cat["auth_seq_num"]
-            my_observed = ["y" if item is not None else "n" for item in my_observed]
+            my_observed = [
+                "y" if item is not None else "n" for item in my_observed
+            ]
             my_obs_res = comm_utils.get_obs(my_ch, my_seq_id, my_observed)
             hetero = cat["hetero"]
             my_mh_id = comm_utils.get_mh_id(my_seq_id, my_mon_id, hetero)
 
-            all_ent, all_res = comm_utils.get_ent_chains(my_ent, my_ch, my_seq_id, my_mon_id)
+            all_ent, all_res = comm_utils.get_ent_chains(
+                my_ent, my_ch, my_seq_id, my_mon_id
+            )
 
             if sifts_res_csv:
                 res_cursor = None
             else:
                 res_cursor = self.conn
-            sifts_res_info, mon_id_info = get_unpres_mapping(pdb_id, sifts_res_csv, res_cursor)
+            sifts_res_info, mon_id_info = get_unpres_mapping(
+                pdb_id, sifts_res_csv, res_cursor
+            )
             xref_resmap = comm_utils.get_xref_db(
                 all_res,
                 sifts_res_info,
@@ -127,7 +148,9 @@ class ExportSIFTSTommCIF:
             )
             xref_resmap = [item for item in xref_resmap if item != []]
 
-            self.UpdateFlag = self.write_data(d_block, "_pdbx_sifts_xref_db", xref_resmap)
+            self.UpdateFlag = self.write_data(
+                d_block, "_pdbx_sifts_xref_db", xref_resmap
+            )
 
         else:
             logger.warning(f"The entry {pdb_id} is not a polymer")
@@ -155,7 +178,9 @@ class ExportSIFTSTommCIF:
 
     def write_data(self, d_block, category, category_data):
         if category_data and len(NEW_MMCIF_CAT[category]) == len(category_data):
-            data = dict(zip(NEW_MMCIF_CAT[category], category_data, strict=False))
+            data = dict(
+                zip(NEW_MMCIF_CAT[category], category_data, strict=False)
+            )
             d_block.set_mmcif_category(category, data)
             return True
         return False
@@ -171,7 +196,10 @@ class ExportSIFTSTommCIF:
             )
             new_seg_data, new_seg_list = read_sifts_segments(self.d_block)
             if self.prev_run_dir:
-                old_sifts_cif = Path(self.prev_run_dir) / f"{self.entry_id}_sifts_only.cif.gz"
+                old_sifts_cif = (
+                    Path(self.prev_run_dir)
+                    / f"{self.entry_id}_sifts_only.cif.gz"
+                )
             else:
                 old_sifts_cif = self.sifts_only_cif
 
@@ -195,7 +223,10 @@ class ExportSIFTSTommCIF:
             else:
                 logger.info(f"Tracked mappings changed for {self.entry_id}")
                 FindMappingChanges(
-                    self.entry_id, old_seg_data, new_seg_data, self.sifts_delta_csv
+                    self.entry_id,
+                    old_seg_data,
+                    new_seg_data,
+                    self.sifts_delta_csv,
                 ).find_mapping_changes()
 
     def process_entry(self, entry_id):
@@ -217,7 +248,9 @@ class ExportSIFTSTommCIF:
             sifts_seg_csv, sifts_res_csv = None, None
             seg_cursor = self.conn
 
-        sifts_segments, sifts_seg_inst = get_unp_segments(entry_id, sifts_seg_csv, seg_cursor)
+        sifts_segments, sifts_seg_inst = get_unp_segments(
+            entry_id, sifts_seg_csv, seg_cursor
+        )
         sifts_segments = [item for item in sifts_segments if item != []]
 
         orig_updated_cif = Path(self.input_cif)
@@ -227,8 +260,14 @@ class ExportSIFTSTommCIF:
 
         self.d_block = cif.read(str(orig_updated_cif)).sole_block()
 
-        self.UpdateFlag, self.d_block, self.UnpDataFlag = self._process_cif_file(
-            self.d_block, sifts_segments, sifts_seg_inst, sifts_res_csv, entry_id
+        self.UpdateFlag, self.d_block, self.UnpDataFlag = (
+            self._process_cif_file(
+                self.d_block,
+                sifts_segments,
+                sifts_seg_inst,
+                sifts_res_csv,
+                entry_id,
+            )
         )
 
         self.entry_id = entry_id
@@ -247,7 +286,9 @@ class ExportSIFTSTommCIF:
             data = self.d_block.get_mmcif_category(f"_{cat}")
             if not data:
                 if cat == "_pdbx_sifts_unp_segments":
-                    raise NoSegmentsError("No segments written. This shouldn't happen")
+                    raise NoSegmentsError(
+                        "No segments written. This shouldn't happen"
+                    )
                 logger.warning(f"Category _{cat} not written out")
                 continue
             block.set_mmcif_category(f"_{cat}.", data)

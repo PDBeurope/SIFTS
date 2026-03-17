@@ -46,7 +46,9 @@ def get_unp_segments(pdbid, seg_csv, pdbecursor):
         else:
             with gzip.open(seg_csv, "rt") as f:
                 csvfile = f.readlines()
-            reader = csv.DictReader(csvfile, delimiter=",", fieldnames=sifts_seg_header)
+            reader = csv.DictReader(
+                csvfile, delimiter=",", fieldnames=sifts_seg_header
+            )
     else:
         rows = pdbecursor.execute(
             "select * from sifts_xref_segment where entry_id=?", [pdbid]
@@ -110,9 +112,11 @@ def get_unp_segments(pdbid, seg_csv, pdbecursor):
                 cif_seq_id_end.append(pdb_end)
                 cif_best_mapping.append(best_mapping)
                 cif_identity.append(identity)
-                res_info.setdefault(int(entity_id), {}).setdefault(asym_id, {}).setdefault(
-                    int(pdb_start), []
-                ).append((int(pdb_end), unp_acc, seg_boo, ins_boo))
+                res_info.setdefault(int(entity_id), {}).setdefault(
+                    asym_id, {}
+                ).setdefault(int(pdb_start), []).append(
+                    (int(pdb_end), unp_acc, seg_boo, ins_boo)
+                )
 
                 if len(data[row][seg]) != 1:
                     ins_boo = ins_boo + 1
@@ -173,7 +177,9 @@ def get_unpres_mapping(pdbid, res_csv, pdbecursor):
         else:
             with gzip.open(res_csv, "rt") as f:
                 csvfile = f.readlines()
-            reader = csv.DictReader(csvfile, delimiter=",", fieldnames=sifts_res_header)
+            reader = csv.DictReader(
+                csvfile, delimiter=",", fieldnames=sifts_res_header
+            )
     else:
         rows = pdbecursor.execute(
             "select * from sifts_xref_residue where entry_id=?", [pdbid]
@@ -198,6 +204,8 @@ def get_unpres_mapping(pdbid, res_csv, pdbecursor):
             )
         mon_id.setdefault(int(row["entity_id"]), {}).setdefault(
             row["struct_asym_id"], {}
-        ).setdefault(int(row["pdb_seq_id"]), {})[row["chem_comp_id"]] = row["pdb_one_letter_code"]
+        ).setdefault(int(row["pdb_seq_id"]), {})[row["chem_comp_id"]] = row[
+            "pdb_one_letter_code"
+        ]
 
     return data, mon_id

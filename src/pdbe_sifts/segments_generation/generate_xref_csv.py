@@ -158,11 +158,18 @@ def track_mapping_change(data, seg_file_name, res_file_name):
                 if entity in prev_info[pdb]:
                     if struct_asym_id in prev_info[pdb][entity]:
                         if accession in prev_info[pdb][entity][struct_asym_id]:
-                            if pdb_start in prev_info[pdb][entity][struct_asym_id][accession]:
-                                prev_seg_list = prev_info[pdb][entity][struct_asym_id][accession][
-                                    pdb_start
+                            if (
+                                pdb_start
+                                in prev_info[pdb][entity][struct_asym_id][
+                                    accession
                                 ]
-                                new_seg = ",".join([str(pdb_end), str(unp_start), str(unp_end)])
+                            ):
+                                prev_seg_list = prev_info[pdb][entity][
+                                    struct_asym_id
+                                ][accession][pdb_start]
+                                new_seg = ",".join(
+                                    [str(pdb_end), str(unp_start), str(unp_end)]
+                                )
                                 if new_seg in prev_seg_list:
                                     # same segments
                                     pass
@@ -173,7 +180,9 @@ def track_mapping_change(data, seg_file_name, res_file_name):
                                 delta_flag = True
                                 delta = "New pdb_start"
                         else:
-                            logger.info(f"UNP Accession changed, new accession {accession}")
+                            logger.info(
+                                f"UNP Accession changed, new accession {accession}"
+                            )
                             delta_flag = True
                             delta = "New unp accession"
 
@@ -237,7 +246,9 @@ def write_seg_csv(out_dir, pdbid, data, nf90_mode):
         # write the csv only when mapping is changed
         if not unp_delta:
             if data:
-                logger.info(f"Same mapping! Skipped writing csv for {file_name}")
+                logger.info(
+                    f"Same mapping! Skipped writing csv for {file_name}"
+                )
 
             # remove the del_file_name from previous week
             if os.path.exists(del_file_name):
@@ -274,7 +285,9 @@ def write_seg_csv(out_dir, pdbid, data, nf90_mode):
 
 def fix_values(row):
     # Replace commas with ; to not have to quote strings
-    row = [col.replace(",", ";") if isinstance(col, str) else col for col in row]
+    row = [
+        col.replace(",", ";") if isinstance(col, str) else col for col in row
+    ]
     # replace True with 0, False with 1
     row = [int(col) if isinstance(col, bool) else col for col in row]
     return row
@@ -299,7 +312,9 @@ def write_res_csv(out_dir, pdbid, data):
 
 
 @log_durations(logger.debug)
-def insert_residues(chain_obj: Chain, unp_object=None, iso_acc=None, canonical=False, conn=None):
+def insert_residues(
+    chain_obj: Chain, unp_object=None, iso_acc=None, canonical=False, conn=None
+):
     # 23 columns for residues
 
     if not chain_obj.is_chimera:
@@ -311,7 +326,9 @@ def insert_residues(chain_obj: Chain, unp_object=None, iso_acc=None, canonical=F
         if chain_obj.tax_id is not None and not chain_obj.is_chimera:
             tax_id = chain_obj.tax_id
         elif unp_obj and unp_obj.taxonomy:
-            tax_id = int(unp_obj.taxonomy[0]) if unp_obj.taxonomy != [] else None
+            tax_id = (
+                int(unp_obj.taxonomy[0]) if unp_obj.taxonomy != [] else None
+            )
         else:
             tax_id = None
 
@@ -337,7 +354,11 @@ def insert_residues(chain_obj: Chain, unp_object=None, iso_acc=None, canonical=F
                         mapped = True
                         unp_obj = u
                         iso = i
-                        tax_id = int(unp_obj.taxonomy[0]) if unp_obj.taxonomy != [] else None
+                        tax_id = (
+                            int(unp_obj.taxonomy[0])
+                            if unp_obj.taxonomy != []
+                            else None
+                        )
                         break
             else:
                 mapped = r.n in residue_map
@@ -359,7 +380,9 @@ def insert_residues(chain_obj: Chain, unp_object=None, iso_acc=None, canonical=F
             else:
                 best_flag = False
                 if mapped:
-                    unp_residue = unp_obj.seq_isoforms[iso][residue_map[r.n] - 1]
+                    unp_residue = unp_obj.seq_isoforms[iso][
+                        residue_map[r.n] - 1
+                    ]
 
                     # Remove old conflicts which don't exist anymore
                     # (due to a PDB or UniProt sequence update)
@@ -399,7 +422,11 @@ def insert_residues(chain_obj: Chain, unp_object=None, iso_acc=None, canonical=F
                         "Y" if r.observed else "N",
                         None,  # Future DB ENTRY
                         iso if mapped else None,
-                        (unp_obj.longName if unp_obj is not None and mapped else None),  # NAME
+                        (
+                            unp_obj.longName
+                            if unp_obj is not None and mapped
+                            else None
+                        ),  # NAME
                         r.rtype,  # TYPE
                         unp_residue if mapped else None,  # UNP_ONE_LETTER_CODE
                         r.oneL,
@@ -407,7 +434,9 @@ def insert_residues(chain_obj: Chain, unp_object=None, iso_acc=None, canonical=F
                         r.mh,
                         tax_id if mapped or unp_obj is None else None,  # TAX_ID
                         (
-                            iso in chain_obj.canonicals if iso is not None else canonical
+                            iso in chain_obj.canonicals
+                            if iso is not None
+                            else canonical
                         ),  # CANONICAL
                         iso,  # REFERENCE_ACC
                         best_flag,  # best mapping
@@ -422,23 +451,47 @@ def insert_residues(chain_obj: Chain, unp_object=None, iso_acc=None, canonical=F
 
 @log_durations(logger.debug)
 def process_chromophores(
-    chain_obj, canonical, iso, unp_obj: UNP, residue_map, tax_id, res, index, r, mapped
+    chain_obj,
+    canonical,
+    iso,
+    unp_obj: UNP,
+    residue_map,
+    tax_id,
+    res,
+    index,
+    r,
+    mapped,
 ):
     for idx, m in enumerate(residue_map[r.n]):
         unp_residue = unp_obj.seq_isoforms[iso][m - 1]
 
         # Remove old conflicts which don't exist anymore
         # (due to a PDB or UniProt sequence update)
-        if r.rtype == "Conflict" and idx <= (len(r.oneL) - 1) and r.oneL[idx] == unp_residue:
+        if (
+            r.rtype == "Conflict"
+            and idx <= (len(r.oneL) - 1)
+            and r.oneL[idx] == unp_residue
+        ):
             r.rtype = None
             # Make a conflict if they are different
-        elif r.rtype is None and idx <= (len(r.oneL) - 1) and r.oneL[idx] != unp_residue:
+        elif (
+            r.rtype is None
+            and idx <= (len(r.oneL) - 1)
+            and r.oneL[idx] != unp_residue
+        ):
             r.rtype = "Conflict"
         best_flag = (
-            chain_obj.best[chain_obj.canonicals[0]][0] == iso if not chain_obj.is_chimera else True
+            chain_obj.best[chain_obj.canonicals[0]][0] == iso
+            if not chain_obj.is_chimera
+            else True
         )  # best mapping
 
-        res_id = [chain_obj.pdbid, chain_obj.entity_id, chain_obj.struct_asym_id, r.n]
+        res_id = [
+            chain_obj.pdbid,
+            chain_obj.entity_id,
+            chain_obj.struct_asym_id,
+            r.n,
+        ]
         res_id = [str(item) for item in res_id]
         res_id = "_".join(res_id)
         res.append(
@@ -456,14 +509,20 @@ def process_chromophores(
                 "Y" if r.observed else "N",
                 None,  # DBENTRY_ID
                 iso if mapped else None,
-                unp_obj.longName if unp_obj is not None and mapped else None,  # NAME
+                unp_obj.longName
+                if unp_obj is not None and mapped
+                else None,  # NAME
                 r.rtype,  # TYPE
                 unp_residue if mapped else None,  # UNP_ONE_LETTER_CODE
                 r.oneL[idx] if idx <= (len(r.oneL) - 1) else r.oneL[0],
                 r.threeL,
                 r.mh,
                 tax_id if mapped or unp_obj is None else None,  # TAX_ID
-                (iso in chain_obj.canonicals if iso is not None else canonical),  # CANONICAL
+                (
+                    iso in chain_obj.canonicals
+                    if iso is not None
+                    else canonical
+                ),  # CANONICAL
                 iso,  # REFERENCE_ACC
                 best_flag,
                 res_id,
@@ -479,7 +538,9 @@ def insert_mappings(out_dir, entry_obj: Entry, nf90_mode, conn=None):
     pdbid = entry_obj.pdbid
     for _, chain_obj in list(entry_obj.chains.items()):
         if not nf90_mode and chain_obj.skip:
-            logger.warning(f"Told to skip chain {chain_obj.auth_asym_id}. Skipping")
+            logger.warning(
+                f"Told to skip chain {chain_obj.auth_asym_id}. Skipping"
+            )
             continue
         logger.info(chain_obj.mappings)
         # If there are no segments OR the canonical couldn't be mapped
@@ -524,7 +585,9 @@ def insert_mappings(out_dir, entry_obj: Entry, nf90_mode, conn=None):
             )
 
             if not nf90_mode:
-                xref_residue.append(insert_residues(chain_obj, canonical=True, conn=conn))
+                xref_residue.append(
+                    insert_residues(chain_obj, canonical=True, conn=conn)
+                )
 
         # A shared one for all the accessions
         if chain_obj.is_chimera:
@@ -667,7 +730,9 @@ def process_non_chimera(
         )
 
         col_id += 1
-        blanks, _ = align.remove_range_alignment(blanks, blanks, pdb_range, "", False)
+        blanks, _ = align.remove_range_alignment(
+            blanks, blanks, pdb_range, "", False
+        )
 
     if not chain_obj.is_chimera:
         for b in blanks:
@@ -711,7 +776,9 @@ def process_non_chimera(
 
         if not nf90_mode:
             xref_residue.append(
-                insert_residues(chain_obj, unp_object=unp_obj, iso_acc=iso, conn=conn)
+                insert_residues(
+                    chain_obj, unp_object=unp_obj, iso_acc=iso, conn=conn
+                )
             )
 
     return blanks, col_id

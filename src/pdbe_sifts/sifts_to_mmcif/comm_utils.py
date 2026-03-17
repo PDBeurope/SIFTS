@@ -39,9 +39,9 @@ def get_ent_chains(a, b, c, d):
     res_list = {}
     for i in range(0, len(a)):
         my_chain.setdefault(int(a[i]), []).append(b[i])
-        res_list.setdefault(int(a[i]), {}).setdefault(b[i], {}).setdefault(int(c[i]), {})[
-            "mon_id"
-        ] = d[i]
+        res_list.setdefault(int(a[i]), {}).setdefault(b[i], {}).setdefault(
+            int(c[i]), {}
+        )["mon_id"] = d[i]
 
     return uniq_val(my_chain), res_list
 
@@ -90,7 +90,11 @@ def modify_atomsite(atom_site: dict[str, list], sifts_data):
 
         db_name, unp_res, unp_acc, unp_num = None, None, None, None
 
-        if ent in sifts_data and asym in sifts_data[ent] and resnum in sifts_data[ent][asym]:
+        if (
+            ent in sifts_data
+            and asym in sifts_data[ent]
+            and resnum in sifts_data[ent][asym]
+        ):
             if len(sifts_data[ent][asym][resnum]) == 1:
                 tar = sifts_data[ent][asym][resnum][0]
 
@@ -98,13 +102,18 @@ def modify_atomsite(atom_site: dict[str, list], sifts_data):
                 unp_res, unp_acc, unp_num = tar[2], tar[3], tar[4]
 
             else:
-                tar1 = [f"{item[2]}_{item[3]}_{item[4]}" for item in sifts_data[ent][asym][resnum]]
+                tar1 = [
+                    f"{item[2]}_{item[3]}_{item[4]}"
+                    for item in sifts_data[ent][asym][resnum]
+                ]
                 tar1 = list(set(tar1))
                 if len(tar1) == 1:
                     db_name = "UNP"
                     unp_res, unp_acc, unp_num = tar1[0].split("_")
                 else:
-                    logger.debug(f"Chromophorore residue: {sifts_data[ent][asym][resnum]}")
+                    logger.debug(
+                        f"Chromophorore residue: {sifts_data[ent][asym][resnum]}"
+                    )
                     # these are chromophores - where one pdb_seq_id
                     # residue may be mapped to more than one unp_seq_id
                     # these are ignored at the moments
@@ -135,16 +144,20 @@ def expand_unp_seg_to_resi(my_res, sifts_seg_inst):
                             region[3],
                         )
 
-                        my_unp_res = [item for item in all_res if start <= item <= end]
+                        my_unp_res = [
+                            item for item in all_res if start <= item <= end
+                        ]
                         for resi in my_unp_res:
-                            my_unp.setdefault(entity, {}).setdefault(chain, {}).setdefault(
-                                resi, {}
-                            )[acc] = [seg_id, inst_id]
+                            my_unp.setdefault(entity, {}).setdefault(
+                                chain, {}
+                            ).setdefault(resi, {})[acc] = [seg_id, inst_id]
 
     return my_unp
 
 
-def get_xref_db(my_res, sifts_data, sifts_seg_inst, my_obs, my_mh_id, my_mon_info):
+def get_xref_db(
+    my_res, sifts_data, sifts_seg_inst, my_obs, my_mh_id, my_mon_info
+):
     mega_list = [[] for _ in range(19)]
     expa_sifts = expand_unp_seg_to_resi(my_res, sifts_seg_inst)
 
@@ -168,7 +181,9 @@ def get_xref_db(my_res, sifts_data, sifts_seg_inst, my_obs, my_mh_id, my_mon_inf
                         unp_num = make_opt(tag[4])
                         res_type = make_opt(tag[5])
                         mh_id = make_opt(tag[6])
-                        unp_seg_id, unp_inst_id = expa_sifts[entity][chain][res][unp_acc]
+                        unp_seg_id, unp_inst_id = expa_sifts[entity][chain][
+                            res
+                        ][unp_acc]
                         xx = [
                             entity,
                             chain,
@@ -192,7 +207,9 @@ def get_xref_db(my_res, sifts_data, sifts_seg_inst, my_obs, my_mh_id, my_mon_inf
                         ]
                         [
                             my_list.append(my_val)
-                            for my_list, my_val in zip(mega_list, xx, strict=False)
+                            for my_list, my_val in zip(
+                                mega_list, xx, strict=False
+                            )
                         ]
                         boo += 1
 
@@ -208,9 +225,13 @@ def check_output_mmcif(file1, file2):
         a_cat_table = block_a.get_mmcif_category(cat)
         b_cat_table = block_b.get_mmcif_category(cat)
         if "_atom_site" in cat:
-            common = set(a_cat_table.keys()).intersection(set(b_cat_table.keys()))
+            common = set(a_cat_table.keys()).intersection(
+                set(b_cat_table.keys())
+            )
             for key in common:
-                assert a_cat_table[key] == b_cat_table[key], f"{key} for {cat} differs"
+                assert (
+                    a_cat_table[key] == b_cat_table[key]
+                ), f"{key} for {cat} differs"
         else:
             assert a_cat_table and b_cat_table and a_cat_table == b_cat_table
 
@@ -227,7 +248,9 @@ def check_sifts_mmcif(file1, file2, category_list):
         b_cat_table = block_b.get_mmcif_category(cat)
 
         if "_atom_site" in cat:
-            common = set(a_cat_table.keys()).intersection(set(b_cat_table.keys()))
+            common = set(a_cat_table.keys()).intersection(
+                set(b_cat_table.keys())
+            )
             for key in common:
                 assert a_cat_table[key] == b_cat_table[key]
         else:

@@ -110,7 +110,8 @@ def fetch_uniprot_batch(accessions: list[str]) -> list[dict]:
 
 def fetch_accessions(all_accessions, max_workers=4, batch_size=100):
     batches = [
-        all_accessions[i : i + batch_size] for i in range(0, len(all_accessions), batch_size)
+        all_accessions[i : i + batch_size]
+        for i in range(0, len(all_accessions), batch_size)
     ]
 
     results = []
@@ -200,7 +201,9 @@ class UNP:
         """
         cache = bool(os.getenv("SIFTS_NO_CACHE_ALL", True))
 
-        pickle_file_path = os.path.join(get_uniprot_cache_dir(accession), f"{accession}.pkl")
+        pickle_file_path = os.path.join(
+            get_uniprot_cache_dir(accession), f"{accession}.pkl"
+        )
 
         loaded = False
         if cache and Path(pickle_file_path).exists():
@@ -245,14 +248,22 @@ class UNP:
         xml_file = fetch_uniprot_file(accession, "xml")
         doc = self.parse_xml(xml_file)
 
-        accessions = list(map(str, doc[0].xpath(".//*[name()='accession']/text()")))
+        accessions = list(
+            map(str, doc[0].xpath(".//*[name()='accession']/text()"))
+        )
         if not accessions:
-            raise ValueError(f"Invalid file for {accession}. No accessions found.")
+            raise ValueError(
+                f"Invalid file for {accession}. No accessions found."
+            )
 
         self.accession = accession
-        accessions = list(map(str, doc[0].xpath(".//*[name()='accession']/text()")))
+        accessions = list(
+            map(str, doc[0].xpath(".//*[name()='accession']/text()"))
+        )
         if not accessions:
-            raise ValueError(f"Invalid file for {accession}. No accessions found.")
+            raise ValueError(
+                f"Invalid file for {accession}. No accessions found."
+            )
 
         self.accession = accession
         self._populate_fields(doc)
@@ -269,11 +280,15 @@ class UNP:
 
     def _populate_fields(self, doc):
         uniprot = doc[0]
-        self.secondary_accessions = list(map(str, uniprot.xpath(".//*[name()='accession']/text()")))
+        self.secondary_accessions = list(
+            map(str, uniprot.xpath(".//*[name()='accession']/text()"))
+        )
         self.accession = str(self.secondary_accessions[0])
         del self.secondary_accessions[0]
 
-        about_sequence = uniprot.xpath(".//*[name()='sequence' and ./@length!='']")[0]
+        about_sequence = uniprot.xpath(
+            ".//*[name()='sequence' and ./@length!='']"
+        )[0]
         self.sequence = about_sequence.xpath("./text()")[0].replace("\n", "")
 
         self.date_seq_update = list(
@@ -289,7 +304,9 @@ class UNP:
         self.seq_molWeight = str(about_sequence.xpath("./@mass")[0])
         self.seq_checksum = str(about_sequence.xpath("./@checksum")[0])
 
-        self.keywords = [kw.upper() for kw in uniprot.xpath(".//*[name()='keyword']/text()")]
+        self.keywords = [
+            kw.upper() for kw in uniprot.xpath(".//*[name()='keyword']/text()")
+        ]
 
         if len(self.keywords) < 1:
             self.keywords = None
@@ -309,7 +326,10 @@ class UNP:
                 int(chainIndices[0].xpath(".//*[name()='end']/@position")[0]),
             )
 
-        self.molName = [name.upper() for name in uniprot.xpath(".//*[name()='protein']//text()")]
+        self.molName = [
+            name.upper()
+            for name in uniprot.xpath(".//*[name()='protein']//text()")
+        ]
 
         recommendedNames = uniprot.xpath(".//*[name()='recommendedName']")
         alternativeNames = uniprot.xpath(".//*[name()='alternativeName']")
@@ -344,7 +364,9 @@ class UNP:
         about_dbreference = uniprot.xpath(".//*[name()='dbReference']")
         for ref in about_dbreference:
             ref_type = ref.xpath("./@type")[0]
-            self.dbreferences.setdefault(ref_type, []).append(str(ref.xpath("./@id")[0]))
+            self.dbreferences.setdefault(ref_type, []).append(
+                str(ref.xpath("./@id")[0])
+            )
 
         about_features = uniprot.xpath(".//*[name()='feature']")
         self._extract_features(about_features)
@@ -361,12 +383,16 @@ class UNP:
     def _extract_taxonomy(self, about_organism):
         self.organism = about_organism[0].xpath(
             ".//*[name()='name'][@type='scientific']/text()"
-        ) + about_organism[0].xpath(".//*[name()='name'][@type='common']/text()")
+        ) + about_organism[0].xpath(
+            ".//*[name()='name'][@type='common']/text()"
+        )
 
         self.organism = list(map(str, self.organism))
         self.taxonomy = [
             str(tax.xpath("./@id")[0])
-            for tax in about_organism[0].xpath(".//*[name()='dbReference'][@type='NCBI Taxonomy']")
+            for tax in about_organism[0].xpath(
+                ".//*[name()='dbReference'][@type='NCBI Taxonomy']"
+            )
         ]
 
     def _extract_features(self, about_features):
@@ -391,8 +417,12 @@ class UNP:
                     original = ""
                     variation = ""
                 else:
-                    original = str(feat.xpath(".//*[name()='original']/text()")[0])
-                    variation = str(feat.xpath(".//*[name()='variation']/text()")[0])
+                    original = str(
+                        feat.xpath(".//*[name()='original']/text()")[0]
+                    )
+                    variation = str(
+                        feat.xpath(".//*[name()='variation']/text()")[0]
+                    )
 
                 if feat.xpath("./@evidence") == []:
                     evidence = None
@@ -405,7 +435,9 @@ class UNP:
                     begin = location.xpath(".//*[name()='begin']/@position")[0]
                     end = location.xpath(".//*[name()='end']/@position")[0]
                 else:
-                    begin = location.xpath(".//*[name()='position']/@position")[0]
+                    begin = location.xpath(".//*[name()='position']/@position")[
+                        0
+                    ]
                     end = begin
 
                 if feat_type in [
@@ -425,7 +457,11 @@ class UNP:
                     )
                 elif feat_type == "modified residue":
                     self.features[feat_type].append(
-                        {"id": id_value, "evidence": evidence, "position": int(begin)}
+                        {
+                            "id": id_value,
+                            "evidence": evidence,
+                            "position": int(begin),
+                        }
                     )
 
     def _extract_comments(self, about_comments):
@@ -448,9 +484,13 @@ class UNP:
                     self.isoforms[str(isoid)] = spliceids
 
             if cc.xpath(".//*[name()='text']/text()") != []:
-                self.comments[cc_type].append(str(cc.xpath(".//*[name()='text']/text()")[0]))
+                self.comments[cc_type].append(
+                    str(cc.xpath(".//*[name()='text']/text()")[0])
+                )
             if cc.xpath(".//*[name()='link']/@uri") != []:
-                self.comments[cc_type].append(str(cc.xpath(".//*[name()='link']/@uri")[0]))
+                self.comments[cc_type].append(
+                    str(cc.xpath(".//*[name()='link']/@uri")[0])
+                )
             if cc.xpath(".//*[name()='subcellularLocation']") != []:
                 self.comments[cc_type].append(
                     str(
@@ -467,24 +507,32 @@ class UNP:
 
             if (
                 signal_peptide.xpath(".//*[name()='begin']/@status")
-                and signal_peptide.xpath(".//*[name()='begin']/@status")[0] == "unknown"
+                and signal_peptide.xpath(".//*[name()='begin']/@status")[0]
+                == "unknown"
             ):
                 begin = None
             # if begin == end then they sometimes use position/position
             elif signal_peptide.xpath(".//*[name()='position']/@position"):
-                begin = int(signal_peptide.xpath(".//*[name()='position']/@position")[0])
+                begin = int(
+                    signal_peptide.xpath(".//*[name()='position']/@position")[0]
+                )
             else:
-                begin = int(signal_peptide.xpath(".//*[name()='begin']/@position")[0])
+                begin = int(
+                    signal_peptide.xpath(".//*[name()='begin']/@position")[0]
+                )
 
             if (
                 signal_peptide.xpath(".//*[name()='end']/@status")
-                and signal_peptide.xpath(".//*[name()='end']/@status")[0] == "unknown"
+                and signal_peptide.xpath(".//*[name()='end']/@status")[0]
+                == "unknown"
             ):
                 end = None
             elif signal_peptide.xpath(".//*[name()='position']/@position"):
                 end = begin
             else:
-                end = int(signal_peptide.xpath(".//*[name()='end']/@position")[0])
+                end = int(
+                    signal_peptide.xpath(".//*[name()='end']/@position")[0]
+                )
 
             signal = (begin, end)
 
@@ -520,7 +568,11 @@ class UNP:
         newSeq = self.sequence
 
         for splice in splices:
-            newSeq = newSeq[: splice["begin"] - 1] + splice["variation"] + newSeq[splice["end"] :]
+            newSeq = (
+                newSeq[: splice["begin"] - 1]
+                + splice["variation"]
+                + newSeq[splice["end"] :]
+            )
 
         return newSeq
 
@@ -591,10 +643,14 @@ class UNP:
         return self.longName if self.longName else False
 
     def hasSpliceVariants(self):
-        return bool(self.features and "splice variant" in list(self.features.keys()))
+        return bool(
+            self.features and "splice variant" in list(self.features.keys())
+        )
 
     def hasVariants(self):
-        return bool(self.features and "sequence variant" in list(self.features.keys()))
+        return bool(
+            self.features and "sequence variant" in list(self.features.keys())
+        )
 
     def getSpliceVariants(self):
         if self.hasSpliceVariants():
@@ -618,13 +674,19 @@ class UNP:
         return self.longName
 
     def hasSecondaryAccessions(self):
-        return bool(self.secondary_accessions and self.secondary_accessions != [])
+        return bool(
+            self.secondary_accessions and self.secondary_accessions != []
+        )
 
     def hasModifiedResidues(self):
-        return bool(self.features and "modified residue" in list(self.features.keys()))
+        return bool(
+            self.features and "modified residue" in list(self.features.keys())
+        )
 
     def hasMutagenesisSite(self):
-        return bool(self.features and "mutagenesis site" in list(self.features.keys()))
+        return bool(
+            self.features and "mutagenesis site" in list(self.features.keys())
+        )
 
     def getFeatures(self, idx):
         features = {}

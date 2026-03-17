@@ -63,7 +63,9 @@ class BlastP(AlignmentSearch):
     def _process(self):
         """Run the BLASTP search using subprocess."""
         if shutil.which("blastp") is None:
-            raise FileNotFoundError("blastp command not found. Please install BLAST+.")
+            raise FileNotFoundError(
+                "blastp command not found. Please install BLAST+."
+            )
 
         cmd = [
             "blastp",
@@ -85,7 +87,9 @@ class BlastP(AlignmentSearch):
         try:
             subprocess.run(cmd, check=True)
         except subprocess.CalledProcessError as e:
-            logger.error(f"blastp execution failed with exit code {e.returncode}")
+            logger.error(
+                f"blastp execution failed with exit code {e.returncode}"
+            )
             raise
 
 

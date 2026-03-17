@@ -87,7 +87,10 @@ class FastaBuilder:
 
     @staticmethod
     def _write_fasta(
-        entity_seq_tax_dict: dict, entry_name: str, fasta_path: Path, mode: str = "w"
+        entity_seq_tax_dict: dict,
+        entry_name: str,
+        fasta_path: Path,
+        mode: str = "w",
     ) -> Path:
         """Write entity sequences to a FASTA file.
 
@@ -149,16 +152,23 @@ class FastaBuilder:
         fasta_path.unlink(missing_ok=True)
 
         file_paths = [
-            line.strip() for line in self.input_path.read_text().splitlines() if line.strip()
+            line.strip()
+            for line in self.input_path.read_text().splitlines()
+            if line.strip()
         ]
-        logger.info(f"Processing {len(file_paths)} CIF files from {self.input_path}")
+        logger.info(
+            f"Processing {len(file_paths)} CIF files from {self.input_path}"
+        )
 
         for i in range(0, len(file_paths), self.batch_size):
             batch = file_paths[i : i + self.batch_size]
             results = []
 
             with ProcessPoolExecutor(max_workers=self.threads) as pool:
-                futures = {pool.submit(self._process_single_cif, fp): fp for fp in batch}
+                futures = {
+                    pool.submit(self._process_single_cif, fp): fp
+                    for fp in batch
+                }
                 for fut in as_completed(futures):
                     res, warn = fut.result()
                     if warn:

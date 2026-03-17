@@ -82,8 +82,12 @@ class CcdFile:
             atom = {
                 "comp_id": cif_loop.loop[i, columns["_chem_comp_atom.comp_id"]],
                 "atom_id": cif_loop.loop[i, columns["_chem_comp_atom.atom_id"]],
-                "alt_atom_id": cif_loop.loop[i, columns["_chem_comp_atom.alt_atom_id"]],
-                "type_symbol": cif_loop.loop[i, columns["_chem_comp_atom.type_symbol"]],
+                "alt_atom_id": cif_loop.loop[
+                    i, columns["_chem_comp_atom.alt_atom_id"]
+                ],
+                "type_symbol": cif_loop.loop[
+                    i, columns["_chem_comp_atom.type_symbol"]
+                ],
                 "pdbx_backbone_atom_flag": cif_loop.loop[
                     i, columns["_chem_comp_atom.pdbx_backbone_atom_flag"]
                 ],
@@ -99,7 +103,9 @@ class CcdFile:
                 "pdbx_component_comp_id": cif_loop.loop[
                     i, columns["_chem_comp_atom.pdbx_component_comp_id"]
                 ],
-                "pdbx_ordinal": cif_loop.loop[i, columns["_chem_comp_atom.pdbx_ordinal"]],
+                "pdbx_ordinal": cif_loop.loop[
+                    i, columns["_chem_comp_atom.pdbx_ordinal"]
+                ],
             }
             atoms[i] = atom
         self.atoms = atoms
@@ -107,9 +113,15 @@ class CcdFile:
     def extract_ters(self):
         atoms_extracted = {}
         for atom, descrip in self.atoms.items():
-            if descrip["pdbx_n_terminal_atom_flag"] == "Y" and descrip["type_symbol"] == "N":
+            if (
+                descrip["pdbx_n_terminal_atom_flag"] == "Y"
+                and descrip["type_symbol"] == "N"
+            ):
                 atoms_extracted["n_ter"] = (atom, descrip)
-            if descrip["pdbx_c_terminal_atom_flag"] == "Y" and descrip["type_symbol"] == "C":
+            if (
+                descrip["pdbx_c_terminal_atom_flag"] == "Y"
+                and descrip["type_symbol"] == "C"
+            ):
                 atoms_extracted["c_ter"] = (atom, descrip)
         return atoms_extracted
 

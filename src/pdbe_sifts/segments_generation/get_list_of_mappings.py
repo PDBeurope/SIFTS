@@ -45,7 +45,9 @@ def get_selection_queries(entry):
     return sql
 
 
-def get_curated_db_mappings(pdbid, chains: Iterable, conn, chain_to_entity: Mapping[str, str]):
+def get_curated_db_mappings(
+    pdbid, chains: Iterable, conn, chain_to_entity: Mapping[str, str]
+):
     """Get mappings from database.
 
     Args:
@@ -60,7 +62,9 @@ def get_curated_db_mappings(pdbid, chains: Iterable, conn, chain_to_entity: Mapp
 
     rows = conn.execute(sql)
     entity_mappings: Mapping[str, list[SMapping]] = {}
-    for key, mapping in itertools.groupby(iter(rows.fetchall()), key=itemgetter(0, 1)):
+    for key, mapping in itertools.groupby(
+        iter(rows.fetchall()), key=itemgetter(0, 1)
+    ):
         _, entity = key
         entity_mapping: list[SMapping] = []
         for _, _, accession, target_start, target_end in mapping:
@@ -98,7 +102,9 @@ def get_curated_db_mappings(pdbid, chains: Iterable, conn, chain_to_entity: Mapp
     # Warn about DB chains not in our poly chain list
     for chain in list(mappings.keys()):
         if chain not in chains:
-            logger.warning(f"Database returned a chain {chain} that's not a poly?")
+            logger.warning(
+                f"Database returned a chain {chain} that's not a poly?"
+            )
             del mappings[chain]
 
     return mappings

@@ -14,11 +14,15 @@ from pdbe_sifts.base.exceptions import AccessionNotFound, ObsoleteUniProtError
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.paths import uniprot_cache_dir as get_uniprot_cache_dir
 
-UNIPROT_REGEX = r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}"
+UNIPROT_REGEX = (
+    r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}"
+)
 UNIPROT_API_BASE_URL = "https://rest.uniprot.org/uniprotkb"
 
 
-def fetch_uniprot_file(uniprot_id: str, file_type: str, fail_silently=False) -> str:
+def fetch_uniprot_file(
+    uniprot_id: str, file_type: str, fail_silently=False
+) -> str:
     """Fetches Uniprot file for a given Uniprot ID.
 
     First checks cache directory for the file. If not found, fetches from Uniprot.
@@ -37,7 +41,9 @@ def fetch_uniprot_file(uniprot_id: str, file_type: str, fail_silently=False) -> 
     try:
         unp_dir = get_uniprot_cache_dir(uniprot_id)
         if file_type not in ["xml", "json", "fasta"]:
-            raise ValueError(f"Invalid file type {file_type}. Must be one of xml, json, fasta")
+            raise ValueError(
+                f"Invalid file type {file_type}. Must be one of xml, json, fasta"
+            )
         filename = f"{uniprot_id}.{file_type}"
         unp_file = Path(unp_dir, filename)
 
@@ -95,7 +101,9 @@ def _check_json_response(response: requests.Response) -> None:
     content = response.json()
     try:
         if content["entryType"] == "Inactive":
-            raise ObsoleteUniProtError(f"Uniprot entry {response.url} is deleted")
+            raise ObsoleteUniProtError(
+                f"Uniprot entry {response.url} is deleted"
+            )
     except KeyError:
         raise AccessionNotFound(f"{response.url} response is invalid") from None
 
@@ -115,7 +123,9 @@ def _check_xml_contents(response: requests.Response) -> None:
 def _check_fasta_contents(response: requests.Response) -> None:
     """Checks if the response is a valid FASTA by size."""
     if len(response.text) == 0:
-        raise ObsoleteUniProtError(f"{response.url} is blank. Entry is probably deleted.")
+        raise ObsoleteUniProtError(
+            f"{response.url} is blank. Entry is probably deleted."
+        )
 
 
 def get_date():
@@ -161,7 +171,9 @@ def get_cpu_count():
 
 
 class SiftsAction(argparse.Action):
-    def __init__(self, envvar=None, confvar=None, required=False, default=None, **kwargs):
+    def __init__(
+        self, envvar=None, confvar=None, required=False, default=None, **kwargs
+    ):
         if not default:
             if envvar and envvar in os.environ:
                 default = os.environ[envvar]

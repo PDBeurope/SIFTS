@@ -60,7 +60,9 @@ def residue_to_dict(r):
         "tax_id": r.tax_id,
         "canonical_acc": bool(r.canonical_acc),
         "reference_acc": r.reference_acc,
-        "best_mapping": (bool(r.best_mapping) if r.best_mapping is not None else None),
+        "best_mapping": (
+            bool(r.best_mapping) if r.best_mapping is not None else None
+        ),
         "residue_id": r.residue_id,
     }
 
@@ -193,10 +195,14 @@ class SiftsDB:
         # self._bulk_load_table(
         #     "sifts_xref_segment", f"{base}/*_seg.csv.gz", "%_nf90_seg.csv.gz"
         # )
-        self._bulk_load_table("sifts_xref_residue", f"{base}/*_res.csv.gz", "%_nf90_res.csv.gz")
+        self._bulk_load_table(
+            "sifts_xref_residue", f"{base}/*_res.csv.gz", "%_nf90_res.csv.gz"
+        )
         logger.info("DuckDB bulk load complete.")
 
-    def _bulk_load_table(self, table: str, glob_pattern: str, exclude: str) -> None:
+    def _bulk_load_table(
+        self, table: str, glob_pattern: str, exclude: str
+    ) -> None:
         files = self.conn.execute(
             "SELECT list(file) FROM glob(?) WHERE NOT file LIKE ?",
             [glob_pattern, exclude],

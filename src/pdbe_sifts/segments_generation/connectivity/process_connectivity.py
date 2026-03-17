@@ -129,11 +129,15 @@ class ConnectivityCheck:
             self.r1_ters_coordinates = None
             self.r2_ters_coordinates = None
         else:
-            self.r1_ters_coordinates = self.chain_obj.mmcif.get_ters_coordinates_of_residue(
-                self.chain_obj.struct_asym_id, r1.n, self.r1_ccd_ters
+            self.r1_ters_coordinates = (
+                self.chain_obj.mmcif.get_ters_coordinates_of_residue(
+                    self.chain_obj.struct_asym_id, r1.n, self.r1_ccd_ters
+                )
             )
-            self.r2_ters_coordinates = self.chain_obj.mmcif.get_ters_coordinates_of_residue(
-                self.chain_obj.struct_asym_id, r2.n, self.r2_ccd_ters
+            self.r2_ters_coordinates = (
+                self.chain_obj.mmcif.get_ters_coordinates_of_residue(
+                    self.chain_obj.struct_asym_id, r2.n, self.r2_ccd_ters
+                )
             )
 
     def check_res_conn(self, r1, r2):
@@ -148,10 +152,18 @@ class ConnectivityCheck:
         # This discrepancy can cause index out-of-range errors.
         # For example, in entry 3EVP, the alignment boundary is at 245, while chain.residues has only 243 elements.
         r1_shift = sum(
-            [len(r.oneL) - 1 for r in self.chain_obj.residues[:r1] if r.rtype == "Chromophore"]
+            [
+                len(r.oneL) - 1
+                for r in self.chain_obj.residues[:r1]
+                if r.rtype == "Chromophore"
+            ]
         )
         r2_shift = sum(
-            [len(r.oneL) - 1 for r in self.chain_obj.residues[:r2] if r.rtype == "Chromophore"]
+            [
+                len(r.oneL) - 1
+                for r in self.chain_obj.residues[:r2]
+                if r.rtype == "Chromophore"
+            ]
         )
         r1 = r1 - r1_shift
         r2 = r2 - r2_shift
@@ -166,28 +178,41 @@ class ConnectivityCheck:
         if mode == "start":
             shift = subseq.count("-")
             limit = r1 + aligned_res_bound - shift - 1
-            residues_to_check = [r.n for r in self.chain_obj.residues[: limit + 1]]
+            residues_to_check = [
+                r.n for r in self.chain_obj.residues[: limit + 1]
+            ]
             for i in range(len(residues_to_check) - 1):
-                connected = self.check_res_conn(residues_to_check[i], residues_to_check[i + 1])
+                connected = self.check_res_conn(
+                    residues_to_check[i], residues_to_check[i + 1]
+                )
                 if not connected:
                     return subseq
             subseq = "".join(subseq)
             dash_to_add = subseq.count("-")
             residues = "-" * dash_to_add + "".join(subseq.split("-"))
         else:
-            from_res = aligned_res_bound - sum([1 for r in subseq[:] if r != "-"]) - 1
+            from_res = (
+                aligned_res_bound - sum([1 for r in subseq[:] if r != "-"]) - 1
+            )
             residues_to_check = [
-                r.n for r in self.chain_obj.residues[from_res : aligned_res_bound + 1]
+                r.n
+                for r in self.chain_obj.residues[
+                    from_res : aligned_res_bound + 1
+                ]
             ]
             for i in range(len(residues_to_check) - 1):
-                connected = self.check_res_conn(residues_to_check[i], residues_to_check[i + 1])
+                connected = self.check_res_conn(
+                    residues_to_check[i], residues_to_check[i + 1]
+                )
                 if not connected:
                     return subseq
             subseq = "".join(subseq)
             residues = "".join(subseq.split("-"))
         return list(residues)
 
-    def subseq_find_midgap(self, pdb_seq, new_pdb_seq, res_first, res_second, start_res):
+    def subseq_find_midgap(
+        self, pdb_seq, new_pdb_seq, res_first, res_second, start_res
+    ):
         """
         Function to refine an extended gap between two continuous regions, where more than 5 PDB residues are aligned (to a UniProt residue).
 
@@ -217,7 +242,9 @@ class ConnectivityCheck:
         pos_start_subseq = one_res_matches[0][1]
         pos_end_subseq = one_res_matches[-1][1]
         # Append the next residue in the continuous region to verify connectivity with the last residue in the gap
-        one_res_matches.append((pdb_seq[res_second + 1], len(subseq), len(subseq)))
+        one_res_matches.append(
+            (pdb_seq[res_second + 1], len(subseq), len(subseq))
+        )
         # Convert subsequence positions to full sequence positions (pdb_seq indexes i.e the aligned sequence)
         pos_start_pdbseq = res_first + pos_start_subseq + 1
         pos_end_pdbseq = res_first + pos_end_subseq + 1
@@ -238,7 +265,9 @@ class ConnectivityCheck:
                 # If connectivity is broken, adjust alignment refinement boundaries
                 pos_start_subseq = one_res_matches[i][1]
                 # Adjust starting index to exclude non-connected residues
-                rconn_beg = pos_start_subseq - subseq[: one_res_matches[i][1]].count("-")
+                rconn_beg = pos_start_subseq - subseq[
+                    : one_res_matches[i][1]
+                ].count("-")
                 # Update position in pdb_seq to ensure correct sequence is returned if broken at the first step
                 pos_start_pdbseq = pos_start_subseq + res_first + 1
                 if pos_start_pdbseq == res_second:
@@ -249,7 +278,9 @@ class ConnectivityCheck:
             residues = "".join(gap_matches)
             residues = residues[rconn_beg:]
             dash_to_add = len(subseq[pos_start_subseq:]) - len(residues)
-            new_subseq = subseq[:pos_start_subseq] + "-" * dash_to_add + residues
+            new_subseq = (
+                subseq[:pos_start_subseq] + "-" * dash_to_add + residues
+            )
             new_pdb_seq[res_first + 1 : res_second] = new_subseq
         return new_pdb_seq
 
@@ -282,7 +313,9 @@ class ConnectivityCheck:
                 and not overlapping(
                     pdb_cleaned + [bound]
                 )  # check overlap with all included pdb chunks
-                and not overlapping(unp_cleaned + [bounds_unp[i]])  # same for unp
+                and not overlapping(
+                    unp_cleaned + [bounds_unp[i]]
+                )  # same for unp
             ):
                 alns_cleaned.append(alns[i])
                 pdb_cleaned.append(bound)
@@ -347,9 +380,13 @@ class ConnectivityCheck:
             last_seq = new_pdb_seq[last_cons + 1 :]
             middle_seq = new_pdb_seq[first_cons : last_cons + 1]
             if handle_beg:
-                beg_seq = self.boundaries_check(beg_seq, "start", first_cons, start_res)
+                beg_seq = self.boundaries_check(
+                    beg_seq, "start", first_cons, start_res
+                )
             if handle_end:
-                last_seq = self.boundaries_check(last_seq, "end", last_cons, al[1]._al_stop)
+                last_seq = self.boundaries_check(
+                    last_seq, "end", last_cons, al[1]._al_stop
+                )
             new_pdb_seq = beg_seq + middle_seq + last_seq
 
         alignment_seq = "".join(new_pdb_seq)

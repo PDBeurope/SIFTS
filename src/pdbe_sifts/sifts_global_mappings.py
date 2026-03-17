@@ -94,18 +94,26 @@ class SiftsGlobalMappings:
     # Search
     # ------------------------------------------------------------------
 
-    def mmseqs_search(self, entry_id: str, fasta_path: Path, result_dir: Path) -> Path:
+    def mmseqs_search(
+        self, entry_id: str, fasta_path: Path, result_dir: Path
+    ) -> Path:
         """Run an MMseqs2 search."""
         output_path = result_dir / f"hits_{entry_id}.tsv"
         tmp_dir = result_dir / f"tmp_{entry_id}"
         tmp_dir.mkdir(parents=True, exist_ok=True)
-        MmSearch(fasta_path, self.db_file, output_path, tmp_dir, self.threads).run()
+        MmSearch(
+            fasta_path, self.db_file, output_path, tmp_dir, self.threads
+        ).run()
         return output_path
 
-    def blastp_search(self, entry_id: str, fasta_path: Path, result_dir: Path) -> Path:
+    def blastp_search(
+        self, entry_id: str, fasta_path: Path, result_dir: Path
+    ) -> Path:
         """Run a BLASTP search."""
         output_path = result_dir / f"hits_{entry_id}.tsv"
-        BlastP(fasta_path, self.db_file, output_path, threads=self.threads).run()
+        BlastP(
+            fasta_path, self.db_file, output_path, threads=self.threads
+        ).run()
         return output_path
 
     def search(self, entry_id: str, fasta_path: Path, result_dir: Path) -> Path:
@@ -114,7 +122,9 @@ class SiftsGlobalMappings:
             return self.mmseqs_search(entry_id, fasta_path, result_dir)
         elif self.tool == "blastp":
             return self.blastp_search(entry_id, fasta_path, result_dir)
-        raise ValueError(f"Unsupported tool: {self.tool!r} (expected 'mmseqs' or 'blastp')")
+        raise ValueError(
+            f"Unsupported tool: {self.tool!r} (expected 'mmseqs' or 'blastp')"
+        )
 
     # ------------------------------------------------------------------
     # Main pipeline
@@ -149,7 +159,9 @@ class SiftsGlobalMappings:
         ).parse()
 
         end = timer()
-        logger.info(f"Total time (extraction → ranked mappings): {end - start:.2f} s.")
+        logger.info(
+            f"Total time (extraction → ranked mappings): {end - start:.2f} s."
+        )
 
 
 def run():
