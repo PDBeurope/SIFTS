@@ -425,14 +425,11 @@ class ConnectivityCheck:
                         logger.info(
                             f"CONNECTIVITY_SEG:{self.chain_obj.pdbid},{current_seg},{next_seg}"
                         )
-                        new_seg = merge_segment(current_seg, next_seg)
-                        current_seg = new_seg
-                        new_segs[accession].append(current_seg)
+                        current_seg = merge_segment(current_seg, next_seg)
                     else:
                         new_segs[accession].append(current_seg)
                         current_seg = next_seg
-                if not connected:
-                    new_segs[accession].append(current_seg)
+                new_segs[accession].append(current_seg)
             else:
                 return segments
         return new_segs
