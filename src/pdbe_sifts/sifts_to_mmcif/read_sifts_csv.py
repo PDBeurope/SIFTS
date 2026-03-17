@@ -44,9 +44,8 @@ def get_unp_segments(pdbid, seg_csv, pdbecursor):
         if not os.path.exists(seg_csv):
             logger.warning(f"No sifts seg csv found for {pdbid}")
         else:
-            f = gzip.open(seg_csv, "rt")
-            csvfile = f.readlines()
-            f.close()
+            with gzip.open(seg_csv, "rt") as f:
+                csvfile = f.readlines()
             reader = csv.DictReader(csvfile, delimiter=",", fieldnames=sifts_seg_header)
     else:
         rows = pdbecursor.execute(
@@ -71,7 +70,7 @@ def get_unp_segments(pdbid, seg_csv, pdbecursor):
                     [
                         str(row["pdb_start"]),
                         str(row["pdb_end"]),
-                        '1' if row["best_mapping"] else '0',
+                        "1" if row["best_mapping"] else "0",
                         str(row["identity"]),
                     ]
                 )
@@ -111,11 +110,9 @@ def get_unp_segments(pdbid, seg_csv, pdbecursor):
                 cif_seq_id_end.append(pdb_end)
                 cif_best_mapping.append(best_mapping)
                 cif_identity.append(identity)
-                res_info.setdefault(int(entity_id), {}).setdefault(
-                    asym_id, {}
-                ).setdefault(int(pdb_start), []).append(
-                    (int(pdb_end), unp_acc, seg_boo, ins_boo)
-                )
+                res_info.setdefault(int(entity_id), {}).setdefault(asym_id, {}).setdefault(
+                    int(pdb_start), []
+                ).append((int(pdb_end), unp_acc, seg_boo, ins_boo))
 
                 if len(data[row][seg]) != 1:
                     ins_boo = ins_boo + 1
@@ -174,9 +171,8 @@ def get_unpres_mapping(pdbid, res_csv, pdbecursor):
         if not os.path.exists(res_csv):
             logger.warning(f"No sifts res csv found for {pdbid}")
         else:
-            f = gzip.open(res_csv, "rt")
-            csvfile = f.readlines()
-            f.close()
+            with gzip.open(res_csv, "rt") as f:
+                csvfile = f.readlines()
             reader = csv.DictReader(csvfile, delimiter=",", fieldnames=sifts_res_header)
     else:
         rows = pdbecursor.execute(
@@ -202,8 +198,6 @@ def get_unpres_mapping(pdbid, res_csv, pdbecursor):
             )
         mon_id.setdefault(int(row["entity_id"]), {}).setdefault(
             row["struct_asym_id"], {}
-        ).setdefault(int(row["pdb_seq_id"]), {})[row["chem_comp_id"]] = row[
-            "pdb_one_letter_code"
-        ]
+        ).setdefault(int(row["pdb_seq_id"]), {})[row["chem_comp_id"]] = row["pdb_one_letter_code"]
 
     return data, mon_id

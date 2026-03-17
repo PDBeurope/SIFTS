@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
-import os
 import pickle as pickle
-from importlib.resources import files
 from collections.abc import Mapping
+from importlib.resources import files
 
 from pdbe_sifts.base.log import logger
 
@@ -49,10 +48,7 @@ class ChemCompMapping:
                 self._dictionary[three] = one_letter
 
         if not self._dictionary:
-            raise ValueError(
-                "Error in chemp_comp file/pkl, its empty!"
-                f"Please check file {cc_file}"
-            )
+            raise ValueError(f"Error in chemp_comp file/pkl, its empty!Please check file {cc_file}")
 
         logger.debug(f"Loaded {len(self._dictionary)} mapping entries")
         self.__dict__ = self._dictionary
@@ -95,4 +91,3 @@ class ChemCompMapping:
         except AttributeError:
             logger.debug(f"Cannot map for 3-letter code {three}")
             return
-

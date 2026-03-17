@@ -149,9 +149,7 @@ class FastaBuilder:
         fasta_path.unlink(missing_ok=True)
 
         file_paths = [
-            line.strip()
-            for line in self.input_path.read_text().splitlines()
-            if line.strip()
+            line.strip() for line in self.input_path.read_text().splitlines() if line.strip()
         ]
         logger.info(f"Processing {len(file_paths)} CIF files from {self.input_path}")
 
@@ -160,9 +158,7 @@ class FastaBuilder:
             results = []
 
             with ProcessPoolExecutor(max_workers=self.threads) as pool:
-                futures = {
-                    pool.submit(self._process_single_cif, fp): fp for fp in batch
-                }
+                futures = {pool.submit(self._process_single_cif, fp): fp for fp in batch}
                 for fut in as_completed(futures):
                     res, warn = fut.result()
                     if warn:
@@ -197,19 +193,27 @@ def run():
         )
     )
     parser.add_argument(
-        "-i", "--input-file", required=True,
+        "-i",
+        "--input-file",
+        required=True,
         help="Input file (.cif, .cif.gz, .fasta, .fa, .faa, or .txt list of CIF paths).",
     )
     parser.add_argument(
-        "-o", "--output-dir", required=True,
+        "-o",
+        "--output-dir",
+        required=True,
         help="Directory where the generated FASTA will be written.",
     )
     parser.add_argument(
-        "--threads", type=int, default=1,
+        "--threads",
+        type=int,
+        default=1,
         help="Number of parallel workers for .txt list processing (default: 1).",
     )
     parser.add_argument(
-        "--batch-size", type=int, default=100000,
+        "--batch-size",
+        type=int,
+        default=100000,
         help="Number of CIF files per batch for .txt list processing (default: 100000).",
     )
     args = parser.parse_args()

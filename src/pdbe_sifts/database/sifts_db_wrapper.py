@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import duckdb
 import pandas as pd
 
 from pdbe_sifts.base.log import logger
@@ -61,9 +60,7 @@ def residue_to_dict(r):
         "tax_id": r.tax_id,
         "canonical_acc": bool(r.canonical_acc),
         "reference_acc": r.reference_acc,
-        "best_mapping": (
-            bool(r.best_mapping) if r.best_mapping is not None else None
-        ),
+        "best_mapping": (bool(r.best_mapping) if r.best_mapping is not None else None),
         "residue_id": r.residue_id,
     }
 
@@ -137,23 +134,23 @@ class SiftsDB:
         """)
 
     def clean_segments(self, entry_ids):
-        entry_id = [entry.lower() for entry in entry_ids]
+        [entry.lower() for entry in entry_ids]
         self.conn.execute(
             """
             DELETE FROM sifts_xref_segment
             WHERE entry_id IN ?
             """,
-            [entry_ids]
+            [entry_ids],
         )
 
     def clean_residues(self, entry_ids):
-        entry_id = [entry.lower() for entry in entry_ids]
+        [entry.lower() for entry in entry_ids]
         self.conn.execute(
             """
             DELETE FROM sifts_xref_residue
             WHERE entry_id IN ?
             """,
-            [entry_ids]
+            [entry_ids],
         )
 
     def insert_xref_segments(self, segments):
@@ -162,7 +159,7 @@ class SiftsDB:
 
         rows = [segment_to_dict(s) for s in segments]
         df = pd.DataFrame(rows)
-        entries = df['entry_id'].to_list()
+        entries = df["entry_id"].to_list()
         self.clean_segments(entries)
 
         self.conn.register("tmp_segments", df)
@@ -178,7 +175,7 @@ class SiftsDB:
 
         rows = [residue_to_dict(r) for r_list in residues for r in r_list]
         df = pd.DataFrame(rows)
-        entries = df['entry_id'].to_list()
+        entries = df["entry_id"].to_list()
         self.clean_residues(entries)
 
         self.conn.register("tmp_residues", df)
@@ -192,13 +189,11 @@ class SiftsDB:
         pass
 
     def bulk_load_from_entries(self, input_dir: str) -> None:
-        base = str(Path(input_dir) / '*' / '*' / 'sifts')
+        base = str(Path(input_dir) / "*" / "*" / "sifts")
         # self._bulk_load_table(
         #     "sifts_xref_segment", f"{base}/*_seg.csv.gz", "%_nf90_seg.csv.gz"
         # )
-        self._bulk_load_table(
-            "sifts_xref_residue", f"{base}/*_res.csv.gz", "%_nf90_res.csv.gz"
-        )
+        self._bulk_load_table("sifts_xref_residue", f"{base}/*_res.csv.gz", "%_nf90_res.csv.gz")
         logger.info("DuckDB bulk load complete.")
 
     def _bulk_load_table(self, table: str, glob_pattern: str, exclude: str) -> None:

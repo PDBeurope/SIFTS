@@ -3,9 +3,9 @@ import argparse
 import gzip
 import shutil
 import tempfile
-import duckdb
 from pathlib import Path
 
+import duckdb
 from gemmi import cif
 
 from pdbe_sifts.base.exceptions import EntryFailedException, NoSegmentsError
@@ -23,7 +23,6 @@ from pdbe_sifts.sifts_to_mmcif.delta_mappings import (
     read_sifts_segments,
 )
 from pdbe_sifts.sifts_to_mmcif.read_sifts_csv import get_unp_segments, get_unpres_mapping
-
 
 
 class ExportSIFTSTommCIF:
@@ -89,21 +88,15 @@ class ExportSIFTSTommCIF:
             if sifts_only_cif.stat().st_size <= 40:
                 raise EntryFailedException(f"Empty sifts output file {sifts_only_cif}")
         else:
-            raise EntryFailedException(
-                f"file not found sifts mmcif file {sifts_only_cif}"
-            )
+            raise EntryFailedException(f"file not found sifts mmcif file {sifts_only_cif}")
 
-    def _process_cif_file(
-        self, d_block, sifts_segments, sifts_seg_inst, sifts_res_csv, pdb_id
-    ):
+    def _process_cif_file(self, d_block, sifts_segments, sifts_seg_inst, sifts_res_csv, pdb_id):
         self.UpdateFlag = False
         self.UnpDataFlag = False
 
         sifts_res_info = {}
 
-        self.UpdateFlag = self.write_data(
-            d_block, "_pdbx_sifts_unp_segments", sifts_segments
-        )
+        self.UpdateFlag = self.write_data(d_block, "_pdbx_sifts_unp_segments", sifts_segments)
 
         cat = d_block.get_mmcif_category("_pdbx_poly_seq_scheme")
         if cat:
@@ -117,17 +110,13 @@ class ExportSIFTSTommCIF:
             hetero = cat["hetero"]
             my_mh_id = comm_utils.get_mh_id(my_seq_id, my_mon_id, hetero)
 
-            all_ent, all_res = comm_utils.get_ent_chains(
-                my_ent, my_ch, my_seq_id, my_mon_id
-            )
+            all_ent, all_res = comm_utils.get_ent_chains(my_ent, my_ch, my_seq_id, my_mon_id)
 
             if sifts_res_csv:
                 res_cursor = None
             else:
                 res_cursor = self.conn
-            sifts_res_info, mon_id_info = get_unpres_mapping(
-                pdb_id, sifts_res_csv, res_cursor
-            )
+            sifts_res_info, mon_id_info = get_unpres_mapping(pdb_id, sifts_res_csv, res_cursor)
             xref_resmap = comm_utils.get_xref_db(
                 all_res,
                 sifts_res_info,
@@ -138,9 +127,7 @@ class ExportSIFTSTommCIF:
             )
             xref_resmap = [item for item in xref_resmap if item != []]
 
-            self.UpdateFlag = self.write_data(
-                d_block, "_pdbx_sifts_xref_db", xref_resmap
-            )
+            self.UpdateFlag = self.write_data(d_block, "_pdbx_sifts_xref_db", xref_resmap)
 
         else:
             logger.warning(f"The entry {pdb_id} is not a polymer")
@@ -168,7 +155,7 @@ class ExportSIFTSTommCIF:
 
     def write_data(self, d_block, category, category_data):
         if category_data and len(NEW_MMCIF_CAT[category]) == len(category_data):
-            data = dict(zip(NEW_MMCIF_CAT[category], category_data))
+            data = dict(zip(NEW_MMCIF_CAT[category], category_data, strict=False))
             d_block.set_mmcif_category(category, data)
             return True
         return False
@@ -230,9 +217,7 @@ class ExportSIFTSTommCIF:
             sifts_seg_csv, sifts_res_csv = None, None
             seg_cursor = self.conn
 
-        sifts_segments, sifts_seg_inst = get_unp_segments(
-            entry_id, sifts_seg_csv, seg_cursor
-        )
+        sifts_segments, sifts_seg_inst = get_unp_segments(entry_id, sifts_seg_csv, seg_cursor)
         sifts_segments = [item for item in sifts_segments if item != []]
 
         orig_updated_cif = Path(self.input_cif)

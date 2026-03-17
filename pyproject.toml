@@ -56,8 +56,7 @@ pdbe_sifts = ["data/*.csv", "data/*.pkl.gz", "data/*.yaml"]
 pdbe_sifts = "pdbe_sifts.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-mock>=3"]
-redis = ["redis>=4"]
+dev = ["pytest>=8", "pytest-mock>=3", "ruff>=0.4", "pre-commit>=3.0"]
 docs = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
@@ -67,3 +66,35 @@ docs = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# ---------------------------------------------------------------------------
+# Ruff — linter + formatter
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes  (unused imports, undefined names…)
+    "I",    # isort     (import ordering)
+    "UP",   # pyupgrade (Python 3.10+ idioms)
+    "B",    # flake8-bugbear  (likely bugs & design issues)
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long — enforced by the formatter
+    "B008",   # function call in default arg — common in argparse
+    "SIM108", # ternary operator — readability preference
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]   # assert is fine in tests
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

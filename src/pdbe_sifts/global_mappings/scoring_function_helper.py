@@ -20,7 +20,7 @@ def get_tax_weight(query_taxid: int, target_taxid: int) -> int:
     ncbi = NCBITaxa()
 
     try:
-        lineage1 = ncbi.get_lineage(query_taxid)[::-1]   # leaf → root
+        lineage1 = ncbi.get_lineage(query_taxid)[::-1]  # leaf → root
         lineage2 = ncbi.get_lineage(target_taxid)[::-1]  # leaf → root
     except Exception as e:
         logger.debug(f"Error computing lineage: {e}")
@@ -32,10 +32,4 @@ def get_tax_weight(query_taxid: int, target_taxid: int) -> int:
         return 0
 
     dist1 = lineage1.index(common_ancestors[0])
-    if dist1 == 0:
-        return 100
-    elif dist1 == 1:
-        return 50
-    elif dist1 == 2:
-        return 25
-    return 0
+    return {0: 100, 1: 50, 2: 25}.get(dist1, 0)

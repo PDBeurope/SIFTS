@@ -138,9 +138,7 @@ class Chain:
             #   Cloning artifact
 
             elif r.rtype in ("Engineered mutation", "Conflict", "Cloning artifact"):
-                self.alignment_sequence.append(
-                    r.oneL_original if r.oneL_original else "X"
-                )
+                self.alignment_sequence.append(r.oneL_original if r.oneL_original else "X")
 
             # unfold the chromophores
             elif r.is_chromophore:
@@ -234,11 +232,11 @@ class Chain:
                 if (
                     r.rtype == "Initiating methionine"
                     and self.expression_tag_start is not None
+                    and r.n < self.expression_tag_start
                 ):
-                    if r.n < self.expression_tag_start:
-                        pdb_i += 1
-                        unp_i += 1
-                        continue
+                    pdb_i += 1
+                    unp_i += 1
+                    continue
                 if len(r.oneL) > 1 and pdb_r != "-" and unp_r != "-":
                     residue_map[pdb_i + pdb_start] = []
                     for x in range(len(r.oneL)):
@@ -268,13 +266,7 @@ class Chain:
         with Pool(N_PROC) as pool:
             # call the function for each item in parallel, get results as tasks complete
             my_list = list(self.mappings.items())
-            list(
-                tqdm.tqdm(
-                    pool.imap_unordered(
-                        self.get_each_resmap, my_list, chunksize=STEP_SIZE
-                    )
-                )
-            )
+            list(tqdm.tqdm(pool.imap_unordered(self.get_each_resmap, my_list, chunksize=STEP_SIZE)))
 
         # remove the residues which map to more than one accession
         # keeping the ones that benefit continuity
@@ -300,12 +292,8 @@ class Chain:
                         # The mapping without conflict has preference
                         pdb_r = self.sequence[key - 1]
                         try:
-                            unp1_r = self.parent.accessions[iso1].seq_isoforms[iso1][
-                                maps1[key] - 1
-                            ]
-                            unp2_r = self.parent.accessions[iso2].seq_isoforms[iso2][
-                                maps2[key] - 1
-                            ]
+                            unp1_r = self.parent.accessions[iso1].seq_isoforms[iso1][maps1[key] - 1]
+                            unp2_r = self.parent.accessions[iso2].seq_isoforms[iso2][maps2[key] - 1]
 
                             # If one is a conflict and the other one is not
                             if unp1_r != unp2_r and pdb_r in (unp1_r, unp2_r):
@@ -397,9 +385,4 @@ class Chain:
 
         """
 
-        return "{}_{} (E:{}|S:{})".format(
-            self.pdbid,
-            self.auth_asym_id,
-            self.entity_id,
-            self.struct_asym_id,
-        )
+        return f"{self.pdbid}_{self.auth_asym_id} (E:{self.entity_id}|S:{self.struct_asym_id})"

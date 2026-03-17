@@ -37,13 +37,4 @@ class Residue:
         self.is_chromophore = self.rtype == "Chromophore"
 
     def __repr__(self):
-        return "{} ({}{}) [{}|{}] T: {} O: {} MH: {}".format(
-            self.n,
-            self.auth_n,
-            self.auth_ins,
-            self.oneL,
-            self.threeL,
-            self.rtype,
-            self.observed,
-            self.mh,
-        )
+        return f"{self.n} ({self.auth_n}{self.auth_ins}) [{self.oneL}|{self.threeL}] T: {self.rtype} O: {self.observed} MH: {self.mh}"

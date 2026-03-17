@@ -8,9 +8,11 @@ to define the alignment logic using a specific tool (e.g., BLAST, MMseqs2, etc.)
 """
 
 from abc import ABC, abstractmethod
-from timeit import default_timer as timer
 from pathlib import Path
+from timeit import default_timer as timer
+
 from pdbe_sifts.base.log import logger
+
 
 class AlignmentSearch(ABC):
     """
@@ -37,12 +39,14 @@ class AlignmentSearch(ABC):
 
     def run(self):
         """Runs the alignment process and logs timing information."""
-        logger.info(f"Processing the search of the query {self.query_path} against {self.target_path}.")
+        logger.info(
+            f"Processing the search of the query {self.query_path} against {self.target_path}."
+        )
         start = timer()
         self._process()
         end = timer()
         logger.info("Search finished.")
-        logger.info(f'Search process took: {end - start} seconds.')
+        logger.info(f"Search process took: {end - start} seconds.")
         logger.info(f"Results saved: {self.output_path}")
 
     @abstractmethod

@@ -10,15 +10,14 @@ mappings stored in DuckDB.
 
 import argparse
 import shutil
-from timeit import default_timer as timer
 from pathlib import Path
-from typing import Optional
+from timeit import default_timer as timer
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.global_mappings.mmseqs_search import MmSearch
+from pdbe_sifts.base.utils import get_date
 from pdbe_sifts.global_mappings.blastp import BlastP
 from pdbe_sifts.global_mappings.global_mappings_parser import GlobMappingsParser
-from pdbe_sifts.base.utils import get_date
+from pdbe_sifts.global_mappings.mmseqs_search import MmSearch
 from pdbe_sifts.sifts_fasta_builder import FastaBuilder
 
 
@@ -30,7 +29,7 @@ class SiftsGlobalMappings:
         input_file: str | Path,
         out_dir: str | Path,
         db_file: str | Path,
-        unp_csv: Optional[str | Path] = None,
+        unp_csv: str | Path | None = None,
         tool: str = "mmseqs",
         threads: int = 1,
         batch_size: int = 100000,
@@ -164,7 +163,9 @@ def run():
         description="Generate SIFTS mappings between a structure and sequence database."
     )
     parser.add_argument(
-        "-i", "--input-file", required=True,
+        "-i",
+        "--input-file",
+        required=True,
         help=(
             "Input file. Accepted formats: "
             "a single mmCIF file (.cif or .cif.gz), "
@@ -173,30 +174,40 @@ def run():
         ),
     )
     parser.add_argument(
-        "-o", "--output-dir", required=True,
+        "-o",
+        "--output-dir",
+        required=True,
         help="Directory where all results will be written.",
     )
     parser.add_argument(
-        "-d", "--db-file", required=True,
+        "-d",
+        "--db-file",
+        required=True,
         help="Path to the preformatted sequence database (MMseqs or BLAST).",
     )
     parser.add_argument(
-        "--tool", default="mmseqs",
+        "--tool",
+        default="mmseqs",
         help="Alignment tool to use ('mmseqs' or 'blastp'). Default: mmseqs.",
     )
     parser.add_argument(
-        "--unp-csv-file", default=None,
+        "--unp-csv-file",
+        default=None,
         help=(
             "Path to CSV with accession metadata "
             "(accession, provenance, pdb_xref, annotation_score)."
         ),
     )
     parser.add_argument(
-        "--threads", type=int, default=1,
+        "--threads",
+        type=int,
+        default=1,
         help="Number of threads to use for parsing and searches.",
     )
     parser.add_argument(
-        "--batch-size", type=int, default=100000,
+        "--batch-size",
+        type=int,
+        default=100000,
         help="Number of CIF files to process per batch when using a .txt list (default: 100000).",
     )
 

@@ -39,9 +39,9 @@ def get_ent_chains(a, b, c, d):
     res_list = {}
     for i in range(0, len(a)):
         my_chain.setdefault(int(a[i]), []).append(b[i])
-        res_list.setdefault(int(a[i]), {}).setdefault(b[i], {}).setdefault(
-            int(c[i]), {}
-        )["mon_id"] = d[i]
+        res_list.setdefault(int(a[i]), {}).setdefault(b[i], {}).setdefault(int(c[i]), {})[
+            "mon_id"
+        ] = d[i]
 
     return uniq_val(my_chain), res_list
 
@@ -57,7 +57,7 @@ def make_opt(my_str):
 def get_obs(my_chain, seq_id, obs_val):
     """Get observed residue from mmcif"""
     my_obs = {}
-    for ch, i, j in zip(my_chain, seq_id, obs_val):
+    for ch, i, j in zip(my_chain, seq_id, obs_val, strict=False):
         my_obs.setdefault(ch, {})[int(i)] = j
     return my_obs
 
@@ -68,7 +68,7 @@ def get_mh_id(seq_id, mon_id, hetero):
     """
     my_mh_id = {}
     boo = 1
-    for i, j, k in zip(seq_id, mon_id, hetero):
+    for i, j, k in zip(seq_id, mon_id, hetero, strict=False):
         my_mh_id.setdefault(int(i), {})[j] = boo
         if k == "n":
             boo = 1
@@ -90,11 +90,7 @@ def modify_atomsite(atom_site: dict[str, list], sifts_data):
 
         db_name, unp_res, unp_acc, unp_num = None, None, None, None
 
-        if (
-            ent in sifts_data
-            and asym in sifts_data[ent]
-            and resnum in sifts_data[ent][asym]
-        ):
+        if ent in sifts_data and asym in sifts_data[ent] and resnum in sifts_data[ent][asym]:
             if len(sifts_data[ent][asym][resnum]) == 1:
                 tar = sifts_data[ent][asym][resnum][0]
 
@@ -102,18 +98,13 @@ def modify_atomsite(atom_site: dict[str, list], sifts_data):
                 unp_res, unp_acc, unp_num = tar[2], tar[3], tar[4]
 
             else:
-                tar1 = [
-                    f"{item[2]}_{item[3]}_{item[4]}"
-                    for item in sifts_data[ent][asym][resnum]
-                ]
+                tar1 = [f"{item[2]}_{item[3]}_{item[4]}" for item in sifts_data[ent][asym][resnum]]
                 tar1 = list(set(tar1))
                 if len(tar1) == 1:
                     db_name = "UNP"
                     unp_res, unp_acc, unp_num = tar1[0].split("_")
                 else:
-                    logger.debug(
-                        f"Chromophorore residue: {sifts_data[ent][asym][resnum]}"
-                    )
+                    logger.debug(f"Chromophorore residue: {sifts_data[ent][asym][resnum]}")
                     # these are chromophores - where one pdb_seq_id
                     # residue may be mapped to more than one unp_seq_id
                     # these are ignored at the moments
@@ -146,9 +137,9 @@ def expand_unp_seg_to_resi(my_res, sifts_seg_inst):
 
                         my_unp_res = [item for item in all_res if start <= item <= end]
                         for resi in my_unp_res:
-                            my_unp.setdefault(entity, {}).setdefault(
-                                chain, {}
-                            ).setdefault(resi, {})[acc] = [seg_id, inst_id]
+                            my_unp.setdefault(entity, {}).setdefault(chain, {}).setdefault(
+                                resi, {}
+                            )[acc] = [seg_id, inst_id]
 
     return my_unp
 
@@ -179,12 +170,30 @@ def get_xref_db(my_res, sifts_data, sifts_seg_inst, my_obs, my_mh_id, my_mon_inf
                         mh_id = make_opt(tag[6])
                         unp_seg_id, unp_inst_id = expa_sifts[entity][chain][res][unp_acc]
                         xx = [
-                            entity, chain, boo, res, mon_id, mon_oneLetter,
-                            unp_res, unp_num, unp_acc, unp_seg_id, unp_inst_id,
-                            res_type, observed, mh_id,
-                            None, None, None, None, None,
+                            entity,
+                            chain,
+                            boo,
+                            res,
+                            mon_id,
+                            mon_oneLetter,
+                            unp_res,
+                            unp_num,
+                            unp_acc,
+                            unp_seg_id,
+                            unp_inst_id,
+                            res_type,
+                            observed,
+                            mh_id,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
                         ]
-                        [my_list.append(my_val) for my_list, my_val in zip(mega_list, xx)]
+                        [
+                            my_list.append(my_val)
+                            for my_list, my_val in zip(mega_list, xx, strict=False)
+                        ]
                         boo += 1
 
     return mega_list

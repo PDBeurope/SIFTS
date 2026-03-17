@@ -19,13 +19,14 @@ Functions:
 
 import argparse
 from pathlib import Path
-from typing import Union
 
 from pymmseqs.commands import createdb, createindex
 from pymmseqs.config.createtaxdb_config import CreateTaxDBConfig
+
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.global_mappings.makeblastdb import MakeBlastDb
 from pdbe_sifts.global_mappings.database import ToolDatabase
+from pdbe_sifts.global_mappings.makeblastdb import MakeBlastDb
+
 
 class TargetDb(ToolDatabase):
     """
@@ -44,11 +45,12 @@ class TargetDb(ToolDatabase):
         threads (int): Number of CPU threads to use. Defaults to 1.
         **kwargs: Additional keyword arguments passed to the database creation commands.
     """
+
     def __init__(
         self,
-        input_path: Union[str, Path],
-        output_path: Union[str, Path],
-        tax_mapping_file: Union[str, Path],
+        input_path: str | Path,
+        output_path: str | Path,
+        tax_mapping_file: str | Path,
         tool: str = "mmseqs",
         threads: int = 1,
         **kwargs,
@@ -64,18 +66,25 @@ class TargetDb(ToolDatabase):
     def _process(self):
         """Run the appropriate database creation tool based on the configuration."""
         match self.tool:
-            case 'mmseqs':
-                self.target_db = createdb(self.input_path, self.output_path,  **self.db_config_kwargs)
-                tmp_fold = Path(self.output_path).parent / 'tmp'
+            case "mmseqs":
+                self.target_db = createdb(
+                    self.input_path, self.output_path, **self.db_config_kwargs
+                )
+                tmp_fold = Path(self.output_path).parent / "tmp"
                 tmp_fold.mkdir(parents=True, exist_ok=True)
-                CreateTaxDBConfig(sequence_db=self.target_db.to_path(),
-                                      tmp_dir=tmp_fold,
-                                      tax_mapping_file=self.tax_mapping_file,
-                                      threads=self.threads).run()
+                CreateTaxDBConfig(
+                    sequence_db=self.target_db.to_path(),
+                    tmp_dir=tmp_fold,
+                    tax_mapping_file=self.tax_mapping_file,
+                    threads=self.threads,
+                ).run()
                 self.target_db = createindex(self.target_db.to_path(), threads=self.threads)
-            case 'blastp':
-                self.target_db = MakeBlastDb(self.input_path, self.output_path, self.tax_mapping_file)
+            case "blastp":
+                self.target_db = MakeBlastDb(
+                    self.input_path, self.output_path, self.tax_mapping_file
+                )
                 self.target_db._process()
+
 
 def run():
     """Command-line entry point for creating a MMseqs2 or BLAST target database."""
@@ -84,26 +93,32 @@ def run():
     )
 
     parser.add_argument(
-        "-i", "--input-file",
+        "-i",
+        "--input-file",
         required=True,
         help="Path to the input FASTA file (with at least one sequence).",
     )
     parser.add_argument(
-        "-o", "--output-path",
+        "-o",
+        "--output-path",
         required=True,
         help="Path where the target database files will be saved.",
     )
     parser.add_argument(
-        "-t", "--tax-mapping-file",
+        "-t",
+        "--tax-mapping-file",
         required=True,
         help="File mapping sequence identifiers to taxonomic identifiers.",
     )
     parser.add_argument(
-        "--tool", default="mmseqs",
+        "--tool",
+        default="mmseqs",
         help="Tool to use for database creation ('mmseqs' or 'blastp'). Default: mmseqs.",
     )
     parser.add_argument(
-        "--threads", type=int, default=1,
+        "--threads",
+        type=int,
+        default=1,
         help="Number of CPU threads to use. Default: 1.",
     )
     args = parser.parse_args()
@@ -117,6 +132,7 @@ def run():
         threads=args.threads,
     )
     target_db.run()
+
 
 if __name__ == "__main__":
     run()

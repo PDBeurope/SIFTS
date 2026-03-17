@@ -91,7 +91,9 @@ def get_curated_db_mappings(pdbid, chains: Iterable, conn, chain_to_entity: Mapp
         for chain in entity_to_chains.get(entity_id, []):
             mappings[chain] = smappings
         if entity_id not in entity_to_chains:
-            logger.warning(f"DB returned entity {entity_id} for {pdbid} with no matching poly chain")
+            logger.warning(
+                f"DB returned entity {entity_id} for {pdbid} with no matching poly chain"
+            )
 
     # Warn about DB chains not in our poly chain list
     for chain in list(mappings.keys()):

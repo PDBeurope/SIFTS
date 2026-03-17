@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
+import gzip
 import os
 import pickle as pickle
-import gzip
 from collections.abc import Mapping
 from importlib.resources import files
+
 
 class TaxonomyFix:
     _dictionary: Mapping[str, Mapping[str, str]] = {}
@@ -23,4 +24,3 @@ class TaxonomyFix:
             return taxid
         except KeyError:
             return None
-

@@ -26,14 +26,12 @@ def read_sifts_segments(block):
             mcat["seq_id_end"],
         )
         for chain, unp_acc, unp_start, unp_end, pdb_start, pdb_end in zip(
-            my_chain, my_unp_acc, my_unp_start, my_unp_end, my_pdb_start, my_pdb_end
+            my_chain, my_unp_acc, my_unp_start, my_unp_end, my_pdb_start, my_pdb_end, strict=False
         ):
-            rows.append(
-                f"{chain}_UNP_{unp_acc}_{pdb_start}_{pdb_end}_{unp_start}_{unp_end}"
+            rows.append(f"{chain}_UNP_{unp_acc}_{pdb_start}_{pdb_end}_{unp_start}_{unp_end}")
+            data.setdefault(chain, {}).setdefault("UNP", {}).setdefault(unp_acc, []).append(
+                f"{pdb_start}_{pdb_end}_{unp_start}_{unp_end}"
             )
-            data.setdefault(chain, {}).setdefault("UNP", {}).setdefault(
-                unp_acc, []
-            ).append(f"{pdb_start}_{pdb_end}_{unp_start}_{unp_end}")
     cat = "_pdbx_sifts_xref_db_segments"
     mcat = block.get_mmcif_category(cat)
     if mcat:
@@ -45,7 +43,7 @@ def read_sifts_segments(block):
             mcat["seq_id_end"],
         )
         for chain, db, db_acc, pdb_start, pdb_end in zip(
-            my_chain, my_db, my_db_acc, my_pdb_start, my_pdb_end
+            my_chain, my_db, my_db_acc, my_pdb_start, my_pdb_end, strict=False
         ):
             rows.append(f"{chain}_{db}_{db_acc}_{pdb_start}_{pdb_end}")
             data.setdefault(chain, {}).setdefault(db, {}).setdefault(db_acc, []).append(
@@ -66,11 +64,7 @@ def get_delta_csv_suffix(csv_dir):
     suff = str(get_next_release_date()).split("-", 1)[1]
     # file all the files with delta mappings
     all_file = sorted(
-        [
-            os.path.join(csv_dir, f)
-            for f in os.listdir(csv_dir)
-            if f.endswith(".csv.gz")
-        ],
+        [os.path.join(csv_dir, f) for f in os.listdir(csv_dir) if f.endswith(".csv.gz")],
         key=os.path.getctime,
     )
     if len(all_file) >= my_cutoff:

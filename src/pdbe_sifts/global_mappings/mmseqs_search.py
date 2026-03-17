@@ -13,10 +13,10 @@ Functions:
 """
 
 import argparse
-from typing import Union
 from pathlib import Path
 
 from pymmseqs.config.easy_search_config import EasySearchConfig
+
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.paths import (
     get_conf_mmseqs_alignment_mode,
@@ -25,6 +25,7 @@ from pdbe_sifts.base.paths import (
     get_conf_mmseqs_sensitivity,
 )
 from pdbe_sifts.global_mappings.base_alignment_search import AlignmentSearch
+
 
 class MmSearch(AlignmentSearch):
     """
@@ -46,12 +47,13 @@ class MmSearch(AlignmentSearch):
         format_string (str): Output format for MMseqs2 results.
         threads (int): Number of threads used.
     """
+
     def __init__(
         self,
-        query_path: Union[str, Path],
-        target_path: Union[str, Path],
-        output_path: Union[str, Path],
-        outtmp_path: Union[str, Path],
+        query_path: str | Path,
+        target_path: str | Path,
+        output_path: str | Path,
+        outtmp_path: str | Path,
         threads: int,
         **kwargs,
     ):
@@ -69,19 +71,21 @@ class MmSearch(AlignmentSearch):
 
     def _process(self):
         """Run the MMseqs2 easy_search process."""
-        result = EasySearchConfig(self.query_path,
-                                  self.target_path,
-                                  self.output_path,
-                                  self.outtmp_path,
-                                  format_mode=0,
-                                  a=True,
-                                  alignment_mode=get_conf_mmseqs_alignment_mode(),
-                                  format_output=self.format_string,
-                                  v=0,
-                                  threads=self.threads,
-                                  db_load_mode=get_conf_mmseqs_db_load_mode(),
-                                  s=get_conf_mmseqs_sensitivity(),
-                                  min_seq_id=get_conf_mmseqs_min_seq_id())
+        result = EasySearchConfig(
+            self.query_path,
+            self.target_path,
+            self.output_path,
+            self.outtmp_path,
+            format_mode=0,
+            a=True,
+            alignment_mode=get_conf_mmseqs_alignment_mode(),
+            format_output=self.format_string,
+            v=0,
+            threads=self.threads,
+            db_load_mode=get_conf_mmseqs_db_load_mode(),
+            s=get_conf_mmseqs_sensitivity(),
+            min_seq_id=get_conf_mmseqs_min_seq_id(),
+        )
         result.run()
 
 
@@ -129,13 +133,10 @@ def run():
 
     logger.info(vars(args))
     mm_search = MmSearch(
-        args.query_path,
-        args.target_path,
-        args.output_path,
-        args.outtmp_path,
-        threads=args.threads
+        args.query_path, args.target_path, args.output_path, args.outtmp_path, threads=args.threads
     )
     mm_search.run()
+
 
 if __name__ == "__main__":
     run()

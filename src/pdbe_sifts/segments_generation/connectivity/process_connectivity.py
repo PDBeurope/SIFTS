@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 
 import math
+
 import regex as re
-
 from Bio.Seq import Seq
-
-from pdbe_sifts.segments_generation.connectivity.ccd_parser import CcdFile
 from pdbe_sifts.base.log import logger
+from pdbe_sifts.segments_generation.connectivity.ccd_parser import CcdFile
 
 PEPTIDE_BOND_LEN = 1.42
 GAP_ALIGNMENT_PATTERN = r"(?<=-)([A-Z]{1,5})(?=-)"
@@ -67,16 +66,14 @@ def is_valid_residue_status(r1, r2):
     Takes two residue objects as input."""
     # we don't need to process insertion, linker etc...
     to_prevent = ["Insertion", "Linker", "Chromophore"]
-    if (
+    return not (
         r1.rtype in to_prevent
         or r2.rtype in to_prevent
         or r1.observed is False
         or r2.observed is False
         or r1.auth_ins is not False
         or r2.auth_ins is not False
-    ):
-        return False
-    return True
+    )
 
 
 class ConnectivityCheck:
@@ -132,15 +129,11 @@ class ConnectivityCheck:
             self.r1_ters_coordinates = None
             self.r2_ters_coordinates = None
         else:
-            self.r1_ters_coordinates = (
-                self.chain_obj.mmcif.get_ters_coordinates_of_residue(
-                    self.chain_obj.struct_asym_id, r1.n, self.r1_ccd_ters
-                )
+            self.r1_ters_coordinates = self.chain_obj.mmcif.get_ters_coordinates_of_residue(
+                self.chain_obj.struct_asym_id, r1.n, self.r1_ccd_ters
             )
-            self.r2_ters_coordinates = (
-                self.chain_obj.mmcif.get_ters_coordinates_of_residue(
-                    self.chain_obj.struct_asym_id, r2.n, self.r2_ccd_ters
-                )
+            self.r2_ters_coordinates = self.chain_obj.mmcif.get_ters_coordinates_of_residue(
+                self.chain_obj.struct_asym_id, r2.n, self.r2_ccd_ters
             )
 
     def check_res_conn(self, r1, r2):
@@ -155,18 +148,10 @@ class ConnectivityCheck:
         # This discrepancy can cause index out-of-range errors.
         # For example, in entry 3EVP, the alignment boundary is at 245, while chain.residues has only 243 elements.
         r1_shift = sum(
-            [
-                len(r.oneL) - 1
-                for r in self.chain_obj.residues[:r1]
-                if r.rtype == "Chromophore"
-            ]
+            [len(r.oneL) - 1 for r in self.chain_obj.residues[:r1] if r.rtype == "Chromophore"]
         )
         r2_shift = sum(
-            [
-                len(r.oneL) - 1
-                for r in self.chain_obj.residues[:r2]
-                if r.rtype == "Chromophore"
-            ]
+            [len(r.oneL) - 1 for r in self.chain_obj.residues[:r2] if r.rtype == "Chromophore"]
         )
         r1 = r1 - r1_shift
         r2 = r2 - r2_shift
@@ -183,9 +168,7 @@ class ConnectivityCheck:
             limit = r1 + aligned_res_bound - shift - 1
             residues_to_check = [r.n for r in self.chain_obj.residues[: limit + 1]]
             for i in range(len(residues_to_check) - 1):
-                connected = self.check_res_conn(
-                    residues_to_check[i], residues_to_check[i + 1]
-                )
+                connected = self.check_res_conn(residues_to_check[i], residues_to_check[i + 1])
                 if not connected:
                     return subseq
             subseq = "".join(subseq)
@@ -197,18 +180,14 @@ class ConnectivityCheck:
                 r.n for r in self.chain_obj.residues[from_res : aligned_res_bound + 1]
             ]
             for i in range(len(residues_to_check) - 1):
-                connected = self.check_res_conn(
-                    residues_to_check[i], residues_to_check[i + 1]
-                )
+                connected = self.check_res_conn(residues_to_check[i], residues_to_check[i + 1])
                 if not connected:
                     return subseq
             subseq = "".join(subseq)
             residues = "".join(subseq.split("-"))
         return list(residues)
 
-    def subseq_find_midgap(
-        self, pdb_seq, new_pdb_seq, res_first, res_second, start_res
-    ):
+    def subseq_find_midgap(self, pdb_seq, new_pdb_seq, res_first, res_second, start_res):
         """
         Function to refine an extended gap between two continuous regions, where more than 5 PDB residues are aligned (to a UniProt residue).
 
@@ -259,9 +238,7 @@ class ConnectivityCheck:
                 # If connectivity is broken, adjust alignment refinement boundaries
                 pos_start_subseq = one_res_matches[i][1]
                 # Adjust starting index to exclude non-connected residues
-                rconn_beg = pos_start_subseq - subseq[: one_res_matches[i][1]].count(
-                    "-"
-                )
+                rconn_beg = pos_start_subseq - subseq[: one_res_matches[i][1]].count("-")
                 # Update position in pdb_seq to ensure correct sequence is returned if broken at the first step
                 pos_start_pdbseq = pos_start_subseq + res_first + 1
                 if pos_start_pdbseq == res_second:
@@ -290,7 +267,7 @@ class ConnectivityCheck:
         # chunks will be included
         if self.repeated_acc:
             return alns
-        alns = [al for al in alns]
+        alns = list(alns)
         bounds_pdb = [(al[1]._al_start, al[1]._al_stop) for al in alns]
         bounds_unp = [(al[0]._al_start, al[0]._al_stop) for al in alns]
         reference_pdb = bounds_pdb[0]
@@ -355,8 +332,8 @@ class ConnectivityCheck:
             if len(match.group()) >= 6
         ]
         if matches:
-            handle_beg = True if matches[0][1] != 0 else False
-            handle_end = True if matches[-1][-1] != lenseq - 1 else False
+            handle_beg = matches[0][1] != 0
+            handle_end = matches[-1][-1] != lenseq - 1
             first_cons = matches[0][1]
             last_cons = matches[-1][-1]
             for ind in range(len(matches) - 1):
@@ -372,9 +349,7 @@ class ConnectivityCheck:
             if handle_beg:
                 beg_seq = self.boundaries_check(beg_seq, "start", first_cons, start_res)
             if handle_end:
-                last_seq = self.boundaries_check(
-                    last_seq, "end", last_cons, al[1]._al_stop
-                )
+                last_seq = self.boundaries_check(last_seq, "end", last_cons, al[1]._al_stop)
             new_pdb_seq = beg_seq + middle_seq + last_seq
 
         alignment_seq = "".join(new_pdb_seq)
@@ -448,6 +423,4 @@ class ConnectivityCheck:
         dist1 = compute_atom_distance(r1_n, r2_c)
         dist2 = compute_atom_distance(r1_c, r2_n)
         dist_min = min([dist1, dist2])
-        if dist_min <= PEPTIDE_BOND_LEN:
-            return True
-        return False
+        return dist_min <= PEPTIDE_BOND_LEN

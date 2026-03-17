@@ -4,6 +4,7 @@ from pathlib import Path
 from gemmi import cif
 
 from pdbe_sifts.base.exceptions import NotAPolyPeptide
+from pdbe_sifts.base.log import logger
 
 # mmCIF categories used in SIFTS
 CATEGORIES = [
@@ -20,6 +21,7 @@ CATEGORIES = [
     "_pdbx_database_status",
     "_pdbx_audit_revision_history",
 ]
+
 
 def extract_table(block, search_list):
     """
@@ -58,9 +60,7 @@ class mmCIF:
         self.poly_seq = block.get_mmcif_category("_pdbx_poly_seq_scheme")
 
         if not self.poly_seq:
-            raise NotAPolyPeptide(
-                "it is not a polypeptide! no poly_seq, only hetatms presents"
-            )
+            raise NotAPolyPeptide("it is not a polypeptide! no poly_seq, only hetatms presents")
         self.cc = chem_comp_dict
         self.entity_poly = block.get_mmcif_category("_entity_poly")
         self.mod_residue = block.get_mmcif_category("_pdbx_struct_mod_residue")
@@ -87,7 +87,7 @@ class mmCIF:
             names = self.struct_ref["db_name"]
             accs = self.struct_ref["pdbx_db_accession"]
 
-            for ent, acc, name in zip(entities, accs, names):
+            for ent, acc, name in zip(entities, accs, names, strict=False):
                 if name == "UNP" and ent == entity:
                     unps.append(acc)
 
@@ -155,9 +155,7 @@ class mmCIF:
         if tax is not None:
             return tax
 
-        tax = self.__get_tax_helper(
-            self.src_gen, "pdbx_gene_src_ncbi_taxonomy_id", entity
-        )
+        tax = self.__get_tax_helper(self.src_gen, "pdbx_gene_src_ncbi_taxonomy_id", entity)
 
         if tax is not None:
             return tax
@@ -255,10 +253,9 @@ class mmCIF:
             return None
 
         for idx, c in enumerate(chains):
-            if c == chain:
-                if n_residue == self.seq_dif["seq_num"][idx]:
-                    threeL = self.seq_dif["db_mon_id"][idx]
-                    return (threeL, self.cc.get(threeL))
+            if c == chain and n_residue == self.seq_dif["seq_num"][idx]:
+                threeL = self.seq_dif["db_mon_id"][idx]
+                return (threeL, self.cc.get(threeL))
 
         return None
 
@@ -290,7 +287,7 @@ class mmCIF:
         label = self.mod_residue["label_comp_id"]
         parent = self.mod_residue["parent_comp_id"]
 
-        for lbl, prnt in zip(label, parent):
+        for lbl, prnt in zip(label, parent, strict=False):
             if lbl == three:
                 return prnt
 
@@ -309,7 +306,7 @@ class mmCIF:
 
         features = [
             (c, int(s), d)
-            for c, s, d in zip(chains, seq, details)
+            for c, s, d in zip(chains, seq, details, strict=False)
             if s not in ("?", ".", None, False)
         ]
 
@@ -356,7 +353,7 @@ class mmCIF:
 
             n = int(self.poly_seq["seq_id"][idx])
 
-            observed = True if self.poly_seq["auth_seq_num"][idx] else False
+            observed = bool(self.poly_seq["auth_seq_num"][idx])
             auth_n = self.poly_seq["pdb_seq_num"][idx] if observed else None
             auth_ins = self.poly_seq["pdb_ins_code"][idx] if observed else None
 
@@ -472,8 +469,8 @@ class mmCIF:
             if (
                 row[4] == chain_id
                 and row[5] == res_num
-                and (atom_lab == cter_lab or atom_lab == nter_lab)
-                and (atom_ordinal == cter_num or atom_ordinal == nter_num)
+                and (atom_lab in (cter_lab, nter_lab))
+                and (atom_ordinal in (cter_num, nter_num))
             ):
                 # Add Cartesian x,y,z
                 return_dict[row[2]] = [
@@ -483,4 +480,3 @@ class mmCIF:
                 ]
             atom_ordinal += 1
         return return_dict
-

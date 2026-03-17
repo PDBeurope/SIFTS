@@ -14,14 +14,14 @@ Functions:
 """
 
 import argparse
-import subprocess
 import shutil
-from typing import Union
+import subprocess
 from pathlib import Path
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.paths import get_conf_blastp_evalue
 from pdbe_sifts.global_mappings.base_alignment_search import AlignmentSearch
+
 
 class BlastP(AlignmentSearch):
     """
@@ -44,11 +44,12 @@ class BlastP(AlignmentSearch):
         evalue (float): E-value threshold.
         threads (int): Number of threads used for the search.
     """
+
     def __init__(
         self,
-        query_path: Union[str, Path],
-        target_path: Union[str, Path],
-        output_path: Union[str, Path],
+        query_path: str | Path,
+        target_path: str | Path,
+        output_path: str | Path,
         outfmt: str = "6 qseqid sseqid length mismatch qstart qend sstart send evalue bitscore qseq sseq qlen staxid pident qcovs",
         evalue: float = None,
         threads: int = 1,
@@ -66,12 +67,18 @@ class BlastP(AlignmentSearch):
 
         cmd = [
             "blastp",
-            "-query", str(self.query_path),
-            "-db", str(self.target_path),
-            "-out", str(self.output_path),
-            "-outfmt", str(self.outfmt),
-            "-evalue", str(self.evalue),
-            "-num_threads", str(self.threads),
+            "-query",
+            str(self.query_path),
+            "-db",
+            str(self.target_path),
+            "-out",
+            str(self.output_path),
+            "-outfmt",
+            str(self.outfmt),
+            "-evalue",
+            str(self.evalue),
+            "-num_threads",
+            str(self.threads),
         ]
 
         logger.info(f"Running BLASTP: {' '.join(cmd)}")
@@ -81,6 +88,7 @@ class BlastP(AlignmentSearch):
             logger.error(f"blastp execution failed with exit code {e.returncode}")
             raise
 
+
 def run():
     """Command-line interface for running BLASTP searches."""
     parser = argparse.ArgumentParser(
@@ -88,33 +96,39 @@ def run():
     )
 
     parser.add_argument(
-        "-query", "--query-path",
+        "-query",
+        "--query-path",
         required=True,
         help="Path to the input FASTA file containing protein sequences.",
     )
     parser.add_argument(
-        "-target", "--target-path",
+        "-target",
+        "--target-path",
         required=True,
         help="Path to the BLAST database to search against.",
     )
     parser.add_argument(
-        "-o", "--output-path",
+        "-o",
+        "--output-path",
         required=True,
         help="Path to save the BLASTP results.",
     )
     parser.add_argument(
-        "-outfmt", "--outfmt",
+        "-outfmt",
+        "--outfmt",
         default="6 qseqid sseqid length mismatch qstart qend sstart send evalue bitscore qseq sseq qlen staxid pident qcovs",
         help="BLAST output format (string or integer). Default: tabular format 6.",
     )
     parser.add_argument(
-        "-eval", "--e-value",
+        "-eval",
+        "--e-value",
         type=float,
         default=10.0,
         help="E-value threshold for saving hits (default = 10.0).",
     )
     parser.add_argument(
-        "-threads", "--threads",
+        "-threads",
+        "--threads",
         type=int,
         default=1,
         help="Number of CPU threads to use.",

@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 
 import argparse
-import duckdb
 from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 
+import duckdb
 import gemmi
 from funcy.debug import log_durations
 
-from pdbe_sifts.base.exceptions import ObsoleteUniProtError
+import pdbe_sifts.segments_generation.generate_xref_csv as generate_xref_csv
+from pdbe_sifts.base.exceptions import NotAPolyPeptide, ObsoleteUniProtError
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.utils import SiftsAction
 from pdbe_sifts.mmcif.chem_comp import ChemCompMapping
 from pdbe_sifts.mmcif.entry import Entry
-from pdbe_sifts.base.exceptions import NotAPolyPeptide
-import pdbe_sifts.segments_generation.generate_xref_csv as generate_xref_csv
 from pdbe_sifts.segments_generation.alignment import helper
 from pdbe_sifts.segments_generation.alignment.helper import CustomSequenceAccession
 from pdbe_sifts.segments_generation.connectivity.process_connectivity import ConnectivityCheck
@@ -87,18 +86,14 @@ class SiftsAlign:
     def process_entry(self, entry_id):
         cif_file = self.cif_file
         if self.no_used_cif_category_modified(cif_file):
-            logger.info(
-                f"{entry_id}: Modification in non-used cif category detected. Skipping."
-            )
+            logger.info(f"{entry_id}: Modification in non-used cif category detected. Skipping.")
             return
 
         try:
-            logger.info("Processing [%s]" % entry_id)
+            logger.info(f"Processing [{entry_id}]")
             entry = Entry(entry_id, self.cc, cif_file)
         except NotAPolyPeptide:
-            logger.warning(
-                f"No pdbx_poly_seq_scheme category found for {entry_id}. Skipping"
-            )
+            logger.warning(f"No pdbx_poly_seq_scheme category found for {entry_id}. Skipping")
             return
 
         chain_lst = list(entry.chains.keys())
@@ -141,10 +136,8 @@ class SiftsAlign:
                 em.chain_obj.segments = connectivity_check.check_segments_conn()
 
         Path(self.out_dir).mkdir(parents=True, exist_ok=True)
-        generate_xref_csv.insert_mappings(
-            self.out_dir, entry, self.nf90_mode, self.conn
-        )
-        logger.info("Processed [%s]" % entry_id)
+        generate_xref_csv.insert_mappings(self.out_dir, entry, self.nf90_mode, self.conn)
+        logger.info(f"Processed [{entry_id}]")
 
     def remove_existing_files(self, entry_id):
         for f in Path(self.out_dir).glob(f"{entry_id}_*.csv.gz"):
@@ -177,9 +170,7 @@ class SiftsAlign:
             chain, acc = chain.split(":")
             try:
                 unp = UNP(acc)
-                mapp.setdefault(chain, []).append(
-                    helper.SMapping(unp.accession, 0, 0)
-                )
+                mapp.setdefault(chain, []).append(helper.SMapping(unp.accession, 0, 0))
             except ObsoleteUniProtError:
                 logger.warning(
                     f"Obsolete UniProt accession provided by user: {acc}. Will be ignored"
@@ -229,22 +220,14 @@ class SiftsAlign:
         self.used_cif_categories = {cat.lstrip("_") for cat in self.used_cif_categories}
 
         block = gemmi.cif.read(str(cif_file)).sole_block()
-        history = block.find(
-            "_pdbx_audit_revision_history.", ["ordinal", "revision_date"]
-        )
-        ordinals = [
-            row["ordinal"]
-            for row in history
-            if self._is_future_date(row["revision_date"])
-        ]
+        history = block.find("_pdbx_audit_revision_history.", ["ordinal", "revision_date"])
+        ordinals = [row["ordinal"] for row in history if self._is_future_date(row["revision_date"])]
 
         if not ordinals:
             logger.info("No future revisions found")
             return False
 
-        categories = block.find(
-            "_pdbx_audit_revision_category.", ["revision_ordinal", "category"]
-        )
+        categories = block.find("_pdbx_audit_revision_category.", ["revision_ordinal", "category"])
         if not categories:
             logger.info("No pdbx_audit_revision_category found")
             return False
@@ -252,9 +235,7 @@ class SiftsAlign:
         modified_categories = {
             row["category"] for row in categories if row["revision_ordinal"] in ordinals
         }
-        modified_used_categories = modified_categories.intersection(
-            self.used_cif_categories
-        )
+        modified_used_categories = modified_categories.intersection(self.used_cif_categories)
         if not modified_used_categories:
             logger.debug(f"Modified categories: {', '.join(modified_categories)}")
             logger.debug(f"Used categories: {', '.join(self.used_cif_categories)}")
@@ -267,9 +248,7 @@ class SiftsAlign:
 
 @log_durations(logger.info)
 def run():
-    parser = argparse.ArgumentParser(
-        "Segment generation in SIFTS, generates seg_csv, res_csv"
-    )
+    parser = argparse.ArgumentParser("Segment generation in SIFTS, generates seg_csv, res_csv")
 
     parser.add_argument(
         "-i",
@@ -316,10 +295,7 @@ def run():
         "--duckdb",
         required=False,
         default=None,
-        help=(
-            "DuckDB hits file to query mappings from. "
-            "Optional when -m/--mapping is provided."
-        ),
+        help=("DuckDB hits file to query mappings from. Optional when -m/--mapping is provided."),
     )
 
     parser.add_argument(

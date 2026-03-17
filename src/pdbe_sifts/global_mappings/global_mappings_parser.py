@@ -9,12 +9,14 @@ and computes adjusted, taxonomy-based, dataset, and SIFTS scores.
 
 import argparse
 import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+
 import duckdb
 import pandas as pd
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from pdbe_sifts.global_mappings.scoring_function_helper import get_tax_weight
+
 from pdbe_sifts.base.log import logger
+from pdbe_sifts.global_mappings.scoring_function_helper import get_tax_weight
 from pdbe_sifts.unp.unp import fetch_accessions
 
 # Identity cutoff
@@ -79,10 +81,10 @@ SELECT
     taln AS target_aligned,
     taxid AS target_tax_id,
     -- Extract query_tax_id from qheader (format: "...TaxID=12345")
-    CASE 
-        WHEN qheader IS NOT NULL AND qheader LIKE '%=%' 
+    CASE
+        WHEN qheader IS NOT NULL AND qheader LIKE '%=%'
         THEN TRY_CAST(SPLIT_PART(qheader, '=', -1) AS INTEGER)
-        ELSE NULL 
+        ELSE NULL
     END AS query_tax_id,
     NULL AS sifts_score,
     NULL AS pdb_cross_references,
@@ -171,21 +173,18 @@ FROM read_csv(
 WHERE pident / 100.0 >= {identity_cutoff};
 """
 
+
 def score_taxonomy_pair(args):
     """
     Worker function to compute taxonomy score for a pair of tax IDs.
     """
     query_taxid, target_taxid = args
     pair = (query_taxid, target_taxid)
-    
+
     try:
         score = get_tax_weight(query_taxid, target_taxid)
-        return {
-            'query_tax_id': query_taxid,
-            'target_tax_id': target_taxid,
-            'tax_score': score
-        }
-    except Exception as e:  
+        return {"query_tax_id": query_taxid, "target_tax_id": target_taxid, "tax_score": score}
+    except Exception as e:
         logger.error(f"Error getting tax_weight for {pair}: {e}")
         return None
 
@@ -204,8 +203,16 @@ class GlobMappingsParser:
 
     Designed to handle very large TSV files efficiently.
     """
-    def __init__(self, format, result_file_path, out_dir,
-                 unp_csv=None, max_workers=None, identity_cutoff=IDENTITY_CUTOFF):
+
+    def __init__(
+        self,
+        format,
+        result_file_path,
+        out_dir,
+        unp_csv=None,
+        max_workers=None,
+        identity_cutoff=IDENTITY_CUTOFF,
+    ):
         self.format = format
         self.result_file_path = Path(result_file_path)
         self.out_dir = Path(out_dir)
@@ -233,20 +240,18 @@ class GlobMappingsParser:
         # Insert data with identity filter
         if self.format == "mmseqs":
             sql = INSERT_MMSEQS_TABLE_HITS.format(
-                tsv_path=str(self.result_file_path),
-                identity_cutoff=self.identity_cutoff
+                tsv_path=str(self.result_file_path), identity_cutoff=self.identity_cutoff
             )
         elif self.format == "blastp":
             sql = INSERT_BLASTP_TABLE_HITS.format(
-                tsv_path=str(self.result_file_path),
-                identity_cutoff=self.identity_cutoff
+                tsv_path=str(self.result_file_path), identity_cutoff=self.identity_cutoff
             )
         else:
             raise ValueError(f"Unsupported format: {self.format}")
 
         logger.info(f"Loading data with identity >= {self.identity_cutoff}...")
         conn.execute(sql)
-        
+
         # Log how many rows were loaded
         count = conn.execute("SELECT COUNT(*) FROM hits").fetchone()[0]
         logger.info(f"Loaded {count} hits passing identity filter")
@@ -307,7 +312,8 @@ class GlobMappingsParser:
 
         # 2) Load initial CSV if provided
         if self.unp_csv:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO accession_info
                 SELECT
                     accession,
@@ -320,21 +326,28 @@ class GlobMappingsParser:
                     delim=',',
                     header=true
                 );
-            """, [str(self.unp_csv)])
+            """,
+                [str(self.unp_csv)],
+            )
 
         # 3) Find missing accessions from hits
-        missing = [acc[0] for acc in conn.execute("""
+        missing = [
+            acc[0]
+            for acc in conn.execute("""
             SELECT DISTINCT h.accession
             FROM hits h
             LEFT JOIN accession_info a
             ON h.accession = a.accession
             WHERE a.accession IS NULL
-        """).fetchall()]
+        """).fetchall()
+        ]
 
         # 4) Fetch accession, provenance, annotation_score and number of pdb xrefs if any:
         if missing:
             rows = fetch_accessions(missing)
-            df = pd.DataFrame(rows, columns=["accession", "provenance", "pdb_xref", "annotation_score"])
+            df = pd.DataFrame(
+                rows, columns=["accession", "provenance", "pdb_xref", "annotation_score"]
+            )
             conn.register("tmp_accession_info", df)
             conn.execute("""
                 INSERT INTO accession_info (accession, provenance, pdb_xref, annotation_score)
@@ -386,10 +399,9 @@ class GlobMappingsParser:
             + COALESCE(dataset_score, 0)
             """)
 
-        logger.info(f"SIFTS score computed.")
+        logger.info("SIFTS score computed.")
 
         conn.close()
-
 
     def compute_rank(self):
         """Assign a dense rank to each hit per (entry, entity), ordered by SIFTS score descending."""
@@ -416,51 +428,47 @@ class GlobMappingsParser:
         """)
         conn.close()
 
-
     def compute_tax_score(self):
         """Compute taxonomy scores for all distinct pairs of query_tax_id, target_tax_id"""
         conn = duckdb.connect(str(self.db_path))
 
         # Get distinct pairs, excluding NULL values
         pairs = conn.execute("""
-            SELECT DISTINCT query_tax_id, target_tax_id 
-            FROM hits 
-            WHERE query_tax_id IS NOT NULL 
+            SELECT DISTINCT query_tax_id, target_tax_id
+            FROM hits
+            WHERE query_tax_id IS NOT NULL
             AND target_tax_id IS NOT NULL
         """).fetchall()
-        
+
         conn.close()
-        
+
         logger.info(f"Scoring {len(pairs)} taxonomy id pairs using {self.max_workers} workers")
-        
+
         # Batch size for database updates
         DB_UPDATE_BATCH_SIZE = 5000
         all_updates = []
-        
+
         with ProcessPoolExecutor(max_workers=self.max_workers) as pool:
             # Submit all tasks
-            futures = {
-                pool.submit(score_taxonomy_pair, pair): pair
-                for pair in pairs
-            }
+            futures = {pool.submit(score_taxonomy_pair, pair): pair for pair in pairs}
 
             # Process results as they complete
             for i, fut in enumerate(as_completed(futures), 1):
                 pair = futures[fut]
                 try:
                     result = fut.result()
-                    
+
                     if result is not None:
                         all_updates.append(result)
-                    
+
                     # Batch update when we have enough results
                     if len(all_updates) >= DB_UPDATE_BATCH_SIZE:
                         self._batch_update_tax_scores(all_updates)
                         all_updates = []
-                    
+
                     if i % 1000 == 0:
                         logger.info(f"[{i}/{len(pairs)}] processed taxonomy pairs")
-                        
+
                 except Exception as e:
                     logger.error(f"Error processing pair {pair}: {e}")
 
@@ -470,35 +478,33 @@ class GlobMappingsParser:
 
         logger.info("Taxonomy scoring complete!")
 
-
     def _batch_update_tax_scores(self, updates):
         """
         Helper method to batch update tax_scores in the database.
         """
         if not updates:
             return
-        
+
         conn = duckdb.connect(str(self.db_path))
-        
+
         try:
             df_updates = pd.DataFrame(updates)
-            conn.register('tmp_tax_updates', df_updates)
-            
+            conn.register("tmp_tax_updates", df_updates)
+
             conn.execute("""
                 UPDATE hits
                 SET tax_score = tmp_tax_updates.tax_score
                 FROM tmp_tax_updates
-                WHERE hits.query_tax_id = tmp_tax_updates.query_tax_id 
+                WHERE hits.query_tax_id = tmp_tax_updates.query_tax_id
                 AND hits.target_tax_id = tmp_tax_updates.target_tax_id
             """)
-            
+
             logger.info(f"Updated {len(updates)} taxonomy score mappings in database")
-            
+
         except Exception as e:
             logger.error(f"Error in batch update: {e}")
         finally:
             conn.close()
-
 
     def parse(self):
         """Main parsing pipeline"""
@@ -518,20 +524,24 @@ def main():
     parser.add_argument("--output", required=True, help="Output directory")
     parser.add_argument("--unp-csv", help="Path to UniProt CSV file (optional)")
     parser.add_argument("--workers", type=int, help="Number of workers")
-    parser.add_argument("--identity-cutoff", type=float, default=IDENTITY_CUTOFF,
-                       help=f"Minimum identity (default: {IDENTITY_CUTOFF})")
-    
+    parser.add_argument(
+        "--identity-cutoff",
+        type=float,
+        default=IDENTITY_CUTOFF,
+        help=f"Minimum identity (default: {IDENTITY_CUTOFF})",
+    )
+
     args = parser.parse_args()
-    
+
     parser_obj = GlobMappingsParser(
         format=args.format,
         result_file_path=args.input,
         out_dir=args.output,
         unp_csv=args.unp_csv,
         max_workers=args.workers,
-        identity_cutoff=args.identity_cutoff
+        identity_cutoff=args.identity_cutoff,
     )
-    
+
     parser_obj.parse()
 
 

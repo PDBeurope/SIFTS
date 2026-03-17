@@ -1,4 +1,3 @@
-
 """
 Base class for tool-specific database creation.
 
@@ -8,9 +7,11 @@ Subclasses must implement the `_process` method.
 """
 
 from abc import ABC, abstractmethod
-from timeit import default_timer as timer
 from pathlib import Path
+from timeit import default_timer as timer
+
 from pdbe_sifts.base.log import logger
+
 
 class ToolDatabase(ABC):
     """
@@ -35,12 +36,14 @@ class ToolDatabase(ABC):
 
     def run(self):
         """Creates the database and logs the processing time."""
-        logger.info(f"Processing the creation of the database from {self.input_path}. This could take many hours/days.")
+        logger.info(
+            f"Processing the creation of the database from {self.input_path}. This could take many hours/days."
+        )
         start = timer()
         self._process()
         end = timer()
         logger.info("Creation finished.")
-        logger.info(f'Creation process took: {end - start} seconds.')
+        logger.info(f"Creation process took: {end - start} seconds.")
         logger.info(f"Database saved: {self.output_path}")
 
     @abstractmethod

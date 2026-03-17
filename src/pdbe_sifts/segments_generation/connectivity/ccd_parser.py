@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 
 import os
-import shutil
-import requests
+
 import gemmi
 from pdbe_sifts.base.paths import ccd_cache_path
 from pdbe_sifts.base.utils import download_file_from_url
 
 URL = "https://ftp.ebi.ac.uk/pub/databases/msd/pdbechem_v2/ccd/"
 
-def get_ccd_file(threeL_res):
 
+def get_ccd_file(threeL_res):
     threeL_res = threeL_res.upper()
 
     local_path = ccd_cache_path(threeL_res)
@@ -20,15 +19,7 @@ def get_ccd_file(threeL_res):
 
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
-    url = (
-        URL
-        + threeL_res[0]
-        + "/"
-        + threeL_res
-        + "/"
-        + threeL_res
-        + ".cif"
-    )
+    url = URL + threeL_res[0] + "/" + threeL_res + "/" + threeL_res + ".cif"
 
     tmp_path = local_path + ".tmp"
 
@@ -44,6 +35,7 @@ def get_ccd_file(threeL_res):
             os.remove(tmp_path)
 
     return local_path
+
 
 def ccd_dict_builder(ccd_ters):
     try:
@@ -107,9 +99,7 @@ class CcdFile:
                 "pdbx_component_comp_id": cif_loop.loop[
                     i, columns["_chem_comp_atom.pdbx_component_comp_id"]
                 ],
-                "pdbx_ordinal": cif_loop.loop[
-                    i, columns["_chem_comp_atom.pdbx_ordinal"]
-                ],
+                "pdbx_ordinal": cif_loop.loop[i, columns["_chem_comp_atom.pdbx_ordinal"]],
             }
             atoms[i] = atom
         self.atoms = atoms
@@ -117,15 +107,9 @@ class CcdFile:
     def extract_ters(self):
         atoms_extracted = {}
         for atom, descrip in self.atoms.items():
-            if (
-                descrip["pdbx_n_terminal_atom_flag"] == "Y"
-                and descrip["type_symbol"] == "N"
-            ):
+            if descrip["pdbx_n_terminal_atom_flag"] == "Y" and descrip["type_symbol"] == "N":
                 atoms_extracted["n_ter"] = (atom, descrip)
-            if (
-                descrip["pdbx_c_terminal_atom_flag"] == "Y"
-                and descrip["type_symbol"] == "C"
-            ):
+            if descrip["pdbx_c_terminal_atom_flag"] == "Y" and descrip["type_symbol"] == "C":
                 atoms_extracted["c_ter"] = (atom, descrip)
         return atoms_extracted
 

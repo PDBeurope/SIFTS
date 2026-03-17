@@ -7,21 +7,21 @@ from a large XML file.
 import os
 import pickle
 import random
-import requests
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
 import funcy
+import requests
+from funcy.calc import memoize
 from lxml import etree as ElementTree
 from lxml.etree import XMLSyntaxError
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from funcy.calc import memoize
 
+from pdbe_sifts.base.exceptions import ObsoleteUniProtError
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.paths import uniprot_cache_dir as get_uniprot_cache_dir
 from pdbe_sifts.base.utils import fetch_uniprot_file
-from pdbe_sifts.base.exceptions import ObsoleteUniProtError, AccessionNotFound
 
 COLORS = {
     "white": 0,
@@ -49,13 +49,14 @@ def get_unp_object(acc):
         memoize.skip()
     return unp
 
+
 def get_annotation_score(accession):
     """
     Fetch UniProt annotation score one accession.
     """
     if not accession:
         return []
-    url = f'https://rest.uniprot.org/uniprotkb/{accession}?fields=annotation_score'
+    url = f"https://rest.uniprot.org/uniprotkb/{accession}?fields=annotation_score"
     r = requests.get(url, timeout=30)
     r.raise_for_status()
     data = r.json()
@@ -95,20 +96,21 @@ def fetch_uniprot_batch(accessions: list[str]) -> list[dict]:
 
         annotation_score = e.get("annotationScore")
 
-        rows.append({
-            "accession": accession,
-            "provenance": provenance,
-            "pdb_xref": pdb_xref,
-            "annotation_score": annotation_score,
-        })
+        rows.append(
+            {
+                "accession": accession,
+                "provenance": provenance,
+                "pdb_xref": pdb_xref,
+                "annotation_score": annotation_score,
+            }
+        )
 
     return rows
 
 
 def fetch_accessions(all_accessions, max_workers=4, batch_size=100):
     batches = [
-        all_accessions[i:i+batch_size]
-        for i in range(0, len(all_accessions), batch_size)
+        all_accessions[i : i + batch_size] for i in range(0, len(all_accessions), batch_size)
     ]
 
     results = []
@@ -120,13 +122,14 @@ def fetch_accessions(all_accessions, max_workers=4, batch_size=100):
 
     return results
 
+
 def colored(string, color="green", bold=False):
     if bold:
         b = "\033[1m"
     else:
         b = ""
 
-    tone = "\033[%dm" % COLORS[color]
+    tone = f"\033[{COLORS[color]}m"
     reset = "\033[0m"
 
     return b + tone + str(string) + reset
@@ -197,9 +200,7 @@ class UNP:
         """
         cache = bool(os.getenv("SIFTS_NO_CACHE_ALL", True))
 
-        pickle_file_path = os.path.join(
-            get_uniprot_cache_dir(accession), f"{accession}.pkl"
-        )
+        pickle_file_path = os.path.join(get_uniprot_cache_dir(accession), f"{accession}.pkl")
 
         loaded = False
         if cache and Path(pickle_file_path).exists():
@@ -268,9 +269,7 @@ class UNP:
 
     def _populate_fields(self, doc):
         uniprot = doc[0]
-        self.secondary_accessions = list(
-            map(str, uniprot.xpath(".//*[name()='accession']/text()"))
-        )
+        self.secondary_accessions = list(map(str, uniprot.xpath(".//*[name()='accession']/text()")))
         self.accession = str(self.secondary_accessions[0])
         del self.secondary_accessions[0]
 
@@ -290,9 +289,7 @@ class UNP:
         self.seq_molWeight = str(about_sequence.xpath("./@mass")[0])
         self.seq_checksum = str(about_sequence.xpath("./@checksum")[0])
 
-        self.keywords = [
-            kw.upper() for kw in uniprot.xpath(".//*[name()='keyword']/text()")
-        ]
+        self.keywords = [kw.upper() for kw in uniprot.xpath(".//*[name()='keyword']/text()")]
 
         if len(self.keywords) < 1:
             self.keywords = None
@@ -303,19 +300,16 @@ class UNP:
 
         chainIndices = uniprot.xpath(".//*[name()='feature'][@type='chain']")
 
-        if chainIndices != []:
-            if (
-                chainIndices[0].xpath(".//*[name()='begin']/@status") != []
-                and chainIndices[0].xpath(".//*[name()='end']/@status") != []
-            ):
-                self.chain = (
-                    int(chainIndices[0].xpath(".//*[name()='begin']/@position")[0]),
-                    int(chainIndices[0].xpath(".//*[name()='end']/@position")[0]),
-                )
+        if chainIndices != [] and (
+            chainIndices[0].xpath(".//*[name()='begin']/@status") != []
+            and chainIndices[0].xpath(".//*[name()='end']/@status") != []
+        ):
+            self.chain = (
+                int(chainIndices[0].xpath(".//*[name()='begin']/@position")[0]),
+                int(chainIndices[0].xpath(".//*[name()='end']/@position")[0]),
+            )
 
-        self.molName = [
-            name.upper() for name in uniprot.xpath(".//*[name()='protein']//text()")
-        ]
+        self.molName = [name.upper() for name in uniprot.xpath(".//*[name()='protein']//text()")]
 
         recommendedNames = uniprot.xpath(".//*[name()='recommendedName']")
         alternativeNames = uniprot.xpath(".//*[name()='alternativeName']")
@@ -350,9 +344,7 @@ class UNP:
         about_dbreference = uniprot.xpath(".//*[name()='dbReference']")
         for ref in about_dbreference:
             ref_type = ref.xpath("./@type")[0]
-            self.dbreferences.setdefault(ref_type, []).append(
-                str(ref.xpath("./@id")[0])
-            )
+            self.dbreferences.setdefault(ref_type, []).append(str(ref.xpath("./@id")[0]))
 
         about_features = uniprot.xpath(".//*[name()='feature']")
         self._extract_features(about_features)
@@ -374,9 +366,7 @@ class UNP:
         self.organism = list(map(str, self.organism))
         self.taxonomy = [
             str(tax.xpath("./@id")[0])
-            for tax in about_organism[0].xpath(
-                ".//*[name()='dbReference'][@type='NCBI Taxonomy']"
-            )
+            for tax in about_organism[0].xpath(".//*[name()='dbReference'][@type='NCBI Taxonomy']")
         ]
 
     def _extract_features(self, about_features):
@@ -458,13 +448,9 @@ class UNP:
                     self.isoforms[str(isoid)] = spliceids
 
             if cc.xpath(".//*[name()='text']/text()") != []:
-                self.comments[cc_type].append(
-                    str(cc.xpath(".//*[name()='text']/text()")[0])
-                )
+                self.comments[cc_type].append(str(cc.xpath(".//*[name()='text']/text()")[0]))
             if cc.xpath(".//*[name()='link']/@uri") != []:
-                self.comments[cc_type].append(
-                    str(cc.xpath(".//*[name()='link']/@uri")[0])
-                )
+                self.comments[cc_type].append(str(cc.xpath(".//*[name()='link']/@uri")[0]))
             if cc.xpath(".//*[name()='subcellularLocation']") != []:
                 self.comments[cc_type].append(
                     str(
@@ -486,9 +472,7 @@ class UNP:
                 begin = None
             # if begin == end then they sometimes use position/position
             elif signal_peptide.xpath(".//*[name()='position']/@position"):
-                begin = int(
-                    signal_peptide.xpath(".//*[name()='position']/@position")[0]
-                )
+                begin = int(signal_peptide.xpath(".//*[name()='position']/@position")[0])
             else:
                 begin = int(signal_peptide.xpath(".//*[name()='begin']/@position")[0])
 
@@ -536,11 +520,7 @@ class UNP:
         newSeq = self.sequence
 
         for splice in splices:
-            newSeq = (
-                newSeq[: splice["begin"] - 1]
-                + splice["variation"]
-                + newSeq[splice["end"] :]
-            )
+            newSeq = newSeq[: splice["begin"] - 1] + splice["variation"] + newSeq[splice["end"] :]
 
         return newSeq
 
@@ -599,30 +579,22 @@ class UNP:
         return self.molName if self.molName else None
 
     def hasSecondaryName(self):
-        return True if self.synonyms else False
+        return bool(self.synonyms)
 
     def getUNPSecondaryName(self):
         return self.synonyms if self.synonyms else []
 
     def hasShortName(self):
-        return True if self.synonyms else False
+        return bool(self.synonyms)
 
     def getUNPShortName(self):
         return self.longName if self.longName else False
 
     def hasSpliceVariants(self):
-        return (
-            True
-            if self.features and "splice variant" in list(self.features.keys())
-            else False
-        )
+        return bool(self.features and "splice variant" in list(self.features.keys()))
 
     def hasVariants(self):
-        return (
-            True
-            if self.features and "sequence variant" in list(self.features.keys())
-            else False
-        )
+        return bool(self.features and "sequence variant" in list(self.features.keys()))
 
     def getSpliceVariants(self):
         if self.hasSpliceVariants():
@@ -646,25 +618,13 @@ class UNP:
         return self.longName
 
     def hasSecondaryAccessions(self):
-        return (
-            True
-            if self.secondary_accessions and self.secondary_accessions != []
-            else False
-        )
+        return bool(self.secondary_accessions and self.secondary_accessions != [])
 
     def hasModifiedResidues(self):
-        return (
-            True
-            if self.features and "modified residue" in list(self.features.keys())
-            else False
-        )
+        return bool(self.features and "modified residue" in list(self.features.keys()))
 
     def hasMutagenesisSite(self):
-        return (
-            True
-            if self.features and "mutagenesis site" in list(self.features.keys())
-            else False
-        )
+        return bool(self.features and "mutagenesis site" in list(self.features.keys()))
 
     def getFeatures(self, idx):
         features = {}

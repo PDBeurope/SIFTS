@@ -9,7 +9,6 @@ interface and CLI for creating BLAST databases from FASTA files.
 
 import argparse
 import subprocess
-from typing import Union
 from pathlib import Path
 
 from pdbe_sifts.base.log import logger
@@ -31,9 +30,9 @@ class MakeBlastDb(ToolDatabase):
 
     def __init__(
         self,
-        input_path: Union[str, Path],
-        output_path: Union[str, Path],
-        tax_id_map: Union[str, Path],
+        input_path: str | Path,
+        output_path: str | Path,
+        tax_id_map: str | Path,
     ):
         super().__init__(input_path, output_path)
         self.tax_id_map = Path(tax_id_map)
@@ -48,12 +47,17 @@ class MakeBlastDb(ToolDatabase):
         """Execute the makeblastdb command to generate the BLAST database."""
         cmd = [
             "makeblastdb",
-            "-in", str(self.input_path),
-            "-input_type", "fasta",
-            "-dbtype", "prot",
+            "-in",
+            str(self.input_path),
+            "-input_type",
+            "fasta",
+            "-dbtype",
+            "prot",
             "-parse_seqids",
-            "-out", str(self.output_path),
-            "-taxid_map", str(self.tax_id_map),
+            "-out",
+            str(self.output_path),
+            "-taxid_map",
+            str(self.tax_id_map),
         ]
 
         logger.info(f"Running makeblastdb: {' '.join(cmd)}")
@@ -66,17 +70,20 @@ def run():
         description="Create a BLAST-formatted protein database using NCBI makeblastdb."
     )
     parser.add_argument(
-        "-in", "--fasta-file",
+        "-in",
+        "--fasta-file",
         required=True,
         help="Path to the input FASTA file (must contain at least one protein sequence).",
     )
     parser.add_argument(
-        "-out", "--output-db",
+        "-out",
+        "--output-db",
         required=True,
         help="Base path for the output BLAST database (no extension).",
     )
     parser.add_argument(
-        "-tax_map", "--taxid-map",
+        "-tax_map",
+        "--taxid-map",
         required=True,
         help="Path to the accession-to-taxid mapping file (tab- or space-delimited).",
     )

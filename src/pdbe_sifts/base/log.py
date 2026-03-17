@@ -19,9 +19,7 @@ import os
 import platform
 import re
 
-LOG_FORMAT = (
-    "{hostname}: {username}: {asctime}: {module}: {lineno} {levelname}: {message}"
-)
+LOG_FORMAT = "{hostname}: {username}: {asctime}: {module}: {lineno} {levelname}: {message}"
 
 
 class SensitiveFormatter(logging.Formatter):

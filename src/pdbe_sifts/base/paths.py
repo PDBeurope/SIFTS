@@ -3,6 +3,7 @@
 `load_config()` is called once here. All other modules must import the getters
 below instead of calling `load_config()` themselves.
 """
+
 from pathlib import Path
 
 from pdbe_sifts.config import load_config
@@ -11,6 +12,7 @@ conf = load_config()
 
 
 # ── Cache path helpers ────────────────────────────────────────────────────────
+
 
 def uniprot_cache_dir(accession: str, base_dir: str | None = None) -> str:
     """Local cache directory for a UniProt accession.
@@ -34,6 +36,7 @@ def ccd_cache_path(three_letter_code: str, base_dir: str | None = None) -> str:
 
 
 # ── Configuration getters ─────────────────────────────────────────────────────
+
 
 def get_conf_user_base_dir():
     return conf.user.base_dir
@@ -65,5 +68,3 @@ def get_conf_mmseqs_db_load_mode() -> int:
 
 def get_conf_blastp_evalue() -> float:
     return conf.alignment.blastp.evalue
-
-

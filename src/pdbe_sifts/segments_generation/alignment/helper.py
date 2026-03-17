@@ -1,3 +1,4 @@
+import contextlib
 from enum import Enum
 from multiprocessing.dummy import Pool
 from typing import NamedTuple
@@ -5,14 +6,13 @@ from typing import NamedTuple
 import tqdm
 from funcy.debug import log_durations
 
-from pdbe_sifts.base.exceptions import SplitAccessionError
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.utils import get_cpu_count
-from pdbe_sifts.segments_generation import alignment
 from pdbe_sifts.mmcif.entry import Entry
+from pdbe_sifts.segments_generation import alignment
+
 # from segments_gen.uniref90_pkl import NF90Coverage, NF90TaxID
-from pdbe_sifts.unp.unp import UNP
-from pdbe_sifts.unp.unp import get_unp_object
+from pdbe_sifts.unp.unp import UNP, get_unp_object
 
 NF_COVERAGE = 0.7
 N_PROC = get_cpu_count()
@@ -64,10 +64,7 @@ def get_accession(entry: Entry, acc: str) -> UNP:
 
 
 def check_range(real_ranges, pdb, unp):
-    for p, u in zip(pdb, unp):
-        if (p, u) not in real_ranges:
-            return False
-    return True
+    return all((p, u) in real_ranges for p, u in zip(pdb, unp, strict=False))
 
 
 def fmt_ranges(ranges):
@@ -165,8 +162,8 @@ class EntryMapping:
         self.repeated_acc = False
         self.accs: list[str] = []
         self.ranges: list[tuple[int, int]] = []
-        self.NFT: NF90TaxID = NFT
-        self.NFC: NF90Coverage = NFC
+        self.NFT = NFT
+        self.NFC = NFC
         self.connectivity_mode = connectivity_mode
 
     def _get_accessions(self):
@@ -211,10 +208,7 @@ class EntryMapping:
             )
             return False
 
-        if self.nf90_mode:
-            if not self.check_unp_coverage():
-                return False
-        return True
+        return not (self.nf90_mode and not self.check_unp_coverage())
 
     @log_durations(logger.debug)
     def process(self):
@@ -252,9 +246,7 @@ class EntryMapping:
                 my_list = list(isoforms.items())
                 list(
                     tqdm.tqdm(
-                        pool.imap_unordered(
-                            self.process_each_isoform, my_list, chunksize=STEP_SIZE
-                        )
+                        pool.imap_unordered(self.process_each_isoform, my_list, chunksize=STEP_SIZE)
                     )
                 )
         if self.connectivity_mode:
@@ -265,11 +257,7 @@ class EntryMapping:
     def process_each_isoform(self, row):
         iso, seq = row
         # Don't repeat the canonical
-        if (
-            not self.nf90_mode
-            and seq == self.unp.sequence
-            and iso != self.unp.accession
-        ):
+        if not self.nf90_mode and seq == self.unp.sequence and iso != self.unp.accession:
             logger.info(f"{iso} is the canonical. Skipping...")
             return iso
 
@@ -284,12 +272,10 @@ class EntryMapping:
                 except StopIteration:
                     break
         else:
-            try:
-                alns.append(next(all_alns))
             # the alignment might be impossible
             # (e.g. an isoform which doesn't have the relevant sequence fragment)
-            except StopIteration:
-                pass
+            with contextlib.suppress(StopIteration):
+                alns.append(next(all_alns))
         self.process_alignments(self.unp, iso, alns)
         return iso
 
@@ -304,15 +290,13 @@ class EntryMapping:
 
             logger.debug(alignment.annotate_alignment(al[0].seq, al[1].seq))
 
-            logger.debug("PDB: [%d-%d]" % (pdb_start, pdb_end))
-            logger.debug("UNP: [%d-%d]" % (unp_start, unp_end))
+            logger.debug(f"PDB: [{pdb_start}-{pdb_end}]")
+            logger.debug(f"UNP: [{unp_start}-{unp_end}]")
 
             pdb_ranges = [(pdb_start, pdb_end)]
             unp_ranges = [(unp_start, unp_end)]
 
-            self.chain_obj.mappings.setdefault(iso, []).append(
-                (pdb_ranges, unp_ranges, al)
-            )
+            self.chain_obj.mappings.setdefault(iso, []).append((pdb_ranges, unp_ranges, al))
             identity = alignment.get_identity(al[0]._seq, al[1]._seq)
             score = alignment.get_score(al[0]._seq, al[1]._seq)
 
@@ -346,9 +330,7 @@ class EntryMapping:
         if not unp:
             accs = self.entry.mmcif.get_unp(self.chain)
             if not accs:
-                logger.warning(
-                    f"The mmCIF doesnt have a UniProt accession: {self.entry.pdbid}"
-                )
+                logger.warning(f"The mmCIF doesnt have a UniProt accession: {self.entry.pdbid}")
                 self.chain_obj.is_chimera = False
                 self.repeated_acc = False
                 return
@@ -361,13 +343,9 @@ class EntryMapping:
                 self.repeated_acc = False
                 return
 
-            logger.warning(
-                f"The accession {acc} is not valid. Got {accs[0]} from mmCIF"
-            )
+            logger.warning(f"The accession {acc} is not valid. Got {accs[0]} from mmCIF")
             if acc == accs[0]:
-                logger.warning(
-                    f"CIF has same invalid obsolete accession {acc}. Doing nothing"
-                )
+                logger.warning(f"CIF has same invalid obsolete accession {acc}. Doing nothing")
                 return
 
             unp = get_accession(self.entry, accs[0])
@@ -408,9 +386,7 @@ class EntryMapping:
             return False
         coverage = self.NFC.get_coverage(self.entry.pdbid, self.chain, unp.accession)
         if coverage < NF_COVERAGE:
-            logger.warning(
-                f"Coverage {coverage} < {NF_COVERAGE} so we skip it for UniRef90"
-            )
+            logger.warning(f"Coverage {coverage} < {NF_COVERAGE} so we skip it for UniRef90")
             return False
         return True
 

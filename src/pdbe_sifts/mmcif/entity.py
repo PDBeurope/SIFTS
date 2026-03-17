@@ -6,34 +6,32 @@ An entity represents a unique sequence in a PDB structure.
 Multiple chains can share the same entity (e.g. homodimers).
 """
 
-from typing import Optional, List, Dict
-from collections.abc import Mapping
-from Bio.Seq import Seq
+from itertools import groupby
 from multiprocessing.dummy import Pool
 from operator import itemgetter
-from itertools import groupby
+
 import tqdm
+from Bio.Seq import Seq
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.utils import get_cpu_count
-from . import mmcif_helper
-from pdbe_sifts.unp.unp import UNP
-from .residue import Residue
-from .chain import Chain
-from .chem_comp import ChemCompMapping
 
+from . import mmcif_helper
+from .chain import Chain
+from .residue import Residue
 
 N_PROC = get_cpu_count()
 STEP_SIZE = 2000
 
+
 class Entity:
     """
     Represents a biological entity in an mmCIF file.
-    
+
     An entity corresponds to a unique sequence (_entity_poly in mmCIF).
     Multiple chains (auth_asym_id) can belong to the same entity
     (for example, in a homodimer, chains A and B share the same entity).
-    
+
     Attributes:
         mmcif (mmcif_helper.mmCIF): Parsed mmCIF object
         pdbid (str): PDB identifier (e.g. "1ABC")
@@ -52,11 +50,11 @@ class Entity:
         mmcif: mmcif_helper.mmCIF,
         pdbid: str,
         entity_id: str,
-        parent: Optional[object] = None,
+        parent: object | None = None,
     ):
         """
         Initialize an entity from mmCIF data.
-        
+
         Args:
             mmcif: mmCIF object containing parsed data
             pdbid: 4-character PDB identifier
@@ -78,43 +76,41 @@ class Entity:
         # alignment info
         # residues are the same to each chain belonging to the same entity
         # however in chain X they can be observed and not in chain Y
-        self.residues: List[Residue] = []
-        self.alignment_sequence: List[str] = []
+        self.residues: list[Residue] = []
+        self.alignment_sequence: list[str] = []
         self.expression_tag_start = None
-        
+
         # Lists of chains belonging to this entity
-        self.auth_asym_ids: List[str] = []
-        self.struct_asym_ids: List[str] = []
-        
+        self.auth_asym_ids: list[str] = []
+        self.struct_asym_ids: list[str] = []
+
         # References to Chain objects for this entity
-        self.chains: Dict[str, Chain] = {}
-        
+        self.chains: dict[str, Chain] = {}
+
         # Biological metadata
-        self.ec: List[str] = []
-        self.tax_id: Optional[int] = None
-        
+        self.ec: list[str] = []
+        self.tax_id: int | None = None
+
         # mapping information
-        self.mappings: Dict = {}
+        self.mappings: dict = {}
         self.residue_maps = {}
         self.segments = {}
-        
+
         # Flag indicating whether this entity should be skipped
         self.skip: bool = False
-        
+
         # Initialization
         self._load_chains_info()
         self._load_metadata()
         self._load_residues()
         self._gen_alignment_sequence()
-        
+
         logger.debug(
-            f"Entity {entity_id} created for {pdbid} with "
-            f"{len(self.auth_asym_ids)} chain(s)"
+            f"Entity {entity_id} created for {pdbid} with {len(self.auth_asym_ids)} chain(s)"
         )
 
     def get_entity_sequence(self):
         return self.mmcif.get_sequence(self.entity_id)
-
 
     def _load_chains_info(self) -> None:
         """
@@ -123,30 +119,27 @@ class Entity:
         """
         all_chains = self.mmcif.get_chains()
         # ==> {'auth_asym_id': ('entity', 'struct_asym')}
-        
+
         for auth_asym_id, chain_data in all_chains.items():
             chain_entity_id = chain_data[0]
             struct_asym_id = chain_data[1]
-            
+
             if chain_entity_id == self.entity_id:
                 self.auth_asym_ids.append(auth_asym_id)
                 self.struct_asym_ids.append(struct_asym_id)
-        
-        logger.debug(
-            f"Entity {self.entity_id}: chains found = {self.auth_asym_ids}"
-        )
+
+        logger.debug(f"Entity {self.entity_id}: chains found = {self.auth_asym_ids}")
 
     def add_chain(self, auth_asym_id: str, chain: Chain) -> None:
         """
         Add a Chain object to this entity.
-        
+
         Args:
             auth_asym_id: Chain identifier
             chain: Chain object
         """
         self.chains[auth_asym_id] = chain
         logger.debug(f"Chain {auth_asym_id} added to Entity {self.entity_id}")
-
 
     def _load_residues(self) -> None:
         """
@@ -162,7 +155,7 @@ class Entity:
             return
 
         # Storage: observed per chain, per seq_id
-        self._observed_by_chain: Dict[str, Dict[int, bool]] = {}
+        self._observed_by_chain: dict[str, dict[int, bool]] = {}
 
         # --- 1. Load residues from the first chain (entity-level definition)
         ref_chain = self.auth_asym_ids[0]
@@ -201,7 +194,6 @@ class Entity:
             f"{len(self.auth_asym_ids)} chains"
         )
 
-
     def is_residue_observed(self, seq_id: int, chain_id: str) -> bool:
         """
         Return whether a residue is observed in a given chain.
@@ -218,11 +210,10 @@ class Entity:
         except AttributeError:
             return False
 
-
     def _gen_alignment_sequence(self) -> None:
         """
         Generate the alignment sequence with modifications to simplify alignment.
-        
+
         Applied modifications:
         - Insertions, Linkers, Expression tags → 'J'
         - Mutations, Conflicts, Cloning artifacts → original residue if available
@@ -230,37 +221,34 @@ class Entity:
         """
         if self.alignment_sequence:
             return
-        
+
         for r in self.residues:
             if isinstance(r, list):
                 r = r[0]
-            
+
             # Mark the start of the expression tag
             if r.rtype == "Expression tag" and self.expression_tag_start is None:
                 self.expression_tag_start = r.n
-            
+
             # Mask insertions, linkers, and expression tags
             if r.rtype in ("Insertion", "Linker", "Expression tag"):
                 self.alignment_sequence.append("J")
-            
+
             # Use original residue for mutations/conflicts
             elif r.rtype in ("Engineered mutation", "Conflict", "Cloning artifact"):
-                self.alignment_sequence.append(
-                    r.oneL_original if r.oneL_original else "X"
-                )
-            
+                self.alignment_sequence.append(r.oneL_original if r.oneL_original else "X")
+
             # Expand chromophores
             elif r.is_chromophore:
                 self.alignment_sequence.extend(list(r.oneL))
-            
+
             else:
                 self.alignment_sequence.append(r.oneL)
-        
+
         logger.debug(
             f"Entity {self.entity_id}: alignment sequence generated "
             f"({len(self.alignment_sequence)} positions)"
         )
-
 
     def mod_after_alignment(self, al):
         seq = al[1].seq
@@ -361,20 +349,13 @@ class Entity:
         self.residue_maps[iso] = residue_map
         return iso, residue_map
 
-
     # generate the residue_map between the chain and each isoform
     def generate_residue_maps(self):
         # create a process pool that uses all cpus
         with Pool(N_PROC) as pool:
             # call the function for each item in parallel, get results as tasks complete
             my_list = list(self.mappings.items())
-            list(
-                tqdm.tqdm(
-                    pool.imap_unordered(
-                        self.get_each_resmap, my_list, chunksize=STEP_SIZE
-                    )
-                )
-            )
+            list(tqdm.tqdm(pool.imap_unordered(self.get_each_resmap, my_list, chunksize=STEP_SIZE)))
 
         # remove the residues which map to more than one accession
         # keeping the ones that benefit continuity
@@ -400,12 +381,8 @@ class Entity:
                         # The mapping without conflict has preference
                         pdb_r = self.sequence[key - 1]
                         try:
-                            unp1_r = self.parent.accessions[iso1].seq_isoforms[iso1][
-                                maps1[key] - 1
-                            ]
-                            unp2_r = self.parent.accessions[iso2].seq_isoforms[iso2][
-                                maps2[key] - 1
-                            ]
+                            unp1_r = self.parent.accessions[iso1].seq_isoforms[iso1][maps1[key] - 1]
+                            unp2_r = self.parent.accessions[iso2].seq_isoforms[iso2][maps2[key] - 1]
 
                             # If one is a conflict and the other one is not
                             if unp1_r != unp2_r and pdb_r in (unp1_r, unp2_r):
@@ -474,23 +451,21 @@ class Entity:
                 for seg in val:
                     self.segments[key].remove(seg)
 
-
     def _load_metadata(self) -> None:
         """
         Load biological metadata (EC numbers, taxonomy).
         """
         # EC numbers
         self.ec = self.mmcif.get_ec(self.entity_id)
-        
+
         # Taxonomy – use the first chain
         if self.auth_asym_ids:
             self.tax_id = self.mmcif.get_tax(self.auth_asym_ids[0])
 
-
-    def get_uniprot_accessions(self) -> List[str]:
+    def get_uniprot_accessions(self) -> list[str]:
         """
         Retrieve UniProt accessions for all chains of the entity.
-        
+
         Returns:
             List of UniProt accessions (duplicates removed)
         """
@@ -500,16 +475,14 @@ class Entity:
             accessions.extend(unps)
         return list(set(accessions))
 
-
     def is_enzyme(self) -> bool:
         """
         Check whether the entity is an enzyme (has EC numbers).
-        
+
         Returns:
             True if the entity has at least one EC number
         """
         return len(self.ec) > 0
-
 
     def __repr__(self) -> str:
         """Concise representation of the entity."""
@@ -525,13 +498,13 @@ class Entity:
             f"Chains: {', '.join(self.auth_asym_ids)}",
             f"Sequence length: {len(self.sequence)} residues",
         ]
-        
+
         if self.ec:
             lines.append(f"EC numbers: {', '.join(self.ec)}")
-        
+
         if self.tax_id:
             lines.append(f"Taxonomy ID: {self.tax_id}")
-        
+
         return "\n".join(lines)
 
     def __len__(self) -> int:
