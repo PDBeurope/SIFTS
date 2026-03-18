@@ -18,6 +18,40 @@ from pdbe_sifts.unp.unp import UNP
 
 
 class XRefSegment(NamedTuple):
+    """One continuous PDB↔UniProt mapping segment.
+
+    Each row in ``{entry_id}_seg.csv.gz`` corresponds to one instance.
+    Column order is positional — do not reorder fields.
+
+    Fields:
+        entry_id: PDB entry identifier (e.g. ``"1cbs"``).
+        entity_id: mmCIF entity identifier.
+        id: Segment ordinal within the chain (1-based).
+        auth_asym_id: Author chain ID (e.g. ``"A"``).
+        struct_asym_id: Internal struct_asym chain ID.
+        accession: UniProt accession (e.g. ``"P29373"``).
+        name: UniProt entry name (e.g. ``"RABP2_HUMAN"``).
+        seq_version: UniProt sequence version.
+        unp_start: Start position in the UniProt sequence (1-based).
+        pdb_start: Start position in the PDB SEQRES sequence (1-based).
+        unp_end: End position in the UniProt sequence (1-based, inclusive).
+        pdb_end: End position in the PDB SEQRES sequence (1-based, inclusive).
+        auth_start: Author residue number at segment start.
+        auth_start_icode: Insertion code at segment start (``""`` if none).
+        auth_end: Author residue number at segment end.
+        auth_end_icode: Insertion code at segment end (``""`` if none).
+        conflicts: Number of residue conflicts in the alignment.
+        modifications: Number of modified residues (MSE, PTM…).
+        unp_alignment: Raw alignment string for the UniProt side.
+        pdb_alignment: Raw alignment string for the PDB side.
+        identity: Sequence identity of the alignment (0–1).
+        score: Alignment score.
+        best_mapping: ``True`` if this is the top-ranked UniProt mapping.
+        canonical_acc: ``True`` if the accession is canonical (not isoform).
+        reference_acc: Accession used as alignment reference.
+        chimera: ``True`` if the chain maps to multiple UniProt entries.
+    """
+
     entry_id: str  # VARCHAR(4 BYTE) NOT NULL ENABLE,
     entity_id: int  # INTEGER NOT NULL ENABLE,
     id: int  # noqa: A003  # INTEGER NOT NULL ENABLE,
@@ -47,6 +81,40 @@ class XRefSegment(NamedTuple):
 
 
 class XRefResidue(NamedTuple):
+    """Residue-level PDB↔UniProt mapping.
+
+    Each row in ``{entry_id}_res.csv.gz`` corresponds to one residue.
+    Column order is positional — do not reorder fields.
+
+    Fields:
+        entry_id: PDB entry identifier (e.g. ``"1cbs"``).
+        entity_id: mmCIF entity identifier.
+        id: Residue ordinal within the chain (1-based).
+        auth_asym_id: Author chain ID (e.g. ``"A"``).
+        struct_asym_id: Internal struct_asym chain ID.
+        unp_segment_id: FK to the parent segment ordinal.
+        auth_seq_id: Author residue sequence number (``None`` for HETATM).
+        auth_seq_id_ins_code: Insertion code (``""`` if none).
+        pdb_seq_id: Position in the SEQRES sequence (1-based).
+        unp_seq_id: Corresponding position in UniProt (``None`` if gap).
+        observed: ``"Y"`` if 3-D coordinates exist for this residue.
+        dbentry_id: Internal database entry identifier.
+        accession: UniProt accession.
+        name: UniProt entry name.
+        type: Residue type label (e.g. ``"Natural"``, ``"Insertion"``,
+            ``"Modified"``, ``"Chromophore"``).
+        unp_one_letter_code: UniProt residue (one-letter code).
+        pdb_one_letter_code: PDB residue (one-letter code; ``"X"`` if modified).
+        chem_comp_id: Three-letter CCD code (e.g. ``"ALA"``, ``"MSE"``).
+        mh_id: Model homologue identifier (when applicable).
+        tax_id: NCBI taxonomy ID of the source organism.
+        canonical_acc: ``True`` if the accession is canonical (not isoform).
+        reference_acc: Accession used as alignment reference.
+        best_mapping: ``True`` if this residue belongs to the best mapping.
+        residue_id: Globally unique residue identifier
+            (``{entry_id}_{struct_asym_id}_{pdb_seq_id}``).
+    """
+
     entry_id: str  # VARCHAR(4 BYTE) NOT NULL ENABLE,
     entity_id: int  # INTEGER NOT NULL ENABLE,
     id: int  # noqa: A003  # INTEGER NOT NULL ENABLE,

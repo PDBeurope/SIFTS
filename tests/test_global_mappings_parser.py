@@ -1,7 +1,7 @@
-import duckdb
-import pytest
 from pathlib import Path
 
+import duckdb
+import pytest
 from pdbe_sifts.global_mappings.global_mappings_parser import GlobMappingsParser
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -31,6 +31,7 @@ def query(db_path, sql, params=None):
 # _init_database
 # ---------------------------------------------------------------------------
 
+
 def test_blastp_loads_two_rows(tmp_path):
     p = make_parser("blastp", BLASTP_TSV, tmp_path)
     p._init_database()
@@ -48,7 +49,9 @@ def test_mmseqs_loads_two_rows(tmp_path):
 def test_blastp_entry_entity_parsed(tmp_path):
     p = make_parser("blastp", BLASTP_TSV, tmp_path)
     p._init_database()
-    rows = query(p.db_path, "SELECT entry, entity, accession FROM hits ORDER BY entry")
+    rows = query(
+        p.db_path, "SELECT entry, entity, accession FROM hits ORDER BY entry"
+    )
     assert ("1cbs", "1", "P29373") in rows
     assert ("1vyc", "1", "P83346") in rows
 
@@ -56,7 +59,9 @@ def test_blastp_entry_entity_parsed(tmp_path):
 def test_mmseqs_entry_entity_parsed(tmp_path):
     p = make_parser("mmseqs", MMSEQS_TSV, tmp_path)
     p._init_database()
-    rows = query(p.db_path, "SELECT entry, entity, accession FROM hits ORDER BY entry")
+    rows = query(
+        p.db_path, "SELECT entry, entity, accession FROM hits ORDER BY entry"
+    )
     assert ("1cbs", "1", "P29373") in rows
     assert ("1vyc", "1", "P83346") in rows
 
@@ -75,7 +80,9 @@ def test_blastp_tax_ids_parsed(tmp_path):
     p._init_database()
     rows = {
         r[0]: (r[1], r[2])
-        for r in query(p.db_path, "SELECT entry, query_tax_id, target_tax_id FROM hits")
+        for r in query(
+            p.db_path, "SELECT entry, query_tax_id, target_tax_id FROM hits"
+        )
     }
     assert rows["1cbs"] == (9606, 9606)
     assert rows["1vyc"] == (92438, 92438)
@@ -84,6 +91,7 @@ def test_blastp_tax_ids_parsed(tmp_path):
 # ---------------------------------------------------------------------------
 # compute_adjusted_score
 # ---------------------------------------------------------------------------
+
 
 def test_adjusted_score_blastp(tmp_path):
     p = make_parser("blastp", BLASTP_TSV, tmp_path)
@@ -107,6 +115,7 @@ def test_adjusted_score_mmseqs(tmp_path):
 # compute_dataset_score (requires unp_csv fixture)
 # ---------------------------------------------------------------------------
 
+
 def test_dataset_score_with_unp_csv(tmp_path, unp_csv):
     p = make_parser("blastp", BLASTP_TSV, tmp_path, unp_csv=unp_csv)
     p._init_database()
@@ -125,6 +134,7 @@ def test_dataset_score_with_unp_csv(tmp_path, unp_csv):
 # without touching the ete4 NCBI database.
 # ---------------------------------------------------------------------------
 
+
 def test_tax_score_same_taxid(tmp_path):
     p = make_parser("blastp", BLASTP_TSV, tmp_path)
     p._init_database()
@@ -138,6 +148,7 @@ def test_tax_score_same_taxid(tmp_path):
 # compute_sifts_score (full pipeline without search)
 # adjusted=1000, tax=200, dataset: P29373→100, P83346→60
 # ---------------------------------------------------------------------------
+
 
 def test_sifts_score_full(tmp_path, unp_csv):
     p = make_parser("blastp", BLASTP_TSV, tmp_path, unp_csv=unp_csv)
@@ -158,6 +169,7 @@ def test_sifts_score_full(tmp_path, unp_csv):
 # ---------------------------------------------------------------------------
 # compute_rank
 # ---------------------------------------------------------------------------
+
 
 def test_rank_assigned(tmp_path, unp_csv):
     p = make_parser("blastp", BLASTP_TSV, tmp_path, unp_csv=unp_csv)

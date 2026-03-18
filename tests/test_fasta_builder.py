@@ -1,8 +1,6 @@
 import re
 from pathlib import Path
 
-import pytest
-
 from pdbe_sifts.sifts_fasta_builder import FastaBuilder
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -43,7 +41,9 @@ def test_fasta_header_format(cif_list_file, tmp_path):
     produced = parse_fasta(fasta_path)
     pattern = re.compile(r"^pdb\|[a-z0-9]+-\d+\|OX=\d+$")
     for header in produced:
-        assert pattern.match(header), f"Header does not match expected format: {header}"
+        assert pattern.match(
+            header
+        ), f"Header does not match expected format: {header}"
 
 
 def test_fasta_passthrough(tmp_path):

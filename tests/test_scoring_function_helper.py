@@ -1,7 +1,5 @@
 from unittest.mock import patch
 
-import pytest
-
 from pdbe_sifts.global_mappings.scoring_function_helper import get_tax_weight
 
 _PATCH = "pdbe_sifts.global_mappings.scoring_function_helper.NCBITaxa"
