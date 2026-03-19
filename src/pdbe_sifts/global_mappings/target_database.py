@@ -59,7 +59,7 @@ class TargetDb(ToolDatabase):
         super().__init__(input_path, output_path)
         self.tool = tool
         self.target_db = None
-        self.tax_mapping_file = tax_mapping_file
+        self.tax_mapping_file = Path(tax_mapping_file).resolve()
         self.threads = threads
         self.db_config_kwargs = kwargs
 

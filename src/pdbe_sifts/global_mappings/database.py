@@ -28,8 +28,8 @@ class ToolDatabase(ABC):
 
     def __init__(self, input_path: str, output_path: str):
         """Initializes the ToolDatabase with input and output file paths."""
-        self.input_path = Path(input_path)
-        self.output_path = Path(output_path)
+        self.input_path = Path(input_path).resolve()
+        self.output_path = Path(output_path).resolve()
 
         if not self.input_path.exists():
             raise FileNotFoundError(f"Input file not found : {self.input_path}")
