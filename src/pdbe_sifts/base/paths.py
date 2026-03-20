@@ -65,6 +65,11 @@ def get_conf_mmseqs_alignment_mode() -> int:
 def get_conf_mmseqs_db_load_mode() -> int:
     return conf.alignment.mmseqs.db_load_mode
 
+def get_conf_mmseqs_prefilter_mode() -> int:
+    return conf.alignment.mmseqs.prefilter_mode
+
+def get_conf_mmseqs_index_subset() -> int:
+    return conf.alignment.mmseqs.index_subset
 
 def get_conf_blastp_evalue() -> float:
     return conf.alignment.blastp.evalue

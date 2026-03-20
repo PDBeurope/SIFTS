@@ -20,12 +20,15 @@ Functions:
 import argparse
 from pathlib import Path
 
-from pymmseqs.commands import createdb, createindex
-from pymmseqs.config.createtaxdb_config import CreateTaxDBConfig
+from pymmseqs.commands import createdb
+from pymmseqs.config.createtaxdb_config import CreateTaxDBConfig, CreateIndexConfig
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.global_mappings.database import ToolDatabase
 from pdbe_sifts.global_mappings.makeblastdb import MakeBlastDb
+from pdbe_sifts.base.paths import (
+    get_conf_mmseqs_index_subset
+)
 
 
 class TargetDb(ToolDatabase):
@@ -78,9 +81,11 @@ class TargetDb(ToolDatabase):
                     tax_mapping_file=self.tax_mapping_file,
                     threads=self.threads,
                 ).run()
-                self.target_db = createindex(
-                    self.target_db.to_path(), threads=self.threads
+                self.target_db = CreateIndexConfig(
+                    self.target_db.to_path(), threads=self.threads,
+                    index_subset=get_conf_mmseqs_index_subset()
                 )
+                self.target_db.run()
             case "blastp":
                 self.target_db = MakeBlastDb(
                     self.input_path, self.output_path, self.tax_mapping_file

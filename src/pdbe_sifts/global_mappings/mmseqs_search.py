@@ -23,6 +23,7 @@ from pdbe_sifts.base.paths import (
     get_conf_mmseqs_db_load_mode,
     get_conf_mmseqs_min_seq_id,
     get_conf_mmseqs_sensitivity,
+    get_conf_mmseqs_prefilter_mode
 )
 from pdbe_sifts.global_mappings.base_alignment_search import AlignmentSearch
 
@@ -85,6 +86,7 @@ class MmSearch(AlignmentSearch):
             db_load_mode=get_conf_mmseqs_db_load_mode(),
             s=get_conf_mmseqs_sensitivity(),
             min_seq_id=get_conf_mmseqs_min_seq_id(),
+            prefilter_mode = get_conf_mmseqs_prefilter_mode(),
         )
         result.run()
 

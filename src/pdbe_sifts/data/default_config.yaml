@@ -30,7 +30,10 @@ alignment:
     sensitivity: 5.7        # float, 1–7.5  (higher = more sensitive, slower)
     min_seq_id: 0.9         # float, 0–1    (minimum sequence identity threshold)
     alignment_mode: 3       # int, 0–4      (3 = backtrack; required for qaln/taln)
-    db_load_mode: 2         # int, 0–3      (2 = memory-mapped, fastest for repeated searches)
+    db_load_mode: 0         # int, 0–3      (2 = memory-mapped, fastest for repeated searches)
+    prefilter_mode: 0       # use 1 for single query search (during the search)
+    index_subset: 0         # use 2 for single query search (during build db)
+    
 
   blastp:
     evalue: 10.0            # float         (e-value cut-off for saving hits)
