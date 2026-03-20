@@ -81,11 +81,10 @@ class TargetDb(ToolDatabase):
                     tax_mapping_file=self.tax_mapping_file,
                     threads=self.threads,
                 ).run()
-                self.target_db = CreateIndexConfig(
+                CreateIndexConfig(
                     self.target_db.to_path(), threads=self.threads,
                     index_subset=get_conf_mmseqs_index_subset()
-                )
-                self.target_db.run()
+                ).run()
             case "blastp":
                 self.target_db = MakeBlastDb(
                     self.input_path, self.output_path, self.tax_mapping_file
