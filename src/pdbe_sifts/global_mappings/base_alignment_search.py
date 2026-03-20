@@ -30,9 +30,9 @@ class AlignmentSearch(ABC):
 
     def __init__(self, query_path: str, target_path: str, output_path: str):
         """Initializes the AlignmentSearch with query, target, and output file paths."""
-        self.query_path = query_path
-        self.target_path = target_path
-        self.output_path = output_path
+        self.query_path = str(Path(query_path).resolve())
+        self.target_path = str(Path(target_path).resolve())
+        self.output_path = str(Path(output_path).resolve())
 
         if not Path(self.query_path).exists():
             raise FileNotFoundError(f"Query file not found : {self.query_path}")
