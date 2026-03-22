@@ -8,11 +8,11 @@ Developed at [EMBL-EBI](https://www.ebi.ac.uk/) by the [PDBe](https://www.ebi.ac
 
 ## What is SIFTS?
 
-SIFTS provides residue-level mappings between PDB protein structures and UniProt sequences. This package automates the full pipeline:
+SIFTS provides residue-level mappings between structures and sequences. This package automates the full pipeline:
 
-1. **Build** a reference UniProt sequence database (MMseqs2 or BLASTP)
-2. **Align** PDB entity sequences against it to identify the best UniProt match per chain (≥ 90% identity) according to the SIFTS scoring function
-3. **Generate** precise residue- and segment-level PDB-UNIPROT mappings via local alignment (FASTA36 `lalign36`)
+1. **Build** a reference sequence database (MMseqs2 or BLASTP)
+2. **Align** structure sequences against it to identify the best match per chain (≥ 90% identity) according to the SIFTS scoring function
+3. **Generate** precise residue- and segment-level structure-sequence mappings via local alignment (FASTA36 `lalign36`)
 4. **Store** results in a DuckDB database and per-entry CSV files
 5. **Export** mappings back into annotated mmCIF files
 
@@ -58,7 +58,7 @@ pdbe_sifts init
 # → downloads the NCBI taxonomy database (~70 MB, first run only)
 ```
 
-Edit the config to set your paths (`base_dir`, `nobackup_dir`, `target_db` (after building it), etc.).
+Edit the config to set your paths (`base_dir`, `nobackup_dir`, `target_db` (after building it), etc.). You can also setup different alignment parameters.
 
 ### 2 — Build a reference database
 
@@ -69,7 +69,7 @@ pdbe_sifts build_db \
   -t taxonomy_mapping.tsv   # TSV: sequence_id <tab> tax_id
 ```
 
-### 3 — Run global mappings
+### 3 — Run structure to sequence matching
 
 ```bash
 # Single CIF entry
@@ -79,18 +79,20 @@ pdbe_sifts global_mappings -i 1abc.cif -o ./results -d ./my_db/target_db
 pdbe_sifts global_mappings -i entries.txt -o ./results -d ./my_db/target_db --threads 8
 ```
 
-Produces `hits.duckdb` and `hits.tsv` — a scored table of UniProt accession candidates per PDB entity.
+At this step you can also provide a .csv file to faster the scoring function. This CSV file must contains per row: row_num, uniprot_accession, dataset (Swiss-Prot or TrEMBL), pdb cross-references, annotation score.
+
+Produces `hits.duckdb` and `hits.tsv` — a scored and raw table of sequence candidates per structure entity.
 
 ### 4 — Generate SIFTS segments and residue mappings
 
 ```bash
-# With DuckDB hits (from global_mappings step)
+# With DuckDB hits (from structure to sequence matching step)
 pdbe_sifts segments -i 1abc.cif.gz -o ./segments -d hits.duckdb
 
-# Manual UniProt accession mapping (chain:accession)
+# Manual structure-sequence mapping (chain:accession)
 pdbe_sifts segments -i 1abc.cif.gz -o ./segments -m "A:P00963,B:P00963"
 
-# Custom FASTA mapping (headers: >{auth_asym_id}|{sequence_id})
+# Custom FASTA mapping (headers: >{structure_id}|{auth_asym_id}|{sequence_id})
 pdbe_sifts segments -i 1abc.cif.gz -o ./segments -m custom_seqs.fasta
 ```
 
@@ -104,7 +106,7 @@ pdbe_sifts db_load -i ./segments/ -d hits.duckdb
 
 Bulk-loads the segment and residue CSVs produced in step 4 into the `sifts_xref_segment` and `sifts_xref_residue` tables of the DuckDB file.
 
-### 6 — Annotate mmCIF files with SIFTS data
+### 6 — Annotate mmCIF files with residue level mappings and SIFTS data
 
 ```bash
 # Reading segment data from DuckDB (after step 5)
@@ -247,7 +249,7 @@ conn.close()
 
 | File | Format | Content |
 |------|--------|---------|
-| `hits.duckdb` | DuckDB | Scored UniProt accession candidates per PDB entity |
+| `hits.duckdb` | DuckDB | Scored sequence accession candidates per structure entity |
 | `hits_<entry>.tsv` | TSV | Raw MMseqs2 / BLASTP alignment hits |
 
 ### Segment generation
