@@ -132,9 +132,9 @@ pdbe_sifts sifts2mmcif \
 | `pdbe_sifts init` | Copy default config to `~/.config/pdbe_sifts/config.yaml` and init NCBI taxonomy DB |
 | `pdbe_sifts show` | Print the fully resolved configuration |
 | `pdbe_sifts update_ncbi` | Force-update the local NCBI taxonomy database (ete4) |
-| `pdbe_sifts build_db` | Build a reference sequence database (MMseqs2 or BLASTP) from a UniProt FASTA |
+| `pdbe_sifts build_db` | Build a reference sequence database (MMseqs2 or BLASTP) from a FASTA file |
 | `pdbe_sifts fasta_build` | Extract entity sequences from mmCIF files and write a FASTA |
-| `pdbe_sifts global_mappings` | Align PDB sequences against the reference DB; score and store hits in DuckDB |
+| `pdbe_sifts global_mappings` | Align structure sequences against the reference DB; score and store hits in DuckDB |
 | `pdbe_sifts segments` | Generate SIFTS mappings for a **single** mmCIF entry |
 | `pdbe_sifts db_load` | Bulk-load segment/residue CSVs from segments generation into DuckDB |
 | `pdbe_sifts sifts2mmcif` | Inject SIFTS mappings into an annotated mmCIF file |
