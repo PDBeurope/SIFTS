@@ -139,24 +139,6 @@ pdbe_sifts sifts2mmcif \
 | `pdbe_sifts db_load` | Bulk-load segment/residue CSVs from segments generation into DuckDB |
 | `pdbe_sifts sifts2mmcif` | Inject SIFTS mappings into an annotated mmCIF file |
 
-### `segments` key options
-
-```
--i  INPUT_CIF     Input CIF file (.cif / .cif.gz)                      [required]
--o  OUTPUT_DIR    Output directory for CSV files                         [required]
--d  DB_FILE       DuckDB hits file from global_mappings                 [optional if -m given]
--m  MAPPING       Manual mapping: 'A:P00963' or path to a FASTA file
---entry           PDB entry ID (derived from CIF if omitted)
---no-connectivity Disable connectivity mode
-```
-
-### `db_load` key options
-
-```
--i  INPUT_DIR     Root directory with per-entry sifts/ subdirectories   [required]
--d  DUCKDB        Path to the DuckDB file                               [required]
-```
-
 ---
 
 ## Useful Classes
@@ -258,8 +240,8 @@ Per entry, under `{output_dir}`:
 
 | File | Format | Content |
 |------|--------|---------|
-| `sifts_segment_mapping.csv.gz` | CSV (gzip) | One row per contiguous aligned range (PDB ↔ UniProt positions, identity, conflicts, chimera flag) |
-| `sifts_residue_mapping.csv.gz` | CSV (gzip) | One row per mapped PDB residue (auth seq id, UniProt position, one-letter codes, observed flag) |
+| `sifts_segment_mapping.csv.gz` | CSV (gzip) | One row per contiguous aligned range (structure ↔ sequence positions, identity, conflicts, chimera flag) |
+| `sifts_residue_mapping.csv.gz` | CSV (gzip) | One row per mapped structure residue (auth seq id, sequence position, one-letter codes, observed flag) |
 
 After running `db_load`, results are available in DuckDB tables `sifts_xref_segment` and `sifts_xref_residue`.
 
