@@ -254,7 +254,7 @@ conn.close()
 
 ### Segment generation
 
-Per entry, under `{output_dir}/{entry_id}/sifts/`:
+Per entry, under `{output_dir}`:
 
 | File | Format | Content |
 |------|--------|---------|
