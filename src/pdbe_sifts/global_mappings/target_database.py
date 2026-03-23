@@ -21,7 +21,8 @@ import argparse
 from pathlib import Path
 
 from pymmseqs.commands import createdb
-from pymmseqs.config.createtaxdb_config import CreateTaxDBConfig, CreateIndexConfig
+from pymmseqs.config.createtaxdb_config import CreateTaxDBConfig
+from pymmseqs.config.createindex_config import CreateIndexConfig
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.global_mappings.database import ToolDatabase
