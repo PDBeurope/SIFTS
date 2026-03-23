@@ -256,6 +256,12 @@ class GlobMappingsParser:
             raise ValueError(f"Unsupported format: {self.format}")
 
         logger.info(f"Loading data with identity >= {self.identity_cutoff}...")
+        if self.result_file_path.stat().st_size == 0:
+            logger.warning(
+                f"Empty result file: {self.result_file_path}. No hits to load."
+            )
+            conn.close()
+            return
         conn.execute(sql)
 
         # Log how many rows were loaded
