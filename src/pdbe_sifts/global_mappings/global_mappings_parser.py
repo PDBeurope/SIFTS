@@ -261,6 +261,7 @@ class GlobMappingsParser:
                 f"Empty result file: {self.result_file_path}. No hits to load."
             )
             conn.close()
+            self.create_accession_table()
             return
         conn.execute(sql)
 
