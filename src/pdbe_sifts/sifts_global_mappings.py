@@ -14,7 +14,6 @@ from pathlib import Path
 from timeit import default_timer as timer
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.base.utils import get_date
 from pdbe_sifts.global_mappings.blastp import BlastP
 from pdbe_sifts.global_mappings.global_mappings_parser import GlobMappingsParser
 from pdbe_sifts.global_mappings.mmseqs_search import MmSearch
@@ -56,7 +55,6 @@ class SiftsGlobalMappings:
         self.tool = tool
         self.threads = threads
         self.batch_size = batch_size
-        self.date = get_date()
 
     # ------------------------------------------------------------------
     # Helpers
@@ -141,7 +139,7 @@ class SiftsGlobalMappings:
         start = timer()
 
         # Create (or wipe and recreate) the result directory
-        result_dir = self.out_dir / f"{self.tool}_{self.entry_name}_{self.date}"
+        result_dir = self.out_dir / f"{self.tool}_{self.entry_name}"
         if result_dir.exists():
             shutil.rmtree(result_dir)
         result_dir.mkdir(parents=True, exist_ok=True)
