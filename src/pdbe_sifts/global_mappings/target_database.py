@@ -21,15 +21,13 @@ import argparse
 from pathlib import Path
 
 from pymmseqs.commands import createdb
-from pymmseqs.config.createtaxdb_config import CreateTaxDBConfig
 from pymmseqs.config.createindex_config import CreateIndexConfig
+from pymmseqs.config.createtaxdb_config import CreateTaxDBConfig
 
 from pdbe_sifts.base.log import logger
+from pdbe_sifts.base.paths import get_conf_mmseqs_index_subset
 from pdbe_sifts.global_mappings.database import ToolDatabase
 from pdbe_sifts.global_mappings.makeblastdb import MakeBlastDb
-from pdbe_sifts.base.paths import (
-    get_conf_mmseqs_index_subset
-)
 
 
 class TargetDb(ToolDatabase):
@@ -83,8 +81,10 @@ class TargetDb(ToolDatabase):
                     threads=self.threads,
                 ).run()
                 CreateIndexConfig(
-                    self.target_db.to_path(), threads=self.threads,
-                    index_subset=get_conf_mmseqs_index_subset()
+                    self.target_db.to_path(),
+                    tmp_dir=tmp_fold,
+                    threads=self.threads,
+                    index_subset=get_conf_mmseqs_index_subset(),
                 ).run()
             case "blastp":
                 self.target_db = MakeBlastDb(

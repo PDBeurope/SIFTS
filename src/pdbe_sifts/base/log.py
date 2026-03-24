@@ -18,6 +18,7 @@ import logging
 import os
 import platform
 import re
+import sys
 
 LOG_FORMAT = "{hostname}: {username}: {asctime}: {module}: {lineno} {levelname}: {message}"
 
@@ -43,7 +44,7 @@ def record_factory(*args, **kwargs):
 
 def _get_handler() -> logging.StreamHandler:
     """Return a console (StreamHandler) for the package logger."""
-    handler = logging.StreamHandler()
+    handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(SensitiveFormatter(LOG_FORMAT, style="{"))
     return handler
 
@@ -67,6 +68,6 @@ except ValueError:
 try:
     import coloredlogs
 
-    coloredlogs.install(level=logLevel, logger=logger)
+    coloredlogs.install(level=logLevel, logger=logger, stream=sys.stdout)
 except ImportError:
     pass

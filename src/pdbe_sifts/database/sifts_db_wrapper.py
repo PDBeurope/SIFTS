@@ -191,10 +191,10 @@ class SiftsDB:
         pass
 
     def bulk_load_from_entries(self, input_dir: str) -> None:
-        base = str(Path(input_dir) / "*" / "*" / "sifts")
-        # self._bulk_load_table(
-        #     "sifts_xref_segment", f"{base}/*_seg.csv.gz", "%_nf90_seg.csv.gz"
-        # )
+        base = str(Path(input_dir))
+        self._bulk_load_table(
+            "sifts_xref_segment", f"{base}/*_seg.csv.gz", "%_nf90_seg.csv.gz"
+        )
         self._bulk_load_table(
             "sifts_xref_residue", f"{base}/*_res.csv.gz", "%_nf90_res.csv.gz"
         )
