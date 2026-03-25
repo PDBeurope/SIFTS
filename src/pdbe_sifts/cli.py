@@ -12,6 +12,20 @@ from pdbe_sifts.sifts_global_mappings import SiftsGlobalMappings
 
 
 def main():
+    """Entry point for the ``pdbe_sifts`` command-line interface.
+
+    Parses sub-commands and dispatches to the appropriate pipeline component:
+
+    * ``init``             — write the default configuration file.
+    * ``show``             — print the resolved configuration.
+    * ``build_db``         — build a reference sequence database.
+    * ``global_mappings``  — run alignment and scoring to produce global mappings.
+    * ``fasta_build``      — extract query FASTA sequences from mmCIF files.
+    * ``segments``         — generate SIFTS segments for a single entry.
+    * ``db_load``          — bulk-load segment/residue CSVs into DuckDB.
+    * ``update_ncbi``      — refresh the local NCBI taxonomy database.
+    * ``sifts2mmcif``      — inject SIFTS mappings back into a mmCIF file.
+    """
     parser = argparse.ArgumentParser(
         prog="pdbe_sifts", description="PDBe SIFTS mapping pipeline"
     )
@@ -271,16 +285,17 @@ def main():
         required=True,
         help="Output directory where SIFTS mmCIF files will be written.",
     )
-    sifts2mmcif_parser.add_argument(
+    _sifts2mmcif_source = sifts2mmcif_parser.add_mutually_exclusive_group(
+        required=True
+    )
+    _sifts2mmcif_source.add_argument(
         "-s",
         "--sifts-csv-dir",
-        required=False,
-        help="Flat directory with {entry}_seg.csv.gz / _res.csv.gz. If not given, read from DB.",
+        help="Flat directory with {entry}_seg.csv.gz / _res.csv.gz.",
     )
-    sifts2mmcif_parser.add_argument(
+    _sifts2mmcif_source.add_argument(
         "-d",
         "--db-file",
-        required=True,
         help="DuckDB file path.",
     )
     sifts2mmcif_parser.add_argument(
@@ -430,7 +445,8 @@ def main():
         try:
             obj.process_entry(entry_id)
         finally:
-            obj.conn.close()
+            if obj.conn:
+                obj.conn.close()
 
     else:
         parser.print_help()

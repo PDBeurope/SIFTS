@@ -28,14 +28,45 @@ class SensitiveFormatter(logging.Formatter):
 
     @staticmethod
     def _filter(s):
+        """Remove credentials embedded in URLs of the form ``scheme://user:pass@host``.
+
+        Args:
+            s: Raw log string that may contain URLs with embedded credentials.
+
+        Returns:
+            The input string with any ``user:pass@`` segments replaced by
+            ``***:***@``.
+        """
         return re.sub(r":\/\/(.*?)\@", r"://***:***/", s)
 
     def format(self, record):  # noqa: A003
+        """Format a log record and strip any embedded URL credentials.
+
+        Args:
+            record: The :class:`logging.LogRecord` to format.
+
+        Returns:
+            The fully formatted log string with credentials redacted.
+        """
         original = logging.Formatter.format(self, record)
         return self._filter(original)
 
 
 def record_factory(*args, **kwargs):
+    """Extend the default :class:`logging.LogRecord` with hostname and username.
+
+    Installed via :func:`logging.setLogRecordFactory` so that every log record
+    automatically carries ``record.hostname`` and ``record.username`` attributes,
+    making them available in format strings.
+
+    Args:
+        *args: Positional arguments forwarded to the original record factory.
+        **kwargs: Keyword arguments forwarded to the original record factory.
+
+    Returns:
+        A :class:`logging.LogRecord` augmented with ``hostname`` and
+        ``username`` fields.
+    """
     record = old_factory(*args, **kwargs)
     record.hostname = platform.node()
     record.username = getpass.getuser()

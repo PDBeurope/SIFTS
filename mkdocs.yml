@@ -58,14 +58,20 @@ nav:
   - CLI Reference: cli.md
   - API Reference:
       - Overview: api/index.md
-      - SiftsGlobalMappings: api/sifts_global_mappings.md
-      - SiftsAlign: api/sifts_segments_generation.md
-      - FastaBuilder: api/sifts_fasta_builder.md
-      - TargetDb: api/target_database.md
-      - SiftsDB: api/sifts_db_wrapper.md
-      - ExportSIFTSTommCIF: api/sifts_to_mmcif.md
-      - UniProt client: api/unp.md
-      - Base utilities: api/base.md
+      - Pipeline classes:
+          - SiftsGlobalMappings: api/sifts_global_mappings.md
+          - SiftsAlign: api/sifts_segments_generation.md
+          - FastaBuilder: api/sifts_fasta_builder.md
+          - TargetDb: api/target_database.md
+          - SiftsDB: api/sifts_db_wrapper.md
+          - ExportSIFTSTommCIF: api/sifts_to_mmcif.md
+      - Internals:
+          - mmCIF parsing: api/mmcif.md
+          - Global mappings: api/global_mappings.md
+          - Segments generation: api/segments_generation.md
+          - Batch & taxonomy: api/batch.md
+          - UniProt client: api/unp.md
+          - Base utilities: api/base.md
   - Changelog: changelog.md
 
 markdown_extensions:

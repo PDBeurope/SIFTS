@@ -22,8 +22,8 @@ from pdbe_sifts.base.paths import (
     get_conf_mmseqs_alignment_mode,
     get_conf_mmseqs_db_load_mode,
     get_conf_mmseqs_min_seq_id,
+    get_conf_mmseqs_prefilter_mode,
     get_conf_mmseqs_sensitivity,
-    get_conf_mmseqs_prefilter_mode
 )
 from pdbe_sifts.global_mappings.base_alignment_search import AlignmentSearch
 
@@ -70,7 +70,7 @@ class MmSearch(AlignmentSearch):
         self.threads = threads
         self.easy_search_config_kwargs = kwargs
 
-    def _process(self):
+    def _process(self) -> None:
         """Run the MMseqs2 easy_search process."""
         result = EasySearchConfig(
             self.query_path,
@@ -86,12 +86,12 @@ class MmSearch(AlignmentSearch):
             db_load_mode=get_conf_mmseqs_db_load_mode(),
             s=get_conf_mmseqs_sensitivity(),
             min_seq_id=get_conf_mmseqs_min_seq_id(),
-            prefilter_mode = get_conf_mmseqs_prefilter_mode(),
+            prefilter_mode=get_conf_mmseqs_prefilter_mode(),
         )
         result.run()
 
 
-def run():
+def run() -> None:
     """Command-line interface for running MMseqs2 easy_search."""
     parser = argparse.ArgumentParser(
         description="Run a mmseqs easy_search against a mmseqs database."

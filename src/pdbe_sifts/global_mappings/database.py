@@ -34,7 +34,7 @@ class ToolDatabase(ABC):
         if not self.input_path.exists():
             raise FileNotFoundError(f"Input file not found : {self.input_path}")
 
-    def run(self):
+    def run(self) -> None:
         """Creates the database and logs the processing time."""
         logger.info(
             f"Processing the creation of the database from {self.input_path}. This could take many hours/days."
@@ -47,6 +47,6 @@ class ToolDatabase(ABC):
         logger.info(f"Database saved: {self.output_path}")
 
     @abstractmethod
-    def _process(self):
+    def _process(self) -> None:
         """Defines how the database should be created. Must be implemented by subclasses."""
         pass

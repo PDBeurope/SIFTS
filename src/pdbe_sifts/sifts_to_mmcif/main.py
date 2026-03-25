@@ -40,15 +40,49 @@ class ExportSIFTSTommCIF:
         track_changes,
         prev_run_dir,
     ):
+        """Initialise the SIFTS-to-mmCIF exporter.
+
+        Args:
+            input_cif (str | Path): Path to the input ``*_updated.cif.gz`` file.
+            output_dir (str | Path): Directory where output mmCIF files will be
+                written.
+            sifts_csv_dir (str | Path | None): Directory containing pre-computed
+                ``{entry_id}_seg.csv.gz`` and ``{entry_id}_res.csv.gz`` files.
+                Pass ``None`` to read data from the DuckDB database instead.
+            duckdb_file (str | Path | None): Path to the DuckDB database file.
+                Pass ``None`` when ``sifts_csv_dir`` is provided for all entries.
+            track_changes (bool): When ``True``, compare the new SIFTS output
+                against the previous run and write a delta CSV file.
+            prev_run_dir (str | Path | None): Directory containing
+                ``{entry_id}_sifts_only.cif.gz`` from the previous run, used
+                as the baseline for change-tracking.  When ``None`` the output
+                directory is used as the baseline.
+        """
         self.input_cif = input_cif
         self.output_dir = output_dir
         self.duckdb_file = duckdb_file
         self.sifts_csv_base = sifts_csv_dir
-        self.conn = duckdb.connect(self.duckdb_file, read_only=True)
+        self.conn = (
+            duckdb.connect(self.duckdb_file, read_only=True)
+            if duckdb_file
+            else None
+        )
         self.track_changes = track_changes
         self.prev_run_dir = prev_run_dir
 
     def _check_mmcif_output(self, infile, outfile):
+        """Verify that the output mmCIF file is at least as large as the input.
+
+        If the output is smaller than the input, a deeper content-level check
+        is performed via :func:`comm_utils.check_output_mmcif`.
+
+        Args:
+            infile (Path): Path to the original input CIF file.
+            outfile (Path): Path to the generated output CIF file.
+
+        Raises:
+            EntryFailedException: If ``outfile`` does not exist.
+        """
         logger.debug("Checking if the output file is more/equal to input file")
 
         if outfile.exists():
@@ -90,6 +124,15 @@ class ExportSIFTSTommCIF:
                     )
 
     def _check_sifts_mmcif(self, sifts_only_cif: Path):
+        """Verify that the SIFTS-only mmCIF output file is non-empty.
+
+        Args:
+            sifts_only_cif (Path): Path to the ``*_sifts_only.cif.gz`` file.
+
+        Raises:
+            EntryFailedException: If the file does not exist or its size is
+                40 bytes or fewer (considered effectively empty).
+        """
         logger.debug("Checking sifts mmcif output is not empty")
         if sifts_only_cif.exists():
             if sifts_only_cif.stat().st_size <= 40:
@@ -104,6 +147,29 @@ class ExportSIFTSTommCIF:
     def _process_cif_file(
         self, d_block, sifts_segments, sifts_seg_inst, sifts_res_csv, pdb_id
     ):
+        """Populate a CIF block with SIFTS segment and residue-level data.
+
+        Writes the ``_pdbx_sifts_unp_segments`` and ``_pdbx_sifts_xref_db``
+        categories into ``d_block`` and updates ``_atom_site`` with the SIFTS
+        cross-reference columns.
+
+        Args:
+            d_block: A ``gemmi`` CIF block to be updated in place.
+            sifts_segments: Column data (tuple of lists) for
+                ``_pdbx_sifts_unp_segments``, as returned by
+                :func:`read_sifts_csv.get_unp_segments`.
+            sifts_seg_inst (dict): Segment-instance lookup used to expand
+                segment mappings to individual residues.
+            sifts_res_csv (Path | None): Path to the residue-level CSV file.
+                ``None`` when data is read from the DuckDB connection.
+            pdb_id (str): The PDB entry identifier.
+
+        Returns:
+            tuple: ``(UpdateFlag, d_block, UnpDataFlag)`` where ``UpdateFlag``
+            is ``True`` if any SIFTS data was written, ``d_block`` is the
+            modified CIF block, and ``UnpDataFlag`` is ``True`` when UniProt
+            residue data was successfully applied to ``_atom_site``.
+        """
         self.UpdateFlag = False
         self.UnpDataFlag = False
 
@@ -177,6 +243,23 @@ class ExportSIFTSTommCIF:
         return self.UpdateFlag, d_block, self.UnpDataFlag
 
     def write_data(self, d_block, category, category_data):
+        """Write a SIFTS mmCIF category into a CIF block.
+
+        The data is written only when ``category_data`` is non-empty and its
+        length matches the number of columns defined for ``category`` in
+        :data:`NEW_MMCIF_CAT`.
+
+        Args:
+            d_block: The ``gemmi`` CIF block to update.
+            category (str): The mmCIF category name (e.g.
+                ``"_pdbx_sifts_unp_segments"``).
+            category_data (list | None): Parallel column lists to be written.
+                Must have the same length as ``NEW_MMCIF_CAT[category]``.
+
+        Returns:
+            bool: ``True`` if the category was successfully written, ``False``
+            otherwise.
+        """
         if category_data and len(NEW_MMCIF_CAT[category]) == len(category_data):
             data = dict(
                 zip(NEW_MMCIF_CAT[category], category_data, strict=False)
@@ -186,6 +269,18 @@ class ExportSIFTSTommCIF:
         return False
 
     def delta_changes(self):
+        """Compare new SIFTS output against the previous run and record changes.
+
+        When change-tracking is enabled (``self.track_changes``) and UniProt
+        data was written (``self.UnpDataFlag``), this method determines the
+        delta CSV suffix, reads the old and new segment data, and invokes
+        :class:`~pdbe_sifts.sifts_to_mmcif.delta_mappings.FindMappingChanges`
+        to write the delta CSV file.  If no changes are detected, no output
+        file is produced.
+
+        Sets ``self.sifts_delta_csv`` to the output path when a delta file is
+        written, or to ``None`` when tracking is skipped or no changes exist.
+        """
         self.sifts_delta_csv = None
         if self.track_changes and self.UnpDataFlag:
             base_sifts_dir = Path(self.sifts_updated_cif).parent
@@ -230,6 +325,25 @@ class ExportSIFTSTommCIF:
                 ).find_mapping_changes()
 
     def process_entry(self, entry_id):
+        """Process a single PDB entry end-to-end.
+
+        Reads the input CIF, merges SIFTS segment and residue data, writes the
+        updated and SIFTS-only output files, runs change-tracking, and performs
+        sanity checks on all outputs.
+
+        Args:
+            entry_id (str): The lowercase PDB entry identifier (e.g. ``"1abc"``).
+
+        Returns:
+            tuple[Path, Path, Path]: ``(orig_updated_cif, sifts_updated_cif,
+            sifts_only_cif)`` — paths to the original input, the updated output,
+            and the SIFTS-only output file.
+
+        Raises:
+            FileNotFoundError: If the input CIF file does not exist.
+            NoSegmentsError: If no SIFTS segments could be written for the entry.
+            EntryFailedException: If any output file fails its post-write checks.
+        """
         out = Path(self.output_dir)
         out.mkdir(parents=True, exist_ok=True)
         self.sifts_updated_cif = out / f"{entry_id}_sifts_updated.cif.gz"
@@ -336,6 +450,24 @@ class ExportSIFTSTommCIF:
 
 
 def run():
+    """CLI entry point: parse arguments and run the SIFTS-to-mmCIF export.
+
+    Parses command-line arguments, resolves the PDB entry identifier from the
+    CIF file when not explicitly provided, constructs an
+    :class:`ExportSIFTSTommCIF` instance, and calls
+    :meth:`ExportSIFTSTommCIF.process_entry`.  The DuckDB connection is always
+    closed in a ``finally`` block.
+
+    Command-line arguments:
+        --entry: Optional PDB entry ID.  Derived from ``_entry.id`` in the CIF
+            when omitted.
+        -i / --input-cif: Path to the input ``*_updated.cif.gz`` file.
+        -o / --output-dir: Directory for output files.
+        -s / --sifts-csv-dir: Optional directory containing CSV SIFTS data.
+        -d / --db-conn-str: DuckDB file path.
+        -T / --no-track-changes: Disable mapping-change tracking.
+        -p / --prev-run-dir: Directory with the previous-run SIFTS-only CIF.
+    """
     parser = argparse.ArgumentParser(
         "Given a clean mmcif file, add sifts_data",
     )

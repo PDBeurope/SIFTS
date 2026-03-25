@@ -174,7 +174,7 @@ WHERE pident / 100.0 >= {identity_cutoff};
 """
 
 
-def score_taxonomy_pair(args):
+def score_taxonomy_pair(args: tuple[int, int]) -> dict | None:
     """
     Worker function to compute taxonomy score for a pair of tax IDs.
     """
@@ -210,13 +210,30 @@ class GlobMappingsParser:
 
     def __init__(
         self,
-        format,
-        result_file_path,
-        out_dir,
-        unp_csv=None,
-        max_workers=None,
-        identity_cutoff=IDENTITY_CUTOFF,
-    ):
+        format: str,
+        result_file_path: str | Path,
+        out_dir: str | Path,
+        unp_csv: str | Path | None = None,
+        max_workers: int | None = None,
+        identity_cutoff: float = IDENTITY_CUTOFF,
+    ) -> None:
+        """Initialise the parser with alignment result paths and scoring parameters.
+
+        Args:
+            format: Alignment tool that produced the TSV file.  Must be one of
+                ``"mmseqs"`` or ``"blastp"``.
+            result_file_path: Path to the TSV alignment result file.
+            out_dir: Directory where the output DuckDB database will be written.
+                Created automatically if it does not exist.
+            unp_csv: Optional path to a CSV file containing pre-fetched UniProt
+                metadata (columns: ``accession``, ``provenance``, ``pdb_xref``,
+                ``annotation_score``).  Missing accessions are fetched from the
+                UniProt API at runtime.
+            max_workers: Number of worker processes for parallel taxonomy
+                scoring.  Defaults to :func:`os.cpu_count`.
+            identity_cutoff: Minimum sequence identity (0–1) required to retain
+                an alignment hit.  Defaults to :data:`IDENTITY_CUTOFF`.
+        """
         self.format = format
         self.result_file_path = Path(result_file_path)
         self.out_dir = Path(out_dir)
@@ -226,7 +243,7 @@ class GlobMappingsParser:
         self.db_path = self.out_dir / "hits.duckdb"
         self.max_workers = max_workers or os.cpu_count()
 
-    def _init_database(self):
+    def _init_database(self) -> None:
         """
         Initialize the DuckDB database and load filtered hits from TSV.
 
@@ -272,7 +289,7 @@ class GlobMappingsParser:
         conn.close()
         self.create_accession_table()
 
-    def compute_adjusted_score(self):
+    def compute_adjusted_score(self) -> None:
         """
         Compute the adjusted alignment score for each hit.
 
@@ -301,7 +318,7 @@ class GlobMappingsParser:
         logger.info("Adjusted score computed.")
         conn.close()
 
-    def create_accession_table(self):
+    def create_accession_table(self) -> None:
         """
         Create and populate the accession_info table.
 
@@ -394,7 +411,7 @@ class GlobMappingsParser:
 
         conn.close()
 
-    def compute_dataset_score(self):
+    def compute_dataset_score(self) -> None:
         """Propagate dataset_score and pdb_cross_references from accession_info into hits."""
         conn = duckdb.connect(str(self.db_path))
         conn.execute("""
@@ -406,7 +423,7 @@ class GlobMappingsParser:
         """)
         conn.close()
 
-    def compute_sifts_score(self):
+    def compute_sifts_score(self) -> None:
         """Compute final SIFTS score."""
         logger.info("Computing sifts_scores...")
         conn = duckdb.connect(str(self.db_path))
@@ -422,7 +439,7 @@ class GlobMappingsParser:
 
         conn.close()
 
-    def compute_rank(self):
+    def compute_rank(self) -> None:
         """Assign a dense rank to each hit per (entry, entity), ordered by SIFTS score descending."""
         conn = duckdb.connect(self.db_path)
         conn.execute("""
@@ -447,7 +464,7 @@ class GlobMappingsParser:
         """)
         conn.close()
 
-    def compute_tax_score(self):
+    def compute_tax_score(self) -> None:
         """Compute taxonomy scores for all distinct pairs of query_tax_id, target_tax_id"""
         conn = duckdb.connect(str(self.db_path))
 
@@ -503,7 +520,7 @@ class GlobMappingsParser:
 
         logger.info("Taxonomy scoring complete!")
 
-    def _batch_update_tax_scores(self, updates):
+    def _batch_update_tax_scores(self, updates: list[dict]) -> None:
         """
         Helper method to batch update tax_scores in the database.
         """
@@ -533,7 +550,7 @@ class GlobMappingsParser:
         finally:
             conn.close()
 
-    def parse(self):
+    def parse(self) -> None:
         """Main parsing pipeline"""
         self._init_database()
         self.compute_adjusted_score()
@@ -544,7 +561,13 @@ class GlobMappingsParser:
         logger.info(f"Parsed results ready at: {self.db_path}")
 
 
-def main():
+def main() -> None:
+    """Command-line entry point for parsing BLASTP or MMseqs2 alignment results.
+
+    Accepts ``--format``, ``--input``, ``--output``, and optional ``--unp-csv``,
+    ``--workers``, and ``--identity-cutoff`` arguments, then delegates to
+    :meth:`GlobMappingsParser.parse`.
+    """
     parser = argparse.ArgumentParser(description="Parse BLAST/MMSEQS2 results")
     parser.add_argument("--format", choices=["mmseqs", "blastp"], required=True)
     parser.add_argument("--input", required=True, help="Path to TSV file")

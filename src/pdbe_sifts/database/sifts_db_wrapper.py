@@ -1,11 +1,19 @@
 from pathlib import Path
 
-import pandas as pd
-
 from pdbe_sifts.base.log import logger
 
 
 def segment_to_dict(seg):
+    """Serialise a SIFTS segment object to a plain dictionary.
+
+    Args:
+        seg: A segment object exposing the SIFTS segment attributes
+            (``entry_id``, ``accession``, ``identity``, etc.).
+
+    Returns:
+        A ``dict`` mapping column names to their scalar values, ready for
+        insertion into a pandas DataFrame or DuckDB table.
+    """
     return {
         "entry_id": seg.entry_id,
         "entity_id": int(seg.entity_id),
@@ -37,6 +45,16 @@ def segment_to_dict(seg):
 
 
 def residue_to_dict(r):
+    """Serialise a SIFTS residue object to a plain dictionary.
+
+    Args:
+        r: A residue object exposing the SIFTS residue attributes
+            (``entry_id``, ``auth_seq_id``, ``unp_seq_id``, etc.).
+
+    Returns:
+        A ``dict`` mapping column names to their scalar values, ready for
+        insertion into a pandas DataFrame or DuckDB table.
+    """
     return {
         "entry_id": r.entry_id,
         "entity_id": int(r.entity_id),
@@ -68,12 +86,24 @@ def residue_to_dict(r):
 
 
 class SiftsDB:
+    """Thin wrapper around a DuckDB connection for SIFTS cross-reference tables.
+
+    On construction the two core tables (``sifts_xref_residue`` and
+    ``sifts_xref_segment``) are created if they do not already exist.
+    """
+
     def __init__(self, conn):
+        """Initialise the wrapper and ensure both SIFTS tables exist.
+
+        Args:
+            conn: An open :class:`duckdb.DuckDBPyConnection` instance.
+        """
         self.conn = conn
         self.create_sifts_xref_residue_table()
         self.create_sifts_xref_segment_table()
 
     def create_sifts_xref_residue_table(self):
+        """Create the ``sifts_xref_residue`` table if it does not already exist."""
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS sifts_xref_residue (
                 entry_id                VARCHAR NOT NULL,
@@ -104,6 +134,7 @@ class SiftsDB:
             """)
 
     def create_sifts_xref_segment_table(self):
+        """Create the ``sifts_xref_segment`` table if it does not already exist."""
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS sifts_xref_segment (
                 entry_id            VARCHAR NOT NULL,
@@ -135,62 +166,19 @@ class SiftsDB:
             );
         """)
 
-    def clean_segments(self, entry_ids):
-        [entry.lower() for entry in entry_ids]
-        self.conn.execute(
-            """
-            DELETE FROM sifts_xref_segment
-            WHERE entry_id IN ?
-            """,
-            [entry_ids],
-        )
-
-    def clean_residues(self, entry_ids):
-        [entry.lower() for entry in entry_ids]
-        self.conn.execute(
-            """
-            DELETE FROM sifts_xref_residue
-            WHERE entry_id IN ?
-            """,
-            [entry_ids],
-        )
-
-    def insert_xref_segments(self, segments):
-        if not segments:
-            return
-
-        rows = [segment_to_dict(s) for s in segments]
-        df = pd.DataFrame(rows)
-        entries = df["entry_id"].to_list()
-        self.clean_segments(entries)
-
-        self.conn.register("tmp_segments", df)
-        self.conn.execute("""
-            INSERT INTO sifts_xref_segment
-            SELECT * FROM tmp_segments
-        """)
-        self.conn.unregister("tmp_segments")
-
-    def insert_xref_residues(self, residues):
-        if not residues:
-            return
-
-        rows = [residue_to_dict(r) for r_list in residues for r in r_list]
-        df = pd.DataFrame(rows)
-        entries = df["entry_id"].to_list()
-        self.clean_residues(entries)
-
-        self.conn.register("tmp_residues", df)
-        self.conn.execute("""
-            INSERT INTO sifts_xref_residue
-            SELECT * FROM tmp_residues
-        """)
-        self.conn.unregister("tmp_residues")
-
-    def clean_by_entry(self, entry):
-        pass
-
     def bulk_load_from_entries(self, input_dir: str) -> None:
+        """Bulk-load all segment and residue CSV files under *input_dir* into DuckDB.
+
+        The method discovers ``*_seg.csv.gz`` and ``*_res.csv.gz`` files
+        recursively under *input_dir* (excluding ``*_nf90_*`` variants) and
+        replaces the contents of ``sifts_xref_segment`` and
+        ``sifts_xref_residue`` in one pass each.
+
+        Args:
+            input_dir: Root directory that contains the per-entry
+                ``sifts/`` sub-directories produced by the segment generation
+                pipeline.
+        """
         base = str(Path(input_dir))
         self._bulk_load_table(
             "sifts_xref_segment", f"{base}/*_seg.csv.gz", "%_nf90_seg.csv.gz"
@@ -203,6 +191,18 @@ class SiftsDB:
     def _bulk_load_table(
         self, table: str, glob_pattern: str, exclude: str
     ) -> None:
+        """Delete and reload all rows in *table* from matching CSV files.
+
+        Uses DuckDB's ``read_csv`` to stream compressed CSV files directly,
+        inferring column names and types from the existing table schema.
+
+        Args:
+            table: Name of the target DuckDB table (e.g. ``sifts_xref_segment``).
+            glob_pattern: Shell-style glob passed to DuckDB ``glob()`` to
+                discover candidate files (e.g. ``/data/*_seg.csv.gz``).
+            exclude: SQL ``LIKE`` pattern for files to exclude
+                (e.g. ``%_nf90_seg.csv.gz``).
+        """
         files = self.conn.execute(
             "SELECT list(file) FROM glob(?) WHERE NOT file LIKE ?",
             [glob_pattern, exclude],

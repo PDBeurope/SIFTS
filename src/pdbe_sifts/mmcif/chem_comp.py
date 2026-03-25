@@ -31,9 +31,17 @@ STANDARD_AA = {
 
 
 class ChemCompMapping:
+    """Map CIF three-letter residue codes to one-letter amino acid codes.
+
+    Loads a bundled CSV file (``three_to_one_letter_mapping.csv``) on
+    construction and exposes a :meth:`get` method for lookups.  Unknown
+    residues return ``'X'``.
+    """
+
     _dictionary: Mapping[str, str] = {}
 
     def __init__(self):
+        """Load the three-to-one-letter mapping from the bundled data file."""
         cc_file = files("pdbe_sifts.data").joinpath(
             "three_to_one_letter_mapping.csv"
         )
@@ -41,6 +49,16 @@ class ChemCompMapping:
         self.hydrate(cc_file)
 
     def hydrate(self, cc_file):
+        """Populate the internal mapping dictionary from a CSV file.
+
+        The CSV must have two columns per line: ``THREE_LETTER,ONE_LETTER``.
+
+        Args:
+            cc_file: Path-like object pointing to the mapping CSV.
+
+        Raises:
+            ValueError: If the file is empty or produces no mappings.
+        """
         logger.debug(f"CC_DICT: {cc_file}")
 
         logger.debug(f"Loading chem_comp from mapping file {cc_file}")
@@ -79,7 +97,7 @@ class ChemCompMapping:
                 not_found.append((res, STANDARD_AA[res], "vs", my_key, my_val))
 
         if not_found:
-            logger.info("Not found:", not_found)
+            logger.warning("Not found: %s", not_found)
             raise Exception(
                 f"""Error, no/mis-match of standard amino acid in your CC
                 Please check {self.CC_DICT}

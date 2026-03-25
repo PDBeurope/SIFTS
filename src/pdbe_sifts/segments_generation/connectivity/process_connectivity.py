@@ -4,6 +4,7 @@ import math
 
 import regex as re
 from Bio.Seq import Seq
+
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.segments_generation.connectivity.ccd_parser import CcdFile
 
@@ -15,7 +16,19 @@ ENDING_GAP = "^(.*?)(-{2,})((?:-?[A-Z]){1,5})$"
 RESIDUE_PATTERN = r"([A-Z])"
 
 
-def fmt_ranges(ranges):
+def fmt_ranges(ranges: list) -> list[list[int]]:
+    """Normalise a list of ranges to a list of ``[start, end]`` integer lists.
+
+    Each element may be either an already-parsed ``[start, end]`` list/tuple
+    or a ``"start-end"`` string; both forms are accepted.
+
+    Args:
+        ranges: Sequence of ranges, where each item is either a two-element
+            sequence of ints or a string such as ``"10-42"``.
+
+    Returns:
+        List of ``[start, end]`` integer lists.
+    """
     out = []
     for r in ranges:
         if isinstance(r, str):
@@ -25,7 +38,18 @@ def fmt_ranges(ranges):
     return out
 
 
-def overlapping(ranges):
+def overlapping(ranges: list) -> bool:
+    """Return ``True`` if any two ranges in *ranges* overlap.
+
+    Two ranges overlap when they share at least one integer position.  The
+    check is performed on all unique pairs.
+
+    Args:
+        ranges: Sequence of ranges accepted by :func:`fmt_ranges`.
+
+    Returns:
+        ``True`` if at least one overlapping pair is found, ``False`` otherwise.
+    """
     ranges = fmt_ranges(ranges)
     for idx, r1 in enumerate(ranges):
         for r2 in ranges[idx + 1 :]:
@@ -39,7 +63,18 @@ def overlapping(ranges):
     return False
 
 
-def merge_segment(seg1, seg2):
+def merge_segment(seg1: tuple, seg2: tuple) -> tuple:
+    """Merge two adjacent segments into a single segment spanning both.
+
+    Args:
+        seg1: ``((pdb_start, pdb_end), (unp_start, unp_end))`` for the left
+            segment.
+        seg2: Same structure for the right segment (must follow *seg1*).
+
+    Returns:
+        A merged segment
+        ``((seg1_pdb_start, seg2_pdb_end), (seg1_unp_start, seg2_unp_end))``.
+    """
     start_pdb = seg1[0][0]
     end_pdb = seg2[0][1]
     start_unp = seg1[1][0]
@@ -47,7 +82,7 @@ def merge_segment(seg1, seg2):
     return ((start_pdb, end_pdb), (start_unp, end_unp))
 
 
-def compute_atom_distance(atom1, atom2):
+def compute_atom_distance(atom1: list[float], atom2: list[float]) -> float:
     """Compute the Euclidean distance between two 3D coordinates and return a truncated value.
     The input should be a list of coordinates in the format [x, y, z]."""
     x1 = atom1[0]
@@ -61,7 +96,7 @@ def compute_atom_distance(atom1, atom2):
     return truncated_number
 
 
-def is_valid_residue_status(r1, r2):
+def is_valid_residue_status(r1, r2) -> bool:
     """Check the status of two residues and ensure the connectivity check is valid.
     Takes two residue objects as input."""
     # we don't need to process insertion, linker etc...
@@ -79,7 +114,16 @@ def is_valid_residue_status(r1, r2):
 class ConnectivityCheck:
     """Class responsible for performing connectivity checks at various stages of the segment generation process."""
 
-    def __init__(self, chain_obj, repeated_acc=None):
+    def __init__(self, chain_obj, repeated_acc: bool | None = None) -> None:
+        """Initialise with a Chain object and optional repeated-accession flag.
+
+        Args:
+            chain_obj: :class:`~pdbe_sifts.mmcif.chain.Chain` instance to
+                perform connectivity checks on.
+            repeated_acc: ``True`` when the same UniProt accession maps to
+                more than one non-overlapping region (repeat protein).
+                ``None`` or ``False`` otherwise.
+        """
         self.chain_obj = chain_obj
         self.repeated_acc = repeated_acc
         self.r1_ccd_ters = None
@@ -87,7 +131,7 @@ class ConnectivityCheck:
         self.r1_ters_coordinates = None
         self.r2_ters_coordinates = None
 
-    def get_residues_ccd_ters(self, r1, r2):
+    def get_residues_ccd_ters(self, r1: int, r2: int) -> None:
         """
         Function to retrieve the C-terminal and N-terminal atoms of two residues.
 
@@ -104,7 +148,7 @@ class ConnectivityCheck:
             self.r1_ccd_ters = 0
             self.r2_ccd_ters = 0
 
-    def get_residue_ters_coordinates(self, r1, r2):
+    def get_residue_ters_coordinates(self, r1: int, r2: int) -> None:
         """
         Function to retrieve the C-terminal and N-terminal atoms 3D coordinates of two residues.
 
@@ -140,7 +184,7 @@ class ConnectivityCheck:
                 )
             )
 
-    def check_res_conn(self, r1, r2):
+    def check_res_conn(self, r1: int, r2: int) -> bool | None:
         """
         Function to check the connectivity of two residues.
 
@@ -174,7 +218,29 @@ class ConnectivityCheck:
         except IndexError:
             pass
 
-    def boundaries_check(self, subseq, mode, r1, aligned_res_bound):
+    def boundaries_check(
+        self, subseq: list, mode: str, r1: int, aligned_res_bound: int
+    ) -> list:
+        """Verify residue connectivity at a segment boundary and reassign gap residues.
+
+        Checks whether a short run of residues adjacent to a gap are covalently
+        connected.  If all residues in the run are connected, merges them into
+        the neighbouring segment by shifting gap characters.
+
+        Args:
+            subseq: Sub-sequence list (characters from the alignment) for the
+                boundary region.
+            mode: ``"start"`` to check the left boundary, ``"end"`` for the
+                right boundary.
+            r1: 1-based residue index of the first residue in the boundary
+                region.
+            aligned_res_bound: 1-based residue index of the segment boundary
+                in the full alignment.
+
+        Returns:
+            Possibly modified *subseq* with gap characters repositioned if
+            the boundary residues are connected.
+        """
         if mode == "start":
             shift = subseq.count("-")
             limit = r1 + aligned_res_bound - shift - 1
@@ -211,8 +277,13 @@ class ConnectivityCheck:
         return list(residues)
 
     def subseq_find_midgap(
-        self, pdb_seq, new_pdb_seq, res_first, res_second, start_res
-    ):
+        self,
+        pdb_seq: str,
+        new_pdb_seq: list,
+        res_first: int,
+        res_second: int,
+        start_res: int,
+    ) -> list:
         """
         Function to refine an extended gap between two continuous regions, where more than 5 PDB residues are aligned (to a UniProt residue).
 
@@ -284,7 +355,7 @@ class ConnectivityCheck:
             new_pdb_seq[res_first + 1 : res_second] = new_subseq
         return new_pdb_seq
 
-    def are_chunks_connected(self, alns):
+    def are_chunks_connected(self, alns: list) -> list | bool:
         """
         Function to checked alignment chunks connectivity and include them in the process if true.
 
@@ -338,7 +409,7 @@ class ConnectivityCheck:
             return connected_chunks
         return False
 
-    def alignment_refining(self, al, iso):
+    def alignment_refining(self, al, iso: str):
         """
         Function to refine extended gaps (i.e more than two dashes) in the alignment from start to end.
 
@@ -398,7 +469,7 @@ class ConnectivityCheck:
         al[1]._seq = Seq(alignment_seq)
         return al
 
-    def check_segments_conn(self):
+    def check_segments_conn(self) -> dict:
         """
         Function to check if there are any two segments connected and if true merge them.
 
@@ -434,7 +505,7 @@ class ConnectivityCheck:
                 return segments
         return new_segs
 
-    def compute_terminals_distance(self):
+    def compute_terminals_distance(self) -> bool:
         """
         Function to compute the distance between two residues and their atom terminals (C and N).
 

@@ -286,6 +286,23 @@ def track_mapping_change(data, seg_file_name, res_file_name):
 
 @log_durations(logger.debug)
 def write_seg_csv(out_dir, pdbid, data, nf90_mode):
+    """Write segment-level SIFTS data to a gzipped CSV file.
+
+    In normal mode the file is only (re-)written when the UniProt mapping has
+    changed relative to the previously stored file; a delta CSV is also
+    produced.  In NF90 mode the file is always written to a separate
+    ``*_nf90_seg.csv.gz`` path and no delta is recorded.
+
+    Args:
+        out_dir: Directory in which the output files are created.
+        pdbid: PDB entry identifier; used to construct output file names.
+        data: Iterable of :class:`XRefSegment` named tuples to write.
+        nf90_mode: When ``True``, write to the NF90 path unconditionally.
+
+    Returns:
+        ``True`` if a file was written, ``False`` if writing was skipped
+        because the mapping was unchanged.
+    """
     write_flag = False
     file_name = Path(out_dir, f"{pdbid}_seg.csv.gz")
     nf90_file_name = Path(out_dir, f"{pdbid}_nf90_seg.csv.gz")
@@ -352,6 +369,23 @@ def write_seg_csv(out_dir, pdbid, data, nf90_mode):
 
 
 def fix_values(row):
+    """Sanitise a row of values for safe CSV serialisation.
+
+    Applies two transformations:
+
+    1. Replaces any literal comma (``","`` ) inside string fields with a
+       semicolon (``";"`` ) so that the CSV writer does not need to quote the
+       field.
+    2. Converts ``bool`` values to their integer equivalents (``True`` → ``1``,
+       ``False`` → ``0``) because the downstream Oracle loader expects numeric
+       booleans.
+
+    Args:
+        row: Sequence of field values representing one CSV row.
+
+    Returns:
+        A new list with the transformations applied.
+    """
     # Replace commas with ; to not have to quote strings
     row = [
         col.replace(",", ";") if isinstance(col, str) else col for col in row
@@ -363,6 +397,19 @@ def fix_values(row):
 
 @log_durations(logger.debug)
 def write_res_csv(out_dir, pdbid, data):
+    """Write residue-level SIFTS data to a gzipped CSV file.
+
+    The output file is always (over-)written; callers are responsible for
+    gating on whether a write is necessary.
+
+    Args:
+        out_dir: Directory in which the output file is created.
+        pdbid: PDB entry identifier; used to construct the file name
+            ``{pdbid}_res.csv.gz``.
+        data: Iterable of iterables of :class:`XRefResidue` named tuples.
+            The outer iterable groups residues by chain; the inner iterable
+            contains the individual residue rows.
+    """
     file_name = Path(out_dir, f"{pdbid}_res.csv.gz")
     logger.info(f"Writing csv for {file_name}")
     with gzip.open(file_name, "wt") as f:
@@ -383,6 +430,29 @@ def write_res_csv(out_dir, pdbid, data):
 def insert_residues(
     chain_obj: Chain, unp_object=None, iso_acc=None, canonical=False, conn=None
 ):
+    """Build a list of :class:`XRefResidue` rows for all residues in a chain.
+
+    Iterates over every residue (including multi-model/alternate-location lists)
+    in *chain_obj* and assembles one :class:`XRefResidue` named tuple per
+    position, mapping each residue to its UniProt equivalent where available.
+    Chromophore residues that encode multiple alignment characters are handled
+    by delegating to :func:`process_chromophores`.
+
+    Args:
+        chain_obj: :class:`~pdbe_sifts.mmcif.chain.Chain` instance whose
+            residues are to be iterated.
+        unp_object: :class:`~pdbe_sifts.unp.unp.UNP` instance (or list of
+            them for chimera chains) supplying sequence and taxonomy data.
+        iso_acc: UniProt isoform accession string, or list of accession strings
+            for chimera chains.
+        canonical: Fallback ``canonical_acc`` flag used when *iso_acc* is
+            ``None``.
+        conn: Unused database connection placeholder (reserved for future use).
+
+    Returns:
+        List of :class:`XRefResidue` named tuples, one per residue position
+        (chromophores may contribute multiple entries).
+    """
     # 23 columns for residues
 
     if not chain_obj.is_chimera:
@@ -530,6 +600,31 @@ def process_chromophores(
     r,
     mapped,
 ):
+    """Append one :class:`XRefResidue` row per UniProt position for a chromophore residue.
+
+    A chromophore may span multiple UniProt positions (its ``oneL`` encodes
+    more than one character in the alignment).  This function unrolls the
+    mapping by iterating over each UniProt position in ``residue_map[r.n]``
+    and appending a separate row for each.
+
+    Args:
+        chain_obj: :class:`~pdbe_sifts.mmcif.chain.Chain` containing the
+            chromophore.
+        canonical: Fallback ``canonical_acc`` flag used when *iso* is ``None``.
+        iso: UniProt isoform accession for the current mapping.
+        unp_obj: :class:`~pdbe_sifts.unp.unp.UNP` instance for *iso*.
+        residue_map: Dict mapping residue ``.n`` values to UniProt positions;
+            the value for a chromophore is a list of positions.
+        tax_id: NCBI taxonomy ID of the source organism (or ``None``).
+        res: Accumulator list of :class:`XRefResidue` rows; rows are appended
+            in-place and the updated list is returned.
+        index: 1-based ordinal for the current residue position.
+        r: Residue object for the chromophore.
+        mapped: ``True`` if the residue has a UniProt mapping.
+
+    Returns:
+        Updated *res* list with the new rows appended.
+    """
     for idx, m in enumerate(residue_map[r.n]):
         unp_residue = unp_obj.seq_isoforms[iso][m - 1]
 
@@ -601,6 +696,26 @@ def process_chromophores(
 
 @log_durations(logger.debug)
 def insert_mappings(out_dir, entry_obj: Entry, nf90_mode, conn=None):
+    """Generate and write all segment and residue CSV rows for one PDB entry.
+
+    Iterates over every polypeptide chain in *entry_obj*, collects
+    :class:`XRefSegment` and :class:`XRefResidue` rows for each UniProt
+    isoform mapping, handles chimera chains, and writes the results to
+    gzipped CSV files via :func:`write_seg_csv` and :func:`write_res_csv`.
+
+    Args:
+        out_dir: Directory in which the output CSV files are written.
+        entry_obj: :class:`~pdbe_sifts.mmcif.entry.Entry` instance for the
+            PDB entry being processed.
+        nf90_mode: When ``True``, writes to NF90 paths and skips residue CSV
+            generation.
+        conn: Unused database connection placeholder (reserved for future use).
+
+    Returns:
+        Tuple ``(segs, xref_residue)`` where *segs* is a list of
+        :class:`XRefSegment` rows and *xref_residue* is a list of lists of
+        :class:`XRefResidue` rows (one inner list per chain).
+    """
     segs = []
     xref_residue = []
     pdbid = entry_obj.pdbid
@@ -731,6 +846,36 @@ def process_non_chimera(
     blanks,
     conn,
 ):
+    """Append segment and residue rows for one non-chimera chain / isoform pair.
+
+    For each mapped PDB↔UniProt range in *maps*, constructs an
+    :class:`XRefSegment` row, extracts the corresponding alignment
+    sub-strings, and removes the mapped range from *blanks*.  After all
+    mapped segments are processed, appends unmapped ``blank`` segments that
+    cover the remaining unaligned portions of the chain and, unless in NF90
+    mode, generates residue-level rows via :func:`insert_residues`.
+
+    Args:
+        nf90_mode: When ``True``, skip residue row generation.
+        segs: Accumulator list of :class:`XRefSegment` rows; rows are
+            appended in-place.
+        xref_residue: Accumulator list of residue-row lists; new lists are
+            appended in-place.
+        chain_obj: :class:`~pdbe_sifts.mmcif.chain.Chain` being processed.
+        iso: UniProt isoform accession for the current mapping.
+        maps: List of ``((pdb_start, pdb_end), (unp_start, unp_end))``
+            segment tuples for *iso*.
+        col_id: 1-based segment ordinal counter for the current chain.
+        unp_obj: :class:`~pdbe_sifts.unp.unp.UNP` instance for *iso*.
+        al: BioPython ``MultipleSeqAlignment`` for this isoform.
+        blanks: List of unmapped ``(start, end)`` PDB ranges; updated
+            in-place as mapped ranges are removed.
+        conn: Unused database connection placeholder.
+
+    Returns:
+        Tuple ``(blanks, col_id)`` with the updated blanks list and the
+        next available segment ordinal.
+    """
     for pdb_range, unp_range in maps:
         logger.info(
             f"Insert mappings: [{chain_obj.entity_id}] "
@@ -854,6 +999,23 @@ def process_non_chimera(
 
 @log_durations(logger.debug)
 def handle_chimera(segs, chain_obj, blanks, iso, col_id):
+    """Append blank segment rows for the unmapped regions of a chimera chain.
+
+    For each remaining blank range in *blanks*, adds an :class:`XRefSegment`
+    row with no UniProt mapping (all UniProt fields set to ``None``).  These
+    rows represent the portions of the chimera chain that were not covered by
+    any of the individual per-UniProt-accession segments.
+
+    Args:
+        segs: Accumulator list of :class:`XRefSegment` rows; rows are
+            appended in-place.
+        chain_obj: :class:`~pdbe_sifts.mmcif.chain.Chain` for the chimera.
+        blanks: List of ``(start, end)`` PDB ranges not covered by any
+            isoform mapping.
+        iso: Last isoform accession processed (used as ``reference_acc``).
+        col_id: Current 1-based segment ordinal; incremented for each blank
+            row appended.
+    """
     for b in blanks:
         pdb_seq = chain_obj.sequence[b[0] - 1 : b[1]]
 

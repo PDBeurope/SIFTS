@@ -25,6 +25,14 @@ def uniq_val(my_dict):
 
 
 def transpose_list(my_data):
+    """Transpose a list of lists using NumPy.
+
+    Args:
+        my_data: A list of lists (or 2-D array-like) to transpose.
+
+    Returns:
+        list: The transposed data as a nested list.
+    """
     np_array = np.array(my_data)
     transpose = np_array.T
     transpose_list = transpose.tolist()
@@ -47,6 +55,15 @@ def get_ent_chains(a, b, c, d):
 
 
 def make_opt(my_str):
+    """Convert a whitespace-only string to None; return all other values unchanged.
+
+    Args:
+        my_str: The value to check. Typically a string, but any type is accepted.
+
+    Returns:
+        None if ``my_str`` is a string containing only whitespace, otherwise
+        ``my_str`` unchanged.
+    """
     opt_str = my_str
     if isinstance(my_str, str) and my_str.strip() == "":
         opt_str = None
@@ -158,6 +175,27 @@ def expand_unp_seg_to_resi(my_res, sifts_seg_inst):
 def get_xref_db(
     my_res, sifts_data, sifts_seg_inst, my_obs, my_mh_id, my_mon_info
 ):
+    """Build the per-residue cross-reference data for the ``_pdbx_sifts_xref_db`` category.
+
+    For every polymer residue, the function combines residue-level SIFTS
+    mappings with segment-level instance information and assembles a list of
+    19 parallel column lists ready to be written into the mmCIF category.
+
+    Args:
+        my_res (dict): Nested dict ``{entity_id: {asym_id: {seq_id: {"mon_id": str}}}}``.
+        sifts_data (dict): Per-residue SIFTS mapping data keyed by
+            ``{entity_id: {asym_id: {seq_id: [tag, ...]}}}``.
+        sifts_seg_inst (dict): Segment-level instance info keyed by
+            ``{entity_id: {asym_id: {start: [(end, acc, seg_id, inst_id)]}}}``.
+        my_obs (dict): Observed-residue flags keyed by ``{asym_id: {seq_id: "y"/"n"}}``.
+        my_mh_id (dict): Micro-heterogeneity index keyed by
+            ``{seq_id: {mon_id: int}}``.
+        my_mon_info: Unused parameter reserved for future use.
+
+    Returns:
+        list[list]: 19 parallel lists (one per mmCIF column) containing the
+        cross-reference data for every mapped residue.
+    """
     mega_list = [[] for _ in range(19)]
     expa_sifts = expand_unp_seg_to_resi(my_res, sifts_seg_inst)
 

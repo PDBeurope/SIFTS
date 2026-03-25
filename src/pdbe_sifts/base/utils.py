@@ -21,8 +21,8 @@ UNIPROT_API_BASE_URL = "https://rest.uniprot.org/uniprotkb"
 
 
 def fetch_uniprot_file(
-    uniprot_id: str, file_type: str, fail_silently=False
-) -> str:
+    uniprot_id: str, file_type: str, fail_silently: bool = False
+) -> str | None:
     """Fetches Uniprot file for a given Uniprot ID.
 
     First checks cache directory for the file. If not found, fetches from Uniprot.
@@ -70,7 +70,21 @@ def fetch_uniprot_file(
         requests.exceptions.ReadTimeout,
     ),
 )
-def _unp_file_checks(file_type, filename, unp_file):
+def _unp_file_checks(file_type: str, filename: str, unp_file: Path) -> None:
+    """Fetch a UniProt file from the REST API and save it to the cache.
+
+    Retries up to 3 times on network errors with exponential back-off.
+
+    Args:
+        file_type: One of ``"xml"``, ``"json"``, or ``"fasta"``.
+        filename: Filename to request from the UniProt API (e.g. ``"P12345.xml"``).
+        unp_file: Local :class:`~pathlib.Path` where the file will be written.
+
+    Raises:
+        AccessionNotFound: If the API returns 400 or 404.
+        ObsoleteUniProtError: If the entry is deleted (blank XML/FASTA,
+            or ``entryType == "Inactive"``).
+    """
     url = f"{UNIPROT_API_BASE_URL}/{filename}"
     logger.info(f"Fetching {url}")
     r = requests.get(url, timeout=5)
@@ -128,7 +142,8 @@ def _check_fasta_contents(response: requests.Response) -> None:
         )
 
 
-def get_date():
+def get_date() -> str:
+    """Return the current date and time as a sortable string (``HH_DD_MM_YYYY``)."""
     now = datetime.now()
     timestamp = now.strftime("%H_%d_%m_%Y")
     return timestamp
@@ -143,7 +158,7 @@ def get_next_release_date() -> date:
     return date.today() + relativedelta(weekday=WE(+1))
 
 
-def get_allocated_cpus():
+def get_allocated_cpus() -> int:
     """Return the number of CPUs available to this process.
 
     Environment variables (checked in order):
@@ -158,7 +173,7 @@ def get_allocated_cpus():
         return os.cpu_count() or 1
 
 
-def get_cpu_count():
+def get_cpu_count() -> int:
     """Return the number of parallel threads to use for internal alignment jobs.
 
     Environment variables (checked in order):
@@ -171,9 +186,31 @@ def get_cpu_count():
 
 
 class SiftsAction(argparse.Action):
+    """Custom argparse action that resolves argument values from environment variables or config.
+
+    Falls back to *envvar* (environment variable) or *confvar* (config value)
+    when no explicit command-line argument is provided.
+    """
+
     def __init__(
-        self, envvar=None, confvar=None, required=False, default=None, **kwargs
-    ):
+        self,
+        envvar: str | None = None,
+        confvar: str | None = None,
+        required: bool = False,
+        default=None,
+        **kwargs,
+    ) -> None:
+        """Initialise the action, resolving the default from environment or config.
+
+        Args:
+            envvar: Name of an environment variable to use as the default.
+            confvar: Config-derived value to use when *envvar* is absent.
+            required: Whether the argument is required on the command line.
+                Automatically set to ``False`` when a default is available.
+            default: Explicit default value; overridden by *envvar*/*confvar*
+                when absent.
+            **kwargs: Forwarded to :class:`argparse.Action`.
+        """
         if not default:
             if envvar and envvar in os.environ:
                 default = os.environ[envvar]
@@ -184,7 +221,14 @@ class SiftsAction(argparse.Action):
             required = False
         super().__init__(default=default, required=required, **kwargs)
 
-    def __call__(self, parser, namespace, values, option_string=None):
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values,
+        option_string: str | None = None,
+    ) -> None:
+        """Store the parsed value on the namespace."""
         setattr(namespace, self.dest, values)
 
 

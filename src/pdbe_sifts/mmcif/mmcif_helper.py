@@ -23,7 +23,7 @@ CATEGORIES = [
 ]
 
 
-def extract_table(block, search_list):
+def extract_table(block: cif.Block, search_list: list[str]) -> cif.Table:
     """
     Produces a Gemmi table based on a list of parsed column names in the _atom_site.
     loop.
@@ -48,9 +48,27 @@ def extract_table(block, search_list):
 
 
 class mmCIF:
-    """Docstring for mmCIF."""
+    """Parser and accessor for mmCIF data used by the SIFTS pipeline.
 
-    def __init__(self, pdbid, chem_comp_dict, cif_file: str):
+    Loads the mmCIF categories required for segment generation on
+    construction and exposes typed accessor methods for chains, residues,
+    UniProt cross-references, taxonomy IDs, and PDB metadata.
+    """
+
+    def __init__(self, pdbid: str, chem_comp_dict, cif_file: str) -> None:
+        """Initialise by reading and caching all required mmCIF categories.
+
+        Args:
+            pdbid: Four-letter PDB identifier (e.g. ``"1abc"``).
+            chem_comp_dict: A :class:`ChemCompMapping` instance used to
+                convert three-letter residue codes to one-letter codes.
+            cif_file: Path to the ``.cif`` or ``.cif.gz`` file.
+
+        Raises:
+            FileNotFoundError: If *cif_file* does not exist.
+            NotAPolyPeptide: If the file contains no
+                ``_pdbx_poly_seq_scheme`` category.
+        """
         self.pdbid = pdbid
         self.fname = cif_file
         if not Path(self.fname).exists():
@@ -81,7 +99,7 @@ class mmCIF:
         self.features = self.__get_features()
         del block
 
-    def get_unp(self, chain):
+    def get_unp(self, chain: str) -> list[str]:
         """Fetches uniprot accessions from CIF for a particular entity, where available."""
         unps: list[str] = []
 
@@ -97,7 +115,21 @@ class mmCIF:
 
         return unps
 
-    def get_ranges(self, chain, acc):
+    def get_ranges(self, chain: str, acc: str) -> list[list[int]] | None:
+        """Return the UniProt alignment ranges for a chain–accession pair.
+
+        Reads ``_struct_ref_seq`` to find the database alignment begin/end
+        positions for the given chain and UniProt accession.
+
+        Args:
+            chain: Author chain ID.
+            acc: UniProt accession to query.
+
+        Returns:
+            List of ``[begin, end]`` integer pairs, one per aligned region.
+            Returns ``None`` if ``_struct_ref_seq`` is absent, or an empty
+            list if the chain/accession pair has no recorded ranges.
+        """
         if self.struct_ref_seq is None:
             return None
 
@@ -118,7 +150,21 @@ class mmCIF:
 
         return out
 
-    def __get_tax_helper(self, cat, item_name, entity):
+    def __get_tax_helper(
+        self, cat: dict | None, item_name: str, entity: str
+    ) -> int | None:
+        """Extract a taxonomy ID from a source category for a given entity.
+
+        Args:
+            cat: Parsed mmCIF category dict (e.g. ``self.src_nat``).
+                May be ``None`` if the category is absent from the file.
+            item_name: Name of the field that holds the taxonomy ID within
+                *cat* (e.g. ``"pdbx_ncbi_taxonomy_id"``).
+            entity: Entity ID string to match against ``cat["entity_id"]``.
+
+        Returns:
+            Integer taxonomy ID, or ``None`` if not found or not parseable.
+        """
         out = None
 
         if cat:
@@ -151,7 +197,19 @@ class mmCIF:
         except ValueError:
             return None
 
-    def get_tax(self, chain):
+    def get_tax(self, chain: str) -> int | None:
+        """Return the NCBI taxonomy ID for the source organism of a chain.
+
+        Tries ``_entity_src_nat``, then ``_entity_src_gen``, then
+        ``_pdbx_entity_src_syn`` in that order.
+
+        Args:
+            chain: Author chain ID.
+
+        Returns:
+            Integer NCBI taxonomy ID, or ``None`` if unavailable in all
+            three source categories.
+        """
         entity = self.get_entity_id(chain)
 
         tax = self.__get_tax_helper(
@@ -172,12 +230,12 @@ class mmCIF:
 
         return tax
 
-    def get_chains(self):
-        """TODO: Docstring for get_chains.
+    def get_chains(self) -> dict[str, tuple]:
+        """Return all polypeptide chains in the structure.
 
-        @param f TODO
-        @return: TODO
-
+        Returns:
+            Dict mapping author chain ID → ``(entity_id, asym_id)`` for the
+            first occurrence of each unique chain in ``_pdbx_poly_seq_scheme``.
         """
 
         chains = self.poly_seq["pdb_strand_id"]
@@ -193,7 +251,16 @@ class mmCIF:
 
         return out
 
-    def is_poly(self, entity_id):
+    def is_poly(self, entity_id: str | int) -> bool:
+        """Return ``True`` if the entity is a polypeptide.
+
+        Args:
+            entity_id: Entity identifier (string or integer).
+
+        Returns:
+            ``True`` when ``_entity_poly.type`` contains ``"peptide"`` for
+            the given entity, ``False`` otherwise.
+        """
         # Check if the entity is a polypeptide
         if isinstance(entity_id, int):
             entity_id = str(entity_id)
@@ -209,13 +276,29 @@ class mmCIF:
 
         return False
 
-    def get_pdb_status(self):
+    def get_pdb_status(self) -> str:
+        """Return the PDB release status code (e.g. ``"REL"``)."""
         return self.pdb_status["status_code"][0]
 
-    def get_rev_date(self):
+    def get_rev_date(self) -> list[str]:
+        """Return all revision dates from ``_pdbx_audit_revision_history``."""
         return self.rev_date["revision_date"]
 
-    def get_type(self, chain, n_residue):
+    def get_type(self, chain: str, n_residue: int) -> str | None:
+        """Return the residue annotation type for a specific chain position.
+
+        Looks up ``_struct_ref_seq_dif`` for a match on chain and residue
+        number and returns the capitalised ``details`` field (e.g.
+        ``"Engineered mutation"``, ``"Insertion"``, ``"Conflict"``).
+
+        Args:
+            chain: Author chain ID.
+            n_residue: 1-based sequence position.
+
+        Returns:
+            Capitalised annotation string, or ``None`` if no annotation is
+            found or the category is absent.
+        """
         if not self.seq_dif:
             return None
 
@@ -249,7 +332,17 @@ class mmCIF:
 
         return None
 
-    def get_original_residue(self, chain, n_residue):
+    def get_original_residue(self, chain: str, n_residue: int) -> tuple | None:
+        """Return the original residue before an engineered mutation or conflict.
+
+        Args:
+            chain: Author chain ID.
+            n_residue: 1-based sequence position.
+
+        Returns:
+            ``(three_letter_code, one_letter_code)`` tuple of the original
+            residue, or ``None`` if not found.
+        """
         if self.seq_dif is None:
             return None
 
@@ -267,7 +360,24 @@ class mmCIF:
 
         return None
 
-    def get_sequence(self, entity_id):
+    def get_sequence(self, entity_id: str | int) -> str:
+        """Return the one-letter amino acid sequence for an entity.
+
+        Iterates over ``_pdbx_poly_seq_scheme`` and collects the one-letter
+        code for each unique sequence position belonging to *entity_id*.
+        Positions are resolved via the chemical component dictionary.
+
+        Args:
+            entity_id: Entity identifier (string or integer).
+
+        Returns:
+            One-letter sequence string ordered by ascending sequence position.
+
+        Note:
+            When the entity spans multiple chains, all chains are visited but
+            each sequence position is only recorded once (the first occurrence
+            wins), so the result is the entity-level canonical sequence.
+        """
         # TODO: is this overwritting sequence positions by going through all
         # the chains in the entity?  that is not a problem in terms of accuracy
         # but it is not optimal in terms of computational time
@@ -291,7 +401,21 @@ class mmCIF:
 
         return "".join([seq[key] for key in sorted(seq.keys())])
 
-    def __get_parent_id(self, three):
+    def __get_parent_id(self, three: str) -> str | None:
+        """Look up the parent residue code for a modified residue.
+
+        Searches ``_pdbx_struct_mod_residue`` for *three* in the
+        ``label_comp_id`` column and returns the corresponding
+        ``parent_comp_id``.
+
+        Args:
+            three: Three-letter code of the modified residue to look up
+                (e.g. ``"MSE"``).
+
+        Returns:
+            Three-letter code of the parent standard residue (e.g. ``"MET"``),
+            or ``None`` if *three* is not listed as a modified residue.
+        """
         label = self.mod_residue["label_comp_id"]
         parent = self.mod_residue["parent_comp_id"]
 
@@ -301,7 +425,19 @@ class mmCIF:
 
         return None
 
-    def __get_features(self):
+    def __get_features(self) -> dict:
+        """Parse ``_struct_ref_seq_dif`` into a per-chain feature index.
+
+        Groups consecutive residues that share the same chain and annotation
+        type into contiguous ranges.  The result is stored in ``self.features``
+        and is used downstream to identify insertions, mutations, and other
+        sequence differences.
+
+        Returns:
+            Dict mapping author chain ID → list of ``(detail_str, (start, end))``
+            tuples, where *start* and *end* are 1-based sequence positions.
+            Returns an empty dict when ``_struct_ref_seq_dif`` is absent.
+        """
         if not self.seq_dif:
             return {}
 
@@ -343,14 +479,43 @@ class mmCIF:
 
         return out
 
-    def get_entity_id(self, chain):
+    def get_entity_id(self, chain: str) -> str | None:
+        """Return the entity ID for a given author chain identifier.
+
+        Searches ``_pdbx_poly_seq_scheme`` for the first row whose
+        ``pdb_strand_id`` matches *chain* and returns the corresponding
+        ``entity_id``.
+
+        Args:
+            chain: Author chain ID (e.g. ``"A"``).
+
+        Returns:
+            Entity ID string (e.g. ``"1"``), or ``None`` if *chain* is not
+            found in the poly seq scheme.
+        """
         chains = self.poly_seq["pdb_strand_id"]
 
         for idx, c in enumerate(chains):
             if c == chain:
                 return self.poly_seq["entity_id"][idx]
 
-    def get_residues(self, chain):
+    def get_residues(self, chain: str) -> list:
+        """Return all residues for a chain as sorted (seq_id, data) pairs.
+
+        Reads ``_pdbx_poly_seq_scheme`` and builds a dict keyed by integer
+        sequence position.  Each value is a tuple of:
+        ``(auth_n, auth_ins, oneL, threeL, rtype, observed, oneL_original,
+        threeL_original, mh_index)``.  For microheterogeneity positions
+        (``hetero == "y"``), the value is a list of such tuples (one per
+        alternate conformer).
+
+        Args:
+            chain: Author chain ID whose residues should be returned.
+
+        Returns:
+            List of ``(seq_id, residue_data)`` tuples sorted by ascending
+            sequence position.
+        """
         chains = self.poly_seq["pdb_strand_id"]
 
         residues = {}
@@ -399,7 +564,20 @@ class mmCIF:
 
         return sorted(residues.items())
 
-    def get_ec(self, entity_id):
+    def get_ec(self, entity_id: str | int) -> list[str]:
+        """Return the EC numbers associated with an entity.
+
+        Reads the ``pdbx_ec`` field from the ``_entity`` category.  Handles
+        comma-separated values and filters out placeholder characters
+        (``"?"`` and ``"."``).
+
+        Args:
+            entity_id: Entity identifier (string or integer).
+
+        Returns:
+            List of EC number strings (e.g. ``["3.4.21.4"]``).  Returns an
+            empty list when no EC data is present or the entity is not found.
+        """
         # Get the EC for the entity
         if isinstance(entity_id, int):
             entity_id = str(entity_id)
@@ -423,7 +601,33 @@ class mmCIF:
 
         return []
 
-    def get_ters_coordinates_of_residue(self, chain_id, res_num, ters_lab_num):
+    def get_ters_coordinates_of_residue(
+        self, chain_id: str, res_num: int, ters_lab_num: dict
+    ) -> dict:
+        """Return the Cartesian coordinates of the N- and C-terminal atoms of a residue.
+
+        Reads ``_atom_site`` from the mmCIF file and locates the specific atom
+        rows for the requested residue by matching chain, residue number, atom
+        label, and atom ordinal.  Only the first model is considered.
+
+        Args:
+            chain_id: Internal ``label_asym_id`` (struct_asym) of the chain.
+            res_num: ``label_seq_id`` (1-based entity sequence position) of the
+                residue whose terminal-atom coordinates are requested.
+            ters_lab_num: Dict with keys ``"C"`` and ``"N"``, each mapping to a
+                ``(atom_label, atom_ordinal)`` pair identifying the C-terminal
+                and N-terminal atoms respectively (e.g.
+                ``{"C": ("C", "1"), "N": ("N", "1")}``).
+
+        Returns:
+            Dict with keys ``"N"`` and ``"C"``, each containing a
+            ``[x, y, z]`` list of float coordinates.  A key's value is an
+            empty list if the atom was not found.
+
+        Raises:
+            TypeError: If the ``_atom_site`` table is empty (mmCIF is missing
+                the required columns).
+        """
         # function from Joseph Ellaway
         cter_lab = ters_lab_num["C"][0]
         nter_lab = ters_lab_num["N"][0]

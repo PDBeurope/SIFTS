@@ -39,6 +39,16 @@ class FastaBuilder:
         threads: int = 1,
         batch_size: int = 100000,
     ):
+        """Initialise the FASTA builder.
+
+        Args:
+            input_path: Path to a ``.cif``/``.cif.gz`` file, a FASTA file,
+                or a ``.txt`` list of mmCIF paths.
+            out_dir: Directory where the generated FASTA will be written.
+                Ignored when the input is already a FASTA file.
+            threads: Number of parallel workers for ``.txt`` list processing.
+            batch_size: Number of CIF files per batch when processing a list.
+        """
         self.input_path = Path(input_path)
         self.out_dir = Path(out_dir)
         self.threads = threads
@@ -67,7 +77,9 @@ class FastaBuilder:
         return self.entry_name_from(self.input_path)
 
     @staticmethod
-    def _process_single_cif(file_path: str | Path):
+    def _process_single_cif(
+        file_path: str | Path,
+    ) -> tuple[tuple[str, dict] | None, str | None]:
         """Extract sequence/taxonomy from one mmCIF file.
 
         Returns:
@@ -147,7 +159,18 @@ class FastaBuilder:
         )
 
     def _build_from_list(self) -> Path:
-        """Process a .txt file listing mmCIF paths, one per line."""
+        """Process a ``.txt`` file listing mmCIF paths and write a combined FASTA.
+
+        Reads mmCIF files in parallel batches of ``self.batch_size``, extracts
+        sequences from each, and appends them to a single output FASTA.
+
+        Returns:
+            Path to the combined FASTA file.
+
+        Raises:
+            RuntimeError: If no sequences could be extracted from any of the
+                listed CIF files.
+        """
         fasta_path = self.out_dir / f"{self.entry_name}.fasta"
         fasta_path.unlink(missing_ok=True)
 
@@ -189,7 +212,7 @@ class FastaBuilder:
         return fasta_path
 
 
-def run():
+def run() -> None:
     """Command-line entry point for building a query FASTA from mmCIF input(s).
 
     Accepts a single .cif/.cif.gz, an existing .fasta/.fa/.faa,

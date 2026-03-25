@@ -29,3 +29,17 @@ Low-level helpers shared across the pipeline: path resolution, CPU detection, an
 ::: pdbe_sifts.base.exceptions.BatchRunException
 
 ::: pdbe_sifts.base.exceptions.EntryFailedException
+
+::: pdbe_sifts.base.exceptions.ReleaseCheckFailedException
+
+::: pdbe_sifts.base.exceptions.ProcessFailedError
+
+::: pdbe_sifts.base.exceptions.EntryTimedOutException
+
+## Logging
+
+::: pdbe_sifts.base.log.SensitiveFormatter
+
+## Argparse action
+
+::: pdbe_sifts.base.utils.SiftsAction

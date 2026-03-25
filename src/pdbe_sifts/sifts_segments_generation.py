@@ -29,6 +29,36 @@ from pdbe_sifts.unp.unp import UNP
 
 
 class SiftsAlign:
+    """Orchestrate the SIFTS segment and residue mapping pipeline for one PDB entry.
+
+    Reads an mmCIF file, resolves UniProt accessions for every polypeptide
+    chain (from a DuckDB hits database and/or a user-supplied mapping),
+    runs pairwise sequence alignments, applies optional connectivity
+    correction, and writes gzipped segment and residue CSV files to the
+    specified output directory.
+
+    The class is designed to be instantiated once per batch and reused across
+    multiple calls to :meth:`process_entry`.
+
+    Attributes:
+        cif_file: Absolute path to the mmCIF file being processed.
+        nf90_mode: ``True`` when the ≥ 90 % identity filter is disabled.
+        unp_mode: Raw value of the ``-m`` / ``--mapping`` argument, or
+            ``None`` if not supplied.
+        db_conn_str: Path to the DuckDB file, or ``None``.
+        sifts_mapping: Internal mapping state (populated during processing).
+        out_dir: Root output directory for CSV files.
+        NFC: Non-fragment connectivity cache.
+        NFT: Non-fragment topology cache.
+        connectivity_mode: ``True`` when connectivity correction is enabled.
+        custom_sequences: Dict of chain-ID → :class:`CustomSequenceAccession`
+            populated from a user-supplied FASTA file.
+        used_cif_categories: Set of mmCIF category names monitored for
+            future-dated revisions.
+        conn: Active ``duckdb.DuckDBPyConnection``, or ``None``.
+        cc: :class:`~pdbe_sifts.mmcif.chem_comp.ChemCompMapping` instance.
+    """
+
     def __init__(
         self,
         cif_file,
@@ -94,6 +124,15 @@ class SiftsAlign:
 
     @log_durations(logger.debug)
     def process_entry(self, entry_id):
+        """Run the full SIFTS segment and residue mapping pipeline for one entry.
+
+        Parses the mmCIF file, resolves UniProt mappings for each chain,
+        runs pairwise alignments, applies connectivity correction, and
+        writes output CSV files to ``self.out_dir``.
+
+        Args:
+            entry_id: Four-letter PDB identifier (e.g. ``"1abc"``).
+        """
         cif_file = self.cif_file
         if self.no_used_cif_category_modified(cif_file):
             logger.info(
@@ -120,7 +159,7 @@ class SiftsAlign:
         }
 
         mappings = self.get_mappings(entry_id, chain_lst, chain_to_entity)
-        logger.info(mappings)
+        logger.debug(mappings)
 
         # Inject AFTER get_mappings: _parse_fasta_mapping() populates self.custom_sequences
         # inside get_mappings. Key by accession ("BLOOD"), not chain_id ("A"), because
@@ -162,10 +201,29 @@ class SiftsAlign:
         logger.info(f"Processed [{entry_id}]")
 
     def remove_existing_files(self, entry_id):
+        """Delete any existing output CSVs for *entry_id* in the output directory.
+
+        Args:
+            entry_id: PDB entry identifier; used to glob ``{entry_id}_*.csv.gz``.
+        """
         for f in Path(self.out_dir).glob(f"{entry_id}_*.csv.gz"):
             f.unlink()
 
     def get_mappings(self, entry_id, chain_lst, chain_to_entity):
+        """Retrieve UniProt mappings for all chains of an entry.
+
+        Initialises every chain with an empty mapping list, then populates
+        it from the DuckDB hits database (if available) and overlays any
+        user-supplied mapping from ``self.unp_mode``.
+
+        Args:
+            entry_id: PDB entry identifier.
+            chain_lst: List of author chain IDs present in the entry.
+            chain_to_entity: Mapping of chain ID → mmCIF entity ID.
+
+        Returns:
+            Dict mapping chain ID → list of :class:`~helper.SMapping`.
+        """
         mappings: Mapping[str, list[helper.SMapping]] = {}
         for chain in chain_lst:
             mappings[chain] = []
@@ -180,6 +238,20 @@ class SiftsAlign:
         return mappings
 
     def _parse_user_mapping(self, entry_mapping):
+        """Overlay user-supplied mappings onto the base mapping dict.
+
+        Dispatches to ``_parse_fasta_mapping`` when ``self.unp_mode`` points
+        to a file, or to ``_parse_accession_mapping`` for a comma-separated
+        ``chain:accession`` string.  Returns *entry_mapping* unchanged when
+        ``self.unp_mode`` is ``None``.
+
+        Args:
+            entry_mapping: Base chain→SMapping dict (modified in-place via
+                dict merge).
+
+        Returns:
+            Updated mapping dict with user overrides applied.
+        """
         if not self.unp_mode:
             return entry_mapping
         if Path(self.unp_mode).is_file():
@@ -209,6 +281,20 @@ class SiftsAlign:
         mapp: dict = {}
 
         def _flush(header: str, seq_parts: list):
+            """Finalise one FASTA record and register it in *mapp*.
+
+            Called each time a new ``>`` header line is encountered (to emit
+            the preceding record) and once more after the last line of the
+            file.  Populates ``self.custom_sequences`` and appends an
+            :class:`~helper.SMapping` entry to *mapp*.
+
+            Args:
+                header: FASTA header text (without the leading ``>``), in the
+                    format ``{entry_id}|{auth_asym_id}|{sequence_id}`` or
+                    ``{entry_id}|{auth_asym_id}|{sequence_id}|{name}``.
+                seq_parts: List of non-empty sequence lines accumulated since
+                    the last header; joined to form the full sequence string.
+            """
             parts = header.split("|")
             # parts[0] = entry_id (ignored in single-entry mode — entry already known)
             chain_id = parts[1] if len(parts) > 1 else ""
@@ -241,9 +327,29 @@ class SiftsAlign:
         return {**entry_mapping, **mapp}
 
     def _is_future_date(self, date: str) -> bool:
+        """Return ``True`` if *date* is strictly after today.
+
+        Args:
+            date: Date string in ``YYYY-MM-DD`` format.
+        """
         return datetime.strptime(date, "%Y-%m-%d") > datetime.now()
 
     def no_used_cif_category_modified(self, cif_file: str) -> bool:
+        """Check whether any SIFTS-relevant mmCIF category has a future revision.
+
+        Reads ``_pdbx_audit_revision_history`` and
+        ``_pdbx_audit_revision_category`` to find revisions dated in the
+        future that touch categories used by the pipeline.
+
+        Args:
+            cif_file: Path to the mmCIF file to inspect.
+
+        Returns:
+            ``True`` if a future revision modifies a used category (the
+            entry should be skipped until the revision date is reached).
+            ``False`` if no such revision exists or the category list is
+            empty.
+        """
         if not self.used_cif_categories:
             logger.debug("No categories to check for modifications")
             return False
@@ -299,6 +405,25 @@ class SiftsAlign:
 
 @log_durations(logger.info)
 def run():
+    """CLI entry point for the SIFTS segment generation pipeline.
+
+    Parses command-line arguments, constructs a :class:`SiftsAlign` instance,
+    and calls :meth:`SiftsAlign.process_entry` for the target entry.  The
+    entry ID is either taken from the ``--entry`` argument or derived from
+    the ``_entry.id`` field of the mmCIF file.
+
+    At least one of ``-d`` / ``--duckdb`` or ``-m`` / ``--mapping`` must be
+    provided; the function calls ``parser.error`` and exits otherwise.
+
+    Command-line arguments:
+        -i / --cif-input: Path to the input mmCIF file.
+        -o / --output-dir: Root output directory for CSV files.
+        -nf90 / --nf90: Enable NF90 mode (default: ``False``).
+        --no-connectivity: Disable connectivity correction (default: enabled).
+        -m / --mapping: User-defined chain→accession mapping or FASTA file.
+        -d / --duckdb: Path to the DuckDB hits file.
+        --entry: PDB entry ID override; derived from the mmCIF file if omitted.
+    """
     parser = argparse.ArgumentParser(
         "Segment generation in SIFTS, generates seg_csv, res_csv"
     )

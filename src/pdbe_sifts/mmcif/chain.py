@@ -20,7 +20,11 @@ STEP_SIZE = 2000
 
 
 class Chain:
-    """Docstring for Chain."""
+    """Represents a single polypeptide chain within a PDB entry.
+
+    Holds residues, alignment sequence, residue maps, and segment mappings
+    between the PDB chain and UniProt isoforms.
+    """
 
     def __init__(
         self,
@@ -32,12 +36,16 @@ class Chain:
         sequence: str,
         parent: object | None,
     ):
-        """TODO: to be defined1.
+        """Initialise a Chain from mmCIF data.
 
-        @param pdbid TODO
-        @param entity_id TODO
-        @param auth_asym_id TODO
-
+        Args:
+            mmcif: Parsed mmCIF object for the parent entry.
+            pdbid: Four-letter PDB identifier (e.g. ``"1abc"``).
+            auth_asym_id: Author chain ID as deposited in the PDB.
+            entity_id: mmCIF entity identifier for this chain.
+            struct_asym_id: Structural asymmetric unit chain ID.
+            sequence: One-letter amino acid sequence for this chain.
+            parent: Parent Entry object; ``None`` if standalone.
         """
         self.mmcif = mmcif
         self.pdbid = pdbid
@@ -111,7 +119,15 @@ class Chain:
     # Generate the "alignment sequence": an alternative version
     # of the original sequence where several modifications are made
     # in order to simplify the alignment
-    def __gen_alignment_sequence(self):
+    def __gen_alignment_sequence(self) -> None:
+        """Build the alignment sequence from residues.
+
+        Replaces insertions, linkers and expression tags with ``'J'``,
+        uses the original residue letter for engineered mutations and
+        conflicts, and expands chromophore residues into their constituent
+        one-letter codes.  Result is stored in ``self.alignment_sequence``.
+        No-op if the sequence has already been generated.
+        """
         if self.alignment_sequence != []:
             return
 
@@ -162,7 +178,20 @@ class Chain:
 
     # Compensate for index deviations due to one letter codes
     # with more than one character
-    def mod_after_alignment(self, al):
+    def mod_after_alignment(self, al: tuple) -> str:
+        """Correct alignment positions for multi-character one-letter codes.
+
+        Some residues (e.g. chromophores) are represented by more than one
+        character in the one-letter code.  After alignment, start/stop indices
+        need to be adjusted so they refer to the correct residue positions.
+
+        Args:
+            al: A two-element alignment tuple ``(unp_seq, pdb_seq)`` as
+                returned by the lalign36 wrapper.
+
+        Returns:
+            The corrected PDB aligned sequence as a plain string.
+        """
         seq = al[1].seq
         out = ""
 
@@ -206,7 +235,22 @@ class Chain:
         return out
 
     # generate the residue_maps between the chain and each isoform
-    def get_each_resmap(self, row):
+    def get_each_resmap(self, row: tuple) -> tuple:
+        """Compute the residue map for a single UniProt isoform.
+
+        Iterates over the pairwise alignment for one isoform and builds a
+        dictionary mapping PDB sequence positions (1-based) to UniProt
+        sequence positions.  Runs connectivity refinement when enabled.
+
+        Args:
+            row: ``(isoform_accession, list_of_mappings)`` tuple taken from
+                ``self.mappings.items()``.
+
+        Returns:
+            ``(isoform_accession, residue_map_dict)`` where the dict maps
+            PDB position (int) → UniProt position (int or list[int] for
+            chromophores).
+        """
         iso, mappings = row
         residue_map = {}
         # Process in reverse so the best mappings is
@@ -278,7 +322,14 @@ class Chain:
         return iso, residue_map
 
     # generate the residue_map between the chain and each isoform
-    def generate_residue_maps(self):
+    def generate_residue_maps(self) -> None:
+        """Generate residue maps for all isoforms in parallel.
+
+        Dispatches ``get_each_resmap`` across all entries in
+        ``self.mappings`` using a thread pool.  After completion, removes
+        overlapping residues for chimeric chains and builds ``self.segments``
+        from the resulting residue maps.
+        """
         # create a process pool that uses all cpus
         with Pool(N_PROC) as pool:
             # call the function for each item in parallel, get results as tasks complete
@@ -287,7 +338,8 @@ class Chain:
                 tqdm.tqdm(
                     pool.imap_unordered(
                         self.get_each_resmap, my_list, chunksize=STEP_SIZE
-                    )
+                    ),
+                    disable=True,
                 )
             )
 
@@ -302,7 +354,15 @@ class Chain:
     # remove the residues which map to more than one accession
     # keeping the ones that benefit continuity
     # (only for chimeras)
-    def __overlapping_residues(self):
+    def __overlapping_residues(self) -> None:
+        """Remove residues that map to multiple accessions (chimera handling).
+
+        For each pair of isoform maps, residues present in both are resolved
+        by preferring the mapping without a sequence conflict (i.e. where the
+        PDB residue matches the UniProt residue).  If both match equally, the
+        mapping that benefits positional continuity is kept.  Only called for
+        chimeric chains.
+        """
         iso_list = list(self.residue_maps.keys())
 
         for idx, iso1 in enumerate(iso_list):
@@ -341,7 +401,17 @@ class Chain:
                         else:
                             del maps1[key]
 
-    def __group_elements(self, lst):
+    def __group_elements(self, lst) -> list:
+        """Group consecutive (PDB pos, UNP pos) pairs into segment ranges.
+
+        Args:
+            lst: Iterable of ``(pdb_position, unp_position)`` tuples, sorted
+                by PDB position.
+
+        Returns:
+            List of ``((pdb_start, pdb_end), (unp_start, unp_end))`` tuples
+            representing contiguous segments.
+        """
         ranges = []
 
         for _, g in groupby(enumerate(lst), lambda i_x: i_x[0] - i_x[1][0]):
@@ -360,10 +430,26 @@ class Chain:
 
         return ranges
 
-    def __overlapping(self, r1, r2):
+    def __overlapping(self, r1: tuple, r2: tuple) -> bool:
+        """Return True if range *r1* overlaps with range *r2*.
+
+        Args:
+            r1: ``(start, end)`` tuple.
+            r2: ``(start, end)`` tuple to compare against.
+
+        Returns:
+            ``True`` if the two ranges share at least one position.
+        """
         return r2[0] <= r1[0] <= r2[1] or r2[0] <= r1[1] <= r2[1]
 
-    def __segments_from_residues(self):
+    def __segments_from_residues(self) -> None:
+        """Build ``self.segments`` from residue maps and resolve chimera overlaps.
+
+        Calls ``__group_elements`` for each isoform's residue map to produce
+        contiguous segment ranges, then removes overlapping segments for
+        chimeric chains so that each PDB position is assigned to at most one
+        UniProt accession.
+        """
         for iso, maps in list(self.residue_maps.items()):
             self.segments[iso] = self.__group_elements(
                 (x, y) for x, y in sorted(maps.items(), key=itemgetter(0))
@@ -391,7 +477,18 @@ class Chain:
                 for seg in val:
                     self.segments[key].remove(seg)
 
-    def get_residue_auth(self, n):
+    def get_residue_auth(self, n: int) -> tuple[str | None, str | None]:
+        """Return the author (PDB) residue number and insertion code for a seq position.
+
+        Args:
+            n: 1-based sequence position in the mmCIF ``_pdbx_poly_seq_scheme``.
+
+        Returns:
+            ``(auth_seq_num, insertion_code)`` tuple.  Either value is ``None``
+            when the residue is unobserved or the field is absent.  The
+            insertion code defaults to a single space ``" "`` when present but
+            empty.
+        """
         unk = (".", "?", None, False)
 
         for r in self.residues:
@@ -406,12 +503,7 @@ class Chain:
 
         return (None, None)
 
-    def __repr__(self):
-        """TODO: Docstring for __repr__.
-
-        @param f TODO
-        @return: TODO
-
-        """
+    def __repr__(self) -> str:
+        """Return a human-readable representation of the chain."""
 
         return f"{self.pdbid}_{self.auth_asym_id} (E:{self.entity_id}|S:{self.struct_asym_id})"

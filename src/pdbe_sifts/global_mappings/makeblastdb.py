@@ -34,6 +34,17 @@ class MakeBlastDb(ToolDatabase):
         output_path: str | Path,
         tax_id_map: str | Path,
     ):
+        """Initialise MakeBlastDb with input FASTA, output database path, and taxid map.
+
+        Args:
+            input_path: Path to the input FASTA file.
+            output_path: Base path for the BLAST database output (no extension).
+            tax_id_map: Path to the accession-to-taxid mapping file
+                (tab- or space-delimited, e.g. ``"P05067    9606"``).
+
+        Raises:
+            FileNotFoundError: If *input_path* or *tax_id_map* do not exist.
+        """
         super().__init__(input_path, output_path)
         self.tax_id_map = Path(tax_id_map)
 
@@ -43,7 +54,7 @@ class MakeBlastDb(ToolDatabase):
         if not self.tax_id_map.exists():
             raise FileNotFoundError(f"File not found: {self.tax_id_map}")
 
-    def _process(self):
+    def _process(self) -> None:
         """Execute the makeblastdb command to generate the BLAST database."""
         cmd = [
             "makeblastdb",
@@ -64,7 +75,7 @@ class MakeBlastDb(ToolDatabase):
         subprocess.run(cmd, check=True)
 
 
-def run():
+def run() -> None:
     """Command-line interface for creating BLAST-formatted databases."""
     parser = argparse.ArgumentParser(
         description="Create a BLAST-formatted protein database using NCBI makeblastdb."

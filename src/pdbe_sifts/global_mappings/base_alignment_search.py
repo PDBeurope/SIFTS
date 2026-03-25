@@ -37,7 +37,7 @@ class AlignmentSearch(ABC):
         if not Path(self.query_path).exists():
             raise FileNotFoundError(f"Query file not found : {self.query_path}")
 
-    def run(self):
+    def run(self) -> None:
         """Runs the alignment process and logs timing information."""
         logger.info(
             f"Processing the search of the query {self.query_path} against {self.target_path}."
@@ -50,6 +50,6 @@ class AlignmentSearch(ABC):
         logger.info(f"Results saved: {self.output_path}")
 
     @abstractmethod
-    def _process(self):
+    def _process(self) -> None:
         """Defines how the alignment should be performed. Must be implemented by subclasses."""
         pass

@@ -135,6 +135,17 @@ class FindMappingChanges:
     """
 
     def __init__(self, pdb, old_data, new_data, sifts_delta_csv):
+        """Initialise the change-tracker for a single PDB entry.
+
+        Args:
+            pdb (str): The PDB entry identifier (e.g. ``"1abc"``).
+            old_data (dict): Segment data from the previous run, keyed by
+                ``{chain: {db: {acc: [segment_str, ...]}}}``.
+            new_data (dict): Segment data from the current run, same structure
+                as ``old_data``.
+            sifts_delta_csv (str | Path): Path to the output CSV (gzip) file
+                where detected changes will be written.
+        """
         self.pdb = pdb
         self.old_data = old_data
         self.new_data = new_data

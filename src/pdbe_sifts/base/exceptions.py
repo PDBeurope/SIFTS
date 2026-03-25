@@ -5,7 +5,16 @@ class BatchRunException(Exception):
 
 
 class ReleaseCheckFailedException(Exception):
+    """Raised when the release-check step fails for a specific PDB entry."""
+
     def __init__(self, entry_id, message, context=None):
+        """Initialise the exception with entry metadata.
+
+        Args:
+            entry_id: PDB entry identifier that triggered the failure.
+            message: Human-readable description of the failure.
+            context: Optional additional context (e.g. HTTP response body).
+        """
         self.entry_id = entry_id
         self.context = context
         self.message = message
@@ -13,14 +22,20 @@ class ReleaseCheckFailedException(Exception):
 
 
 class ProcessFailedError(Exception):
+    """Raised when a subprocess or pipeline step exits with a non-zero status."""
+
     pass
 
 
 class EntryFailedException(Exception):
+    """Raised when processing of a single PDB entry fails."""
+
     pass
 
 
 class EntryTimedOutException(Exception):
+    """Raised when processing of a single PDB entry exceeds its time budget."""
+
     pass
 
 

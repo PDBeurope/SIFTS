@@ -8,7 +8,7 @@ from pdbe_sifts.segments_generation.alignment.helper import SMapping
 from pdbe_sifts.unp.unp import UNP
 
 
-def get_selection_queries(entry):
+def get_selection_queries(entry: str) -> str:
     """Return the SQL query that fetches exactly one best hit per entity.
 
     Uses ROW_NUMBER() instead of DENSE_RANK (hit_rank) so that ties are
@@ -46,8 +46,11 @@ def get_selection_queries(entry):
 
 
 def get_curated_db_mappings(
-    pdbid, chains: Iterable, conn, chain_to_entity: Mapping[str, str]
-):
+    pdbid: str,
+    chains: Iterable,
+    conn,
+    chain_to_entity: Mapping[str, str],
+) -> dict[str, list[SMapping]]:
     """Get mappings from database.
 
     Args:

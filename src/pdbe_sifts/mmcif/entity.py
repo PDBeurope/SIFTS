@@ -109,7 +109,8 @@ class Entity:
             f"Entity {entity_id} created for {pdbid} with {len(self.auth_asym_ids)} chain(s)"
         )
 
-    def get_entity_sequence(self):
+    def get_entity_sequence(self) -> str:
+        """Return the primary one-letter amino acid sequence for this entity."""
         return self.mmcif.get_sequence(self.entity_id)
 
     def _load_chains_info(self) -> None:
@@ -261,7 +262,16 @@ class Entity:
             f"({len(self.alignment_sequence)} positions)"
         )
 
-    def mod_after_alignment(self, al):
+    def mod_after_alignment(self, al: tuple) -> str:
+        """Correct alignment positions for multi-character one-letter codes.
+
+        Args:
+            al: A two-element alignment tuple ``(unp_seq, pdb_seq)`` as
+                returned by the lalign36 wrapper.
+
+        Returns:
+            The corrected PDB aligned sequence as a plain string.
+        """
         seq = al[1].seq
         out = ""
 
@@ -305,7 +315,18 @@ class Entity:
         return out
 
     # generate the residue_maps between the chain and each isoform
-    def get_each_resmap(self, row):
+    def get_each_resmap(self, row: tuple) -> tuple:
+        """Compute the residue map for a single UniProt isoform (entity-level).
+
+        Args:
+            row: ``(isoform_accession, list_of_mappings)`` tuple taken from
+                ``self.mappings.items()``.
+
+        Returns:
+            ``(isoform_accession, residue_map_dict)`` where the dict maps
+            entity sequence position (int) → UniProt position (int or
+            list[int] for chromophores).
+        """
         iso, mappings = row
         residue_map = {}
         # Process in reverse so the best mappings is
@@ -365,7 +386,14 @@ class Entity:
         return iso, residue_map
 
     # generate the residue_map between the chain and each isoform
-    def generate_residue_maps(self):
+    def generate_residue_maps(self) -> None:
+        """Build residue maps and segment ranges for all isoforms.
+
+        Runs :meth:`get_each_resmap` in parallel across all isoforms stored in
+        ``self.mappings``.  After the pool completes, overlapping residues are
+        resolved for chimeric entities and segments are derived from the
+        resulting residue maps.
+        """
         # create a process pool that uses all cpus
         with Pool(N_PROC) as pool:
             # call the function for each item in parallel, get results as tasks complete
@@ -374,7 +402,8 @@ class Entity:
                 tqdm.tqdm(
                     pool.imap_unordered(
                         self.get_each_resmap, my_list, chunksize=STEP_SIZE
-                    )
+                    ),
+                    disable=True,
                 )
             )
 
@@ -389,7 +418,14 @@ class Entity:
     # remove the residues which map to more than one accession
     # keeping the ones that benefit continuity
     # (only for chimeras)
-    def __overlapping_residues(self):
+    def __overlapping_residues(self) -> None:
+        """Resolve residues that map to more than one accession (chimeras only).
+
+        For each pair of isoform residue maps, removes duplicate keys by
+        preferring the mapping that is conflict-free (PDB residue matches the
+        UniProt residue).  When both mappings are equivalent, continuity with
+        the preceding residue is used as the tie-breaker.
+        """
         iso_list = list(self.residue_maps.keys())
 
         for idx, iso1 in enumerate(iso_list):
@@ -428,7 +464,15 @@ class Entity:
                         else:
                             del maps1[key]
 
-    def __group_elements(self, lst):
+    def __group_elements(self, lst) -> list:
+        """Group consecutive (entity pos, UNP pos) pairs into segment ranges.
+
+        Args:
+            lst: Iterable of ``(entity_position, unp_position)`` tuples.
+
+        Returns:
+            List of ``((pdb_start, pdb_end), (unp_start, unp_end))`` tuples.
+        """
         ranges = []
 
         for _, g in groupby(enumerate(lst), lambda i_x: i_x[0] - i_x[1][0]):
@@ -447,10 +491,27 @@ class Entity:
 
         return ranges
 
-    def __overlapping(self, r1, r2):
+    def __overlapping(self, r1: tuple, r2: tuple) -> bool:
+        """Return True if range r1 overlaps with range r2.
+
+        Args:
+            r1: ``(start, end)`` integer pair for the first range.
+            r2: ``(start, end)`` integer pair for the second range.
+
+        Returns:
+            ``True`` when at least one endpoint of *r1* falls within *r2*.
+        """
         return r2[0] <= r1[0] <= r2[1] or r2[0] <= r1[1] <= r2[1]
 
-    def __segments_from_residues(self):
+    def __segments_from_residues(self) -> None:
+        """Convert residue maps into contiguous segment ranges.
+
+        Groups consecutive ``(entity_pos, unp_pos)`` pairs from each isoform's
+        residue map into ``((pdb_start, pdb_end), (unp_start, unp_end))``
+        tuples and stores them in ``self.segments``.  For chimeric entities,
+        overlapping segments across different isoforms are pruned so that each
+        entity position appears in at most one isoform's segment list.
+        """
         for iso, maps in list(self.residue_maps.items()):
             self.segments[iso] = self.__group_elements(
                 (x, y) for x, y in sorted(maps.items(), key=itemgetter(0))

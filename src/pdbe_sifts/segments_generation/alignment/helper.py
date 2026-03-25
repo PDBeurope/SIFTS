@@ -20,6 +20,16 @@ STEP_SIZE = 2000
 
 
 class SMapping(NamedTuple):
+    """A single UniProt segment mapping for one PDB chain.
+
+    Attributes:
+        accession: UniProt accession string (e.g. ``"P12345"``).
+        range_start: First UniProt residue position covered by this mapping
+            (1-based, inclusive).
+        range_stop: Last UniProt residue position covered by this mapping
+            (1-based, inclusive).
+    """
+
     accession: str
     range_start: int
     range_stop: int
@@ -35,6 +45,15 @@ class CustomSequenceAccession:
     """
 
     def __init__(self, accession: str, sequence: str, name: str = ""):
+        """Initialise a custom sequence accession object.
+
+        Args:
+            accession: Identifier string used in FASTA headers and as the
+                isoform key (e.g. a chain ID or arbitrary label).
+            sequence: One-letter amino-acid sequence.
+            name: Human-readable display name.  Defaults to *accession* when
+                empty.
+        """
         self.accession = accession
         self.ad_dbref_auto_acc = accession  # used in get_curated_db_mappings
         self.sequence = sequence
@@ -46,16 +65,49 @@ class CustomSequenceAccession:
             "0",
         ]  # [modified_date, version] — no versioning for custom seqs
 
-    def getAllIsoforms(self):  # noqa: N802 — matches UNP method name
+    def getAllIsoforms(self) -> dict[str, str]:  # noqa: N802 — matches UNP method name
+        """Return a dict of all isoforms for this custom sequence.
+
+        For user-provided sequences there is only a single "isoform" — the
+        sequence itself — keyed by the accession.  This method exists to
+        satisfy the interface expected by the alignment pipeline, which calls
+        ``getAllIsoforms()`` on both :class:`UNP` and custom sequence objects.
+
+        Returns:
+            Dict mapping ``{accession: sequence}``.
+        """
         return {self.accession: self.sequence}
 
 
 class SiftsMode(Enum):
+    """Operating mode for the SIFTS alignment pipeline.
+
+    Attributes:
+        ISOFORM: Align against all UniProt isoforms of each accession.
+        NF90: Align against UniRef90 representative sequences instead of
+            isoforms, used for large-scale / reduced-redundancy runs.
+    """
+
     ISOFORM = 1
     NF90 = 2
 
 
 def get_accession(entry: Entry, acc: str) -> UNP:
+    """Fetch or cache a UNP object for a given accession.
+
+    First checks the entry-level accession cache.  If not present, resolves
+    the accession via :func:`~pdbe_sifts.unp.unp.get_unp_object` and stores
+    the result in the cache for subsequent calls.
+
+    Args:
+        entry: :class:`~pdbe_sifts.mmcif.entry.Entry` whose ``accessions``
+            dict acts as the cache.
+        acc: UniProt accession string to look up.
+
+    Returns:
+        A :class:`~pdbe_sifts.unp.unp.UNP` object, or ``None`` if the
+        accession cannot be resolved.
+    """
     if acc in entry.accessions:
         return entry.accessions[acc]
 
@@ -66,11 +118,35 @@ def get_accession(entry: Entry, acc: str) -> UNP:
     return unp
 
 
-def check_range(real_ranges, pdb, unp):
+def check_range(real_ranges: list, pdb: list, unp: list) -> bool:
+    """Verify that every (pdb_pos, unp_pos) pair is present in real_ranges.
+
+    Args:
+        real_ranges: List of ``(pdb_pos, unp_pos)`` pairs considered valid.
+        pdb: Sequence of PDB positions to test.
+        unp: Sequence of UniProt positions to test (same length as *pdb*).
+
+    Returns:
+        ``True`` if every zipped ``(pdb, unp)`` pair appears in *real_ranges*,
+        ``False`` otherwise.
+    """
     return all((p, u) in real_ranges for p, u in zip(pdb, unp, strict=False))
 
 
-def fmt_ranges(ranges):
+def fmt_ranges(ranges: list) -> list[list[int]]:
+    """Normalise a list of ranges to ``[[start, end], ...]`` integer lists.
+
+    Accepts ranges either as ``"start-end"`` strings (e.g. from AD_DBREF /
+    Redis) or as existing integer sequences and converts all of them to
+    two-element ``[int, int]`` lists.
+
+    Args:
+        ranges: List of ranges, each either a ``"start-end"`` string or an
+            iterable of two integers.
+
+    Returns:
+        List of ``[start, end]`` integer lists.
+    """
     out = []
 
     for r in ranges:
@@ -82,7 +158,18 @@ def fmt_ranges(ranges):
     return out
 
 
-def overlapping(ranges):
+def overlapping(ranges: list) -> bool:
+    """Return True if any two ranges in the list overlap.
+
+    Normalises input via :func:`fmt_ranges` before comparison.  Two ranges
+    overlap when either endpoint of the first falls within the second.
+
+    Args:
+        ranges: List of ranges in any format accepted by :func:`fmt_ranges`.
+
+    Returns:
+        ``True`` if at least one pair of ranges overlaps, ``False`` otherwise.
+    """
     ranges = fmt_ranges(ranges)
 
     for idx, r1 in enumerate(ranges):
@@ -93,7 +180,20 @@ def overlapping(ranges):
     return False
 
 
-def out_of_order(ranges):
+def out_of_order(ranges: list) -> bool:
+    """Return True if any range starts at or before a preceding range.
+
+    Detects when segments are not in strictly ascending order, which
+    indicates a repeated or rearranged mapping that must be handled
+    specially during alignment.  Input is normalised via :func:`fmt_ranges`.
+
+    Args:
+        ranges: List of ranges in any format accepted by :func:`fmt_ranges`.
+
+    Returns:
+        ``True`` if any later range has a start position less than or equal
+        to the start of an earlier range, ``False`` otherwise.
+    """
     ranges = fmt_ranges(ranges)
 
     for idx, r1 in enumerate(ranges):
@@ -104,7 +204,22 @@ def out_of_order(ranges):
     return False
 
 
-def unroll_map(m):
+def unroll_map(m: list) -> tuple:
+    """Unpack a serialised mapping record into its constituent parts.
+
+    Mapping records may arrive as a single-element list (chain only) or as a
+    three-element list ``[chain, accs_str, ranges_str]`` where the second and
+    third elements are ``eval``-able string representations of Python objects.
+
+    Args:
+        m: List with either one element ``[chain]`` or three elements
+            ``[chain, accs_str, ranges_str]``.
+
+    Returns:
+        ``(chain, accs, ranges)`` tuple where *accs* and *ranges* are the
+        deserialised Python objects, or ``(chain, None, None)`` for a
+        single-element input.
+    """
     chain = m[0]
 
     if len(m) > 1:
@@ -129,7 +244,26 @@ def unroll_map(m):
 #
 # This method identifies manually annotated large gaps so we can treat them
 # as overlapping mappings (forcing extra alignments, one per range)
-def large_gap(ranges):
+def large_gap(ranges: list) -> bool:
+    """Detect whether the gap between two consecutive ranges is unusually large.
+
+    Uses the lalign36 gap scoring heuristic: with ``GAP_OPEN=10`` and
+    ``GAP_EXTEND=2``, a gap of length *G* will only be opened if the extra
+    aligned sequence *E* satisfies ``G > E / 2 - 5``.  Here a factor of 3 is
+    applied to be conservative.  Ranges may be provided as ``"start-end"``
+    strings (from AD_DBREF) or as integer lists.
+
+    Only the first pair of ranges (index 0 and 1) is evaluated.
+
+    Args:
+        ranges: List of at least two ranges, each either a ``"start-end"``
+            string or a two-element integer list/tuple.
+
+    Returns:
+        ``True`` if the gap between the first two ranges exceeds the
+        heuristic threshold, ``False`` if fewer than two ranges are given or
+        the gap is within the expected bounds.
+    """
     if len(ranges) < 2:
         return False
 
@@ -147,16 +281,40 @@ def large_gap(ranges):
 
 
 class EntryMapping:
+    """Orchestrate the mapping between a single PDB chain and UniProt accessions.
+
+    For each candidate accession, runs lalign36 alignments against every
+    UniProt isoform, stores the best mapping, builds residue maps and
+    segment ranges via the parent :class:`Chain` object, and optionally
+    applies connectivity correction.
+    """
+
     def __init__(
         self,
         entry: Entry,
-        chain,
+        chain: str,
         chain_mapping: list[SMapping],
-        nf90_mode=False,
-        NFT=None,
-        NFC=None,
-        connectivity_mode=True,
-    ):
+        nf90_mode: bool = False,
+        NFT: dict | None = None,
+        NFC: dict | None = None,
+        connectivity_mode: bool = True,
+    ) -> None:
+        """Initialise the mapping for one chain.
+
+        Args:
+            entry: Parsed :class:`Entry` object for the PDB entry.
+            chain: Author chain ID to process.
+            chain_mapping: Pre-computed list of :class:`SMapping` objects
+                (accession + range) for this chain, e.g. from DuckDB.
+            nf90_mode: When ``True`` uses UniRef90 representative sequences
+                instead of all isoforms.
+            NFT: NF90 taxonomy lookup object (required when *nf90_mode* is
+                ``True``).
+            NFC: NF90 coverage lookup object (required when *nf90_mode* is
+                ``True``).
+            connectivity_mode: When ``True`` activates the connectivity
+                correction step on the chain.
+        """
         self.entry = entry
         self.chain = chain
         self.chain_mapping = chain_mapping
@@ -169,7 +327,14 @@ class EntryMapping:
         self.NFC = NFC
         self.connectivity_mode = connectivity_mode
 
-    def _get_accessions(self):
+    def _get_accessions(self) -> None:
+        """Populate ``self.accs`` and ``self.ranges`` from mappings or mmCIF.
+
+        First validates the provided *chain_mapping* accessions against
+        UniProt.  If none are valid, falls back to accessions embedded in
+        the mmCIF ``_struct_ref`` category.  Ranges are similarly taken
+        from the mmCIF when not already available.
+        """
         # Validate the provided mappings
         for mapping in self.chain_mapping:
             unp = get_accession(self.entry, mapping.accession)
@@ -196,7 +361,17 @@ class EntryMapping:
             self.ranges = self.entry.mmcif.get_ranges(self.chain, self.accs[0])
             logger.info(f"Ranges come from mmCIF: {self.ranges}")
 
-    def set_chain_accessions(self):
+    def set_chain_accessions(self) -> bool:
+        """Resolve accessions and verify the chain is ready for alignment.
+
+        Calls ``_get_accessions()``, then checks that the chain object
+        exists and, in NF90 mode, that UniProt coverage meets the threshold.
+
+        Returns:
+            ``True`` if the chain can be processed, ``False`` if it should
+            be skipped (no valid accession, unknown chain, or insufficient
+            NF90 coverage).
+        """
         self._get_accessions()
         if not self.accs:
             logger.warning("The mmCIF doesnt have a valid UniProt accession")
@@ -214,7 +389,19 @@ class EntryMapping:
         return not (self.nf90_mode and not self.check_unp_coverage())
 
     @log_durations(logger.debug)
-    def process(self):
+    def process(self) -> None:
+        """Run the full alignment and segment generation pipeline for this chain.
+
+        For each unique accession:
+
+        1. Fetches the UniProt object and all its isoforms (or NF90 reps).
+        2. Aligns each isoform against the chain alignment sequence in
+           parallel using lalign36.
+        3. Stores alignment results and updates the best mapping.
+
+        After processing all accessions, triggers ``generate_residue_maps``
+        on the chain object to produce final segment data.
+        """
         self.seq_pdb = self.chain_obj.alignment_sequence
         self.check_repeated_accession()
 
@@ -253,7 +440,8 @@ class EntryMapping:
                             self.process_each_isoform,
                             my_list,
                             chunksize=STEP_SIZE,
-                        )
+                        ),
+                        disable=True,
                     )
                 )
         if self.connectivity_mode:
@@ -261,7 +449,17 @@ class EntryMapping:
         self.chain_obj.generate_residue_maps()
         logger.info("Segments generated")
 
-    def process_each_isoform(self, row):
+    def process_each_isoform(self, row: tuple) -> str:
+        """Align a single isoform against the chain sequence and record results.
+
+        Designed to run inside a thread pool via ``pool.imap_unordered``.
+
+        Args:
+            row: ``(isoform_accession, isoform_sequence)`` tuple.
+
+        Returns:
+            The isoform accession string (for tqdm progress tracking).
+        """
         iso, seq = row
         # Don't repeat the canonical
         if (
@@ -290,7 +488,15 @@ class EntryMapping:
         self.process_alignments(self.unp, iso, alns)
         return iso
 
-    def process_alignments(self, unp, iso, alns):
+    def process_alignments(self, unp: UNP, iso: str, alns: list) -> None:
+        """Store alignment results and update scores for one isoform.
+
+        Args:
+            unp: UniProt object for the canonical accession.
+            iso: Isoform accession being processed.
+            alns: List of alignment tuples returned by lalign36 (one per
+                repeat of the accession in chimera/repeated-accession mode).
+        """
         # Loop through as many alignments as accessions in the list
         # if it is only one accession which repeats
         for al in alns:
@@ -321,7 +527,16 @@ class EntryMapping:
 
             self._update_best_mapping(unp, iso, al, score)
 
-    def get_nf90_isoforms(self, unp, isoforms):
+    def get_nf90_isoforms(self, unp: UNP, isoforms: dict) -> dict:
+        """Fetch NF90 representative sequences for a UniProt accession.
+
+        Args:
+            unp: UniProt object for the accession being processed.
+            isoforms: Existing isoform dict to extend in-place.
+
+        Returns:
+            Updated *isoforms* dict with NF90 representative sequences added.
+        """
         logger.debug(f"fetching NF90 isoforms for {unp}")
         for acc in self.NFT.get_nf90(unp.accession):
             unp_nf90 = get_accession(self.entry, acc)
@@ -340,7 +555,20 @@ class EntryMapping:
             isoforms[acc] = unp_nf90.sequence
         return isoforms
 
-    def get_valid_accession(self, acc):
+    def get_valid_accession(self, acc: str) -> UNP | None:
+        """Fetch and validate a UniProt accession, falling back to mmCIF data.
+
+        If *acc* cannot be resolved directly, tries the accession embedded
+        in the mmCIF ``_struct_ref`` category.  Resets chimera and
+        repeated-accession flags if resolution fails entirely.
+
+        Args:
+            acc: UniProt accession to validate.
+
+        Returns:
+            A :class:`UNP` object, or ``None`` if no valid accession
+            can be found.
+        """
         unp = get_accession(self.entry, acc)
         if not unp:
             accs = self.entry.mmcif.get_unp(self.chain)
@@ -373,7 +601,21 @@ class EntryMapping:
 
         return unp
 
-    def _update_best_mapping(self, unp, iso, al, score):
+    def _update_best_mapping(
+        self, unp: UNP, iso: str, al: tuple, score: float
+    ) -> None:
+        """Update the best mapping for an accession if this alignment is better.
+
+        The best mapping is replaced when the new *score* is strictly higher,
+        or equal with a longer aligned sequence, or equal/same-length but the
+        isoform is canonical or matches the AD_DBREF accession.
+
+        Args:
+            unp: UniProt object for the accession.
+            iso: Isoform accession being evaluated.
+            al: Alignment tuple ``(unp_seq, pdb_seq)``.
+            score: Alignment score for this isoform.
+        """
         try:
             ad_dbref_acc = self.chain_mapping[0].accession
         except Exception:
@@ -395,7 +637,14 @@ class EntryMapping:
                 len(al[1]._seq),
             )
 
-    def check_unp_coverage(self):
+    def check_unp_coverage(self) -> bool:
+        """Check whether the chain meets the NF90 coverage threshold.
+
+        Returns:
+            ``False`` if the UniProt object is unavailable, the chain is
+            chimeric or has a repeated accession, or coverage is below
+            ``NF_COVERAGE`` (0.7).  ``True`` otherwise.
+        """
         logger.debug("Checking coverage")
         unp = get_accession(self.entry, self.accs[0])
 
@@ -415,7 +664,14 @@ class EntryMapping:
             return False
         return True
 
-    def check_repeated_accession(self):
+    def check_repeated_accession(self) -> None:
+        """Detect whether the same accession appears multiple times (chimera / repeat).
+
+        Sets ``self.repeated_acc = True`` when the same accession maps to
+        out-of-order, overlapping, or large-gap ranges.  Sets
+        ``chain_obj.is_chimera = True`` when multiple distinct accessions
+        are present for the chain.
+        """
         if len(self.accs) > 1:
             # One accession that repeats
             if len(set(self.accs)) == 1:

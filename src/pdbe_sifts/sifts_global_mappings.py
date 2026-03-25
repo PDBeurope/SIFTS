@@ -62,7 +62,7 @@ class SiftsGlobalMappings:
 
     @property
     def entry_name(self) -> str:
-        """Entry/run name derived from the input filename."""
+        """Entry/run name derived from the input filename (all known suffixes stripped)."""
         return FastaBuilder.entry_name_from(self.input_file)
 
     # ------------------------------------------------------------------
@@ -95,7 +95,16 @@ class SiftsGlobalMappings:
     def mmseqs_search(
         self, entry_id: str, fasta_path: Path, result_dir: Path
     ) -> Path:
-        """Run an MMseqs2 search."""
+        """Run an MMseqs2 easy_search against the configured database.
+
+        Args:
+            entry_id: Entry/run name used to name output files.
+            fasta_path: Path to the query FASTA file.
+            result_dir: Directory where TSV hits and temp files will be written.
+
+        Returns:
+            Path to the resulting hits TSV file.
+        """
         output_path = result_dir / f"hits_{entry_id}.tsv"
         tmp_dir = result_dir / f"tmp_{entry_id}"
         tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -107,7 +116,16 @@ class SiftsGlobalMappings:
     def blastp_search(
         self, entry_id: str, fasta_path: Path, result_dir: Path
     ) -> Path:
-        """Run a BLASTP search."""
+        """Run a BLASTP search against the configured BLAST database.
+
+        Args:
+            entry_id: Entry/run name used to name output files.
+            fasta_path: Path to the query FASTA file.
+            result_dir: Directory where the TSV hits file will be written.
+
+        Returns:
+            Path to the resulting hits TSV file.
+        """
         output_path = result_dir / f"hits_{entry_id}.tsv"
         BlastP(
             fasta_path, self.db_file, output_path, threads=self.threads
@@ -115,7 +133,19 @@ class SiftsGlobalMappings:
         return output_path
 
     def search(self, entry_id: str, fasta_path: Path, result_dir: Path) -> Path:
-        """Dispatch to the selected search tool."""
+        """Dispatch to the search tool selected at construction time.
+
+        Args:
+            entry_id: Entry/run name used to name output files.
+            fasta_path: Path to the query FASTA file.
+            result_dir: Directory where output files will be written.
+
+        Returns:
+            Path to the resulting hits TSV file.
+
+        Raises:
+            ValueError: If ``self.tool`` is not ``"mmseqs"`` or ``"blastp"``.
+        """
         if self.tool == "mmseqs":
             return self.mmseqs_search(entry_id, fasta_path, result_dir)
         elif self.tool == "blastp":
@@ -128,7 +158,7 @@ class SiftsGlobalMappings:
     # Main pipeline
     # ------------------------------------------------------------------
 
-    def process(self):
+    def process(self) -> None:
         """Run the complete mapping pipeline.
 
         Creates (or recreates) a result directory named
@@ -162,7 +192,7 @@ class SiftsGlobalMappings:
         )
 
 
-def run():
+def run() -> None:
     """Command-line entry point for generating SIFTS global mappings.
 
     Accepts a single mmCIF file, a FASTA file, or a text file listing

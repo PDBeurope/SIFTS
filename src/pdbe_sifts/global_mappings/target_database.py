@@ -65,7 +65,7 @@ class TargetDb(ToolDatabase):
         self.threads = threads
         self.db_config_kwargs = kwargs
 
-    def _process(self):
+    def _process(self) -> None:
         """Run the appropriate database creation tool based on the configuration."""
         match self.tool:
             case "mmseqs":
@@ -93,7 +93,7 @@ class TargetDb(ToolDatabase):
                 self.target_db._process()
 
 
-def run():
+def run() -> None:
     """Command-line entry point for creating a MMseqs2 or BLAST target database."""
     parser = argparse.ArgumentParser(
         description="Create a MMseqs2 or BLAST target database from a FASTA file."

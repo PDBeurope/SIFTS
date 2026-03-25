@@ -6,6 +6,28 @@ from pdbe_sifts.base.log import logger
 
 
 def get_unp_segments(pdbid, seg_csv, pdbecursor):
+    """Read SIFTS segment-level UniProt mappings for a PDB entry.
+
+    Data is sourced either from a gzip-compressed CSV file or from a DuckDB
+    cursor (exactly one of ``seg_csv`` / ``pdbecursor`` must be supplied).
+
+    Args:
+        pdbid (str): The PDB entry identifier (e.g. ``"1abc"``).
+        seg_csv (str | Path | None): Path to ``{entry_id}_seg.csv.gz``.
+            Pass ``None`` to read from ``pdbecursor`` instead.
+        pdbecursor: An open DuckDB connection used when ``seg_csv`` is
+            ``None``.
+
+    Returns:
+        tuple:
+            - **mmcif_cat** (tuple[list, ...]): 11 parallel lists containing
+              the column data for ``_pdbx_sifts_unp_segments`` (entity_id,
+              asym_id, unp_accession, segment_id, instance_id, unp_start,
+              unp_end, seq_id_start, seq_id_end, best_mapping, identity).
+            - **res_info** (dict): Nested dict keyed by
+              ``{entity_id: {asym_id: {pdb_start: [(pdb_end, unp_acc, seg_id,
+              inst_id)]}}}``, used by downstream residue-mapping functions.
+    """
     res_info = {}
 
     sifts_seg_header = [
@@ -141,6 +163,31 @@ def get_unp_segments(pdbid, seg_csv, pdbecursor):
 
 
 def get_unpres_mapping(pdbid, res_csv, pdbecursor):
+    """Read SIFTS residue-level UniProt mappings for a PDB entry.
+
+    Data is sourced either from a gzip-compressed CSV file or from a DuckDB
+    cursor (exactly one of ``res_csv`` / ``pdbecursor`` must be supplied).
+    Only rows flagged as ``best_mapping`` and with a non-null ``accession``
+    are included in the primary mapping dict; all rows contribute to the
+    ``mon_id`` index.
+
+    Args:
+        pdbid (str): The PDB entry identifier (e.g. ``"1abc"``).
+        res_csv (str | Path | None): Path to ``{entry_id}_res.csv.gz``.
+            Pass ``None`` to read from ``pdbecursor`` instead.
+        pdbecursor: An open DuckDB connection used when ``res_csv`` is
+            ``None``.
+
+    Returns:
+        tuple:
+            - **data** (dict): Nested dict keyed by
+              ``{entity_id: {asym_id: {pdb_seq_id: [(chem_comp_id,
+              pdb_one_letter_code, unp_one_letter_code, accession,
+              unp_seq_id, type, mh_id, observed)]}}}``.
+            - **mon_id** (dict): Nested dict keyed by
+              ``{entity_id: {asym_id: {pdb_seq_id: {chem_comp_id:
+              pdb_one_letter_code}}}}``.
+    """
     sifts_res_header = [
         "entry_id",
         "entity_id",

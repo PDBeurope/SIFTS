@@ -60,7 +60,7 @@ class BlastP(AlignmentSearch):
         self.evalue = evalue if evalue is not None else get_conf_blastp_evalue()
         self.threads = threads
 
-    def _process(self):
+    def _process(self) -> None:
         """Run the BLASTP search using subprocess."""
         if shutil.which("blastp") is None:
             raise FileNotFoundError(
@@ -93,7 +93,7 @@ class BlastP(AlignmentSearch):
             raise
 
 
-def run():
+def run() -> None:
     """Command-line interface for running BLASTP searches."""
     parser = argparse.ArgumentParser(
         description="Run a BLASTP search against a BLAST-formatted database."

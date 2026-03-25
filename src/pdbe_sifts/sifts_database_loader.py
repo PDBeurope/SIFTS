@@ -9,6 +9,21 @@ from pdbe_sifts.database.sifts_db_wrapper import SiftsDB
 
 
 def run():
+    """CLI entry point for bulk-loading SIFTS CSV files into DuckDB.
+
+    Parses command-line arguments, opens a connection to the target DuckDB
+    file, and delegates to
+    :meth:`~pdbe_sifts.database.sifts_db_wrapper.SiftsDB.bulk_load_from_entries`
+    to discover and load all ``*_seg.csv.gz`` / ``*_res.csv.gz`` files found
+    under the given input directory.  The connection is closed in a
+    ``finally`` block regardless of errors.
+
+    Command-line arguments:
+        -i / --input-dir: Root directory containing per-entry ``sifts/``
+            subdirectories with CSV files.
+        -d / --duckdb: Path to the DuckDB file whose ``sifts_xref_segment``
+            and ``sifts_xref_residue`` tables are to be reloaded.
+    """
     parser = argparse.ArgumentParser(
         description="Bulk-load segment/residue CSVs from sifts_segments_generation into DuckDB."
     )
