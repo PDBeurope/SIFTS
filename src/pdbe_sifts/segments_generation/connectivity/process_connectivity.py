@@ -100,7 +100,7 @@ def is_valid_residue_status(r1, r2) -> bool:
     """Check the status of two residues and ensure the connectivity check is valid.
     Takes two residue objects as input."""
     # we don't need to process insertion, linker etc...
-    to_prevent = ["Insertion", "Linker", "Chromophore"]
+    to_prevent = ["Insertion", "Linker", "Chromophore", "See remark 999"]
     return not (
         r1.rtype in to_prevent
         or r2.rtype in to_prevent
