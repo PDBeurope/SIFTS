@@ -109,17 +109,16 @@ Bulk-loads the segment and residue CSVs produced in step 4 into the `sifts_xref_
 ### 6 — Annotate mmCIF files with residue level mappings and SIFTS data
 
 ```bash
-# Reading segment data from DuckDB (after step 5)
+# Reading from DuckDB (after step 5)
 pdbe_sifts sifts2mmcif \
   -i 1abc.cif.gz \
   -o ./sifts_mmcif \
   -d hits.duckdb
 
-# Or reading segment CSVs directly from the output directory (skip step 5)
+# Or reading segment CSVs directly (skip step 5)
 pdbe_sifts sifts2mmcif \
   -i 1abc.cif.gz \
   -o ./sifts_mmcif \
-  -d hits.duckdb \
   -s ./segments/
 ```
 
@@ -208,8 +207,8 @@ sa = SiftsAlign(
 sa.process_entry("1abc")
 if sa.conn:
     sa.conn.close()
-# → writes {out_dir}/1abc/sifts/sifts_segment_mapping.csv.gz
-#           {out_dir}/1abc/sifts/sifts_residue_mapping.csv.gz
+# → writes {out_dir}/1abc_seg.csv.gz
+#           {out_dir}/1abc_res.csv.gz
 ```
 
 ### `SiftsDB` — Bulk-load segment CSVs into DuckDB
@@ -240,8 +239,9 @@ Per entry, under `{output_dir}`:
 
 | File | Format | Content |
 |------|--------|---------|
-| `sifts_segment_mapping.csv.gz` | CSV (gzip) | One row per contiguous aligned range (structure ↔ sequence positions, identity, conflicts, chimera flag) |
-| `sifts_residue_mapping.csv.gz` | CSV (gzip) | One row per mapped structure residue (auth seq id, sequence position, one-letter codes, observed flag) |
+| `{entry}_seg.csv.gz` | CSV (gzip) | One row per contiguous aligned range (structure ↔ sequence positions, identity, conflicts, chimera flag) |
+| `{entry}_res.csv.gz` | CSV (gzip) | One row per mapped structure residue (auth seq id, sequence position, one-letter codes, observed flag) |
+| `{entry}_nf90_seg.csv.gz` | CSV (gzip) | NF90 variant of the segment file (written when applicable) |
 
 After running `db_load`, results are available in DuckDB tables `sifts_xref_segment` and `sifts_xref_residue`.
 
@@ -267,7 +267,6 @@ src/pdbe_sifts/
 ├── sifts_segments_generation.py   # Single-entry segment generation (SiftsAlign)
 ├── sifts_fasta_builder.py         # Extract sequences from mmCIF → FASTA (FastaBuilder)
 ├── sifts_database_loader.py       # Standalone bulk-loader script (wraps SiftsDB)
-├── sifts_multi_segments.py        # Standalone batch script (multiprocessing)
 ├── config/                        # OmegaConf configuration loading
 ├── base/
 │   ├── paths.py                   # Single load_config() + all configuration getters

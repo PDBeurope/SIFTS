@@ -28,17 +28,17 @@ def extract_entities(cif_file):
     cc = ChemCompMapping()
 
     # Get required categories
-    poly_seq = block.get_mmcif_category("_pdbx_poly_seq_scheme")
+    entity_poly_seq = block.get_mmcif_category("_entity_poly_seq")
     entity_poly = block.get_mmcif_category("_entity_poly")
     src_nat = block.get_mmcif_category("_entity_src_nat")
     src_gen = block.get_mmcif_category("_entity_src_gen")
     src_syn = block.get_mmcif_category("_pdbx_entity_src_syn")
 
-    if not poly_seq:
+    if not entity_poly_seq:
         return {}
 
-    # Get all entity IDs from poly_seq
-    entities = poly_seq["entity_id"]
+    # Get all entity IDs from entity_poly_seq
+    entities = entity_poly_seq["entity_id"]
     unique_entities = sorted(set(entities))
 
     result = {}
@@ -49,7 +49,7 @@ def extract_entities(cif_file):
             continue
 
         # Build sequence
-        sequence = _build_sequence(poly_seq, entity_id, cc)
+        sequence = _build_sequence(entity_poly_seq, entity_id, cc)
 
         # Get taxonomy ID
         tax_id = _get_taxonomy_id(entity_id, src_nat, src_gen, src_syn)
@@ -74,20 +74,20 @@ def _is_polypeptide(entity_poly, entity_id):
     return False
 
 
-def _build_sequence(poly_seq, entity_id, cc):
+def _build_sequence(entity_poly_seq, entity_id, cc):
     """Build the sequence for a given entity."""
-    entities = poly_seq["entity_id"]
+    entities = entity_poly_seq["entity_id"]
     seq = {}
 
     for idx, e in enumerate(entities):
         if e != entity_id:
             continue
 
-        seq_id = int(poly_seq["seq_id"][idx])
+        num = int(entity_poly_seq["num"][idx])
 
-        if seq_id not in seq:
-            three_letter = poly_seq["mon_id"][idx]
-            seq[seq_id] = cc.get(three_letter)
+        if num not in seq:
+            three_letter = entity_poly_seq["mon_id"][idx]
+            seq[num] = cc.get(three_letter)
 
     return "".join([seq[key] for key in sorted(seq.keys())])
 
