@@ -25,6 +25,7 @@ def main():
     * ``db_load``          — bulk-load segment/residue CSVs into DuckDB.
     * ``update_ncbi``      — refresh the local NCBI taxonomy database.
     * ``sifts2mmcif``      — inject SIFTS mappings back into a mmCIF file.
+    * ``seq2seq``          — align canonical deposited sequence vs coordinate sequence.
     """
     parser = argparse.ArgumentParser(
         prog="pdbe_sifts", description="PDBe SIFTS mapping pipeline"
@@ -312,6 +313,21 @@ def main():
         help="Compare sifts_only.mmcif from this directory for delta tracking.",
     )
 
+    ######### seq2seq
+    seq2seq_parser = subparsers.add_parser(
+        "seq2seq",
+        help="Align canonical deposited sequence vs coordinate sequence (lalign36).",
+    )
+    seq2seq_parser.add_argument(
+        "-i", "--input-cif", required=True, help="mmCIF file path."
+    )
+    seq2seq_parser.add_argument(
+        "-e", "--entity-id", required=True, help="Entity ID (e.g. 1)."
+    )
+    seq2seq_parser.add_argument(
+        "-c", "--chain-id", required=True, help="Author chain ID (e.g. A)."
+    )
+
     args = parser.parse_args()
 
     # Apply log level from CLI flag (overrides the env-var default set at import time).
@@ -447,6 +463,21 @@ def main():
         finally:
             if obj.conn:
                 obj.conn.close()
+
+    elif args.command == "seq2seq":
+        from pdbe_sifts.seq2seq import Seq2Seq
+
+        result = Seq2Seq(args.input_cif, args.entity_id, args.chain_id).run()
+        print(f"Entity {args.entity_id}  chain {args.chain_id}")
+        print(f"Canonical length  : {len(result['canonical'])}")
+        print(f"Coordinate length : {len(result['coordinate'])}")
+        print(f"Identity          : {result['identity']:.2f}")
+        print(f"Coverage          : {result['coverage']:.2f}")
+        print()
+        if result["annotated"]:
+            print(result["annotated"])
+        else:
+            print("No alignment produced.")
 
     else:
         parser.print_help()
