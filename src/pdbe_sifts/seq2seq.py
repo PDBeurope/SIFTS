@@ -33,13 +33,7 @@ from pdbe_sifts.segments_generation.alignment import (
 
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Low-level readers
-# ---------------------------------------------------------------------------
-
-
-def get_canonical_sequence(block, entity_id: str, cc: ChemCompMapping) -> str:
+def get_sample_sequence(block, entity_id: str, cc: ChemCompMapping) -> str:
     """Return the canonical sequence for *entity_id* from ``_entity_poly_seq``.
 
     Args:
@@ -111,12 +105,6 @@ def get_coordinate_sequence(
         return ""
 
     return "".join(cc.get(seen[k]) for k in sorted(seen))
-
-
-# ---------------------------------------------------------------------------
-# Main class
-# ---------------------------------------------------------------------------
-
 
 class Seq2Seq:
     """Align the canonical deposited sequence against the coordinate sequence.
@@ -242,12 +230,6 @@ class Seq2Seq:
             "identity": identity,
             "coverage": coverage,
         }
-
-
-# ---------------------------------------------------------------------------
-# CLI entry point
-# ---------------------------------------------------------------------------
-
 
 def run() -> None:
     """Command-line entry point: ``pdbe_sifts seq2seq``.
