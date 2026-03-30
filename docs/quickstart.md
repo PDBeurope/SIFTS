@@ -25,10 +25,10 @@ pdbe_sifts build_db \
 
 ```bash
 # Single CIF entry
-pdbe_sifts global_mappings -i 1abc.cif -o ./results -d ./my_db/target_db
+pdbe_sifts sequence_match -i 1abc.cif -o ./results -d ./my_db/target_db
 
 # Batch (one mmCIF path per line)
-pdbe_sifts global_mappings -i entries.txt -o ./results -d ./my_db/target_db --threads 8
+pdbe_sifts sequence_match -i entries.txt -o ./results -d ./my_db/target_db --threads 8
 ```
 
 Produces `hits.duckdb` and `hits.tsv` — a scored table of UniProt accession candidates per PDB entity.
@@ -36,7 +36,7 @@ Produces `hits.duckdb` and `hits.tsv` — a scored table of UniProt accession ca
 ## Step 4 — Generate SIFTS segments and residue mappings
 
 ```bash
-# With DuckDB hits (from global_mappings step)
+# With DuckDB hits (from sequence_match step)
 pdbe_sifts segments -i 1abc.cif.gz -o ./segments -d hits.duckdb
 
 # Manual UniProt accession mapping (chain:accession)

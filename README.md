@@ -73,10 +73,10 @@ pdbe_sifts build_db \
 
 ```bash
 # Single CIF entry
-pdbe_sifts global_mappings -i 1abc.cif -o ./results -d ./my_db/target_db
+pdbe_sifts sequence_match -i 1abc.cif -o ./results -d ./my_db/target_db
 
 # Batch (one mmCIF path per line)
-pdbe_sifts global_mappings -i entries.txt -o ./results -d ./my_db/target_db --threads 8
+pdbe_sifts sequence_match -i entries.txt -o ./results -d ./my_db/target_db --threads 8
 ```
 
 At this step you can also provide a .csv file to faster the scoring function. This CSV file must contains per row: row_num, uniprot_accession, dataset (Swiss-Prot or TrEMBL), pdb cross-references, annotation score.
@@ -133,7 +133,7 @@ pdbe_sifts sifts2mmcif \
 | `pdbe_sifts update_ncbi` | Force-update the local NCBI taxonomy database (ete4) |
 | `pdbe_sifts build_db` | Build a reference sequence database (MMseqs2 or BLASTP) from a FASTA file |
 | `pdbe_sifts fasta_build` | Extract entity sequences from mmCIF files and write a FASTA |
-| `pdbe_sifts global_mappings` | Align structure sequences against the reference DB; score and store hits in DuckDB |
+| `pdbe_sifts sequence_match` | Align structure sequences against the reference DB; score and store hits in DuckDB |
 | `pdbe_sifts segments` | Generate SIFTS mappings for a **single** mmCIF entry |
 | `pdbe_sifts db_load` | Bulk-load segment/residue CSVs from segments generation into DuckDB |
 | `pdbe_sifts sifts2mmcif` | Inject SIFTS mappings into an annotated mmCIF file |
@@ -147,7 +147,7 @@ The pipeline classes can be used directly in Python scripts without going throug
 ### `TargetDb` — Build a reference sequence database
 
 ```python
-from pdbe_sifts.global_mappings.target_database import TargetDb
+from pdbe_sifts.sequence_match.target_database import TargetDb
 
 TargetDb(
     input_path="uniprot_sprot.fasta",
@@ -170,12 +170,12 @@ fasta_path = FastaBuilder(
 ).build()
 ```
 
-### `SiftsGlobalMappings` — Run the alignment and scoring pipeline
+### `SiftsSequenceMatch` — Run the alignment and scoring pipeline
 
 ```python
-from pdbe_sifts.sifts_global_mappings import SiftsGlobalMappings
+from pdbe_sifts.sifts_sequence_match import SiftsSequenceMatch
 
-SiftsGlobalMappings(
+SiftsSequenceMatch(
     input_file="1abc.cif",   # or .fasta, or a .txt list of CIF paths
     out_dir="./results/",
     db_file="./my_db/target_db",
@@ -190,7 +190,7 @@ SiftsGlobalMappings(
 ```python
 from pdbe_sifts.sifts_segments_generation import SiftsAlign
 
-# Mode 1: use scored hits from global_mappings
+# Mode 1: use scored hits from sequence_match
 sa = SiftsAlign(
     cif_file="1abc.cif",
     out_dir="./segments/",
@@ -263,7 +263,7 @@ After running `db_load`, results are available in DuckDB tables `sifts_xref_segm
 ```
 src/pdbe_sifts/
 ├── cli.py                         # CLI entry point (pdbe_sifts command)
-├── sifts_global_mappings.py       # Global mapping pipeline (SiftsGlobalMappings)
+├── sifts_sequence_match.py       # Global mapping pipeline (SiftsSequenceMatch)
 ├── sifts_segments_generation.py   # Single-entry segment generation (SiftsAlign)
 ├── sifts_fasta_builder.py         # Extract sequences from mmCIF → FASTA (FastaBuilder)
 ├── sifts_database_loader.py       # Standalone bulk-loader script (wraps SiftsDB)
@@ -276,11 +276,11 @@ src/pdbe_sifts/
 ├── database/
 │   └── sifts_db_wrapper.py        # SiftsDB: DuckDB schema + bulk loader
 ├── mmcif/                         # mmCIF parsing (Entry, Chain, Entity, Residue, ChemComp)
-├── global_mappings/
+├── sequence_match/
 │   ├── target_database.py         # Build MMseqs2 / BLAST reference database (TargetDb)
 │   ├── mmseqs_search.py           # MMseqs2 easy-search wrapper
 │   ├── blastp.py                  # BLASTP wrapper
-│   └── global_mappings_parser.py  # Parse TSV hits, score, store in DuckDB
+│   └── sequence_match_parser.py  # Parse TSV hits, score, store in DuckDB
 ├── segments_generation/
 │   └── alignment/                 # lalign36 wrapper, isoform alignment, residue mapping
 ├── sifts_to_mmcif/                # Inject SIFTS data back into mmCIF files

@@ -20,7 +20,7 @@ from pathlib import Path
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.paths import get_conf_blastp_evalue
-from pdbe_sifts.global_mappings.base_alignment_search import AlignmentSearch
+from pdbe_sifts.sequence_match.base_alignment_search import AlignmentSearch
 
 
 class BlastP(AlignmentSearch):

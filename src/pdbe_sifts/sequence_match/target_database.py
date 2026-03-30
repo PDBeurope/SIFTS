@@ -26,8 +26,8 @@ from pymmseqs.config.createtaxdb_config import CreateTaxDBConfig
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.paths import get_conf_mmseqs_index_subset
-from pdbe_sifts.global_mappings.database import ToolDatabase
-from pdbe_sifts.global_mappings.makeblastdb import MakeBlastDb
+from pdbe_sifts.sequence_match.database import ToolDatabase
+from pdbe_sifts.sequence_match.makeblastdb import MakeBlastDb
 
 
 class TargetDb(ToolDatabase):

@@ -25,7 +25,7 @@ from pdbe_sifts.base.paths import (
     get_conf_mmseqs_prefilter_mode,
     get_conf_mmseqs_sensitivity,
 )
-from pdbe_sifts.global_mappings.base_alignment_search import AlignmentSearch
+from pdbe_sifts.sequence_match.base_alignment_search import AlignmentSearch
 
 
 class MmSearch(AlignmentSearch):

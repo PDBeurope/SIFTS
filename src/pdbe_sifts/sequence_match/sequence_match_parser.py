@@ -16,7 +16,7 @@ import duckdb
 import pandas as pd
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.global_mappings.scoring_function_helper import get_tax_weight
+from pdbe_sifts.sequence_match.scoring_function_helper import get_tax_weight
 from pdbe_sifts.unp.unp import fetch_accessions
 
 # Identity cutoff
@@ -193,7 +193,7 @@ def score_taxonomy_pair(args: tuple[int, int]) -> dict | None:
         return None
 
 
-class GlobMappingsParser:
+class SequenceMatchParser:
     """
     Parse and score global alignment results using DuckDB.
 
@@ -566,7 +566,7 @@ def main() -> None:
 
     Accepts ``--format``, ``--input``, ``--output``, and optional ``--unp-csv``,
     ``--workers``, and ``--identity-cutoff`` arguments, then delegates to
-    :meth:`GlobMappingsParser.parse`.
+    :meth:`SequenceMatchParser.parse`.
     """
     parser = argparse.ArgumentParser(description="Parse BLAST/MMSEQS2 results")
     parser.add_argument("--format", choices=["mmseqs", "blastp"], required=True)
@@ -583,7 +583,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    parser_obj = GlobMappingsParser(
+    parser_obj = SequenceMatchParser(
         format=args.format,
         result_file_path=args.input,
         out_dir=args.output,

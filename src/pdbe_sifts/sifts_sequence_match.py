@@ -14,13 +14,13 @@ from pathlib import Path
 from timeit import default_timer as timer
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.global_mappings.blastp import BlastP
-from pdbe_sifts.global_mappings.global_mappings_parser import GlobMappingsParser
-from pdbe_sifts.global_mappings.mmseqs_search import MmSearch
+from pdbe_sifts.sequence_match.blastp import BlastP
+from pdbe_sifts.sequence_match.mmseqs_search import MmSearch
+from pdbe_sifts.sequence_match.sequence_match_parser import SequenceMatchParser
 from pdbe_sifts.sifts_fasta_builder import FastaBuilder
 
 
-class SiftsGlobalMappings:
+class SiftsSequenceMatch:
     """Main class for generating structure–sequence mappings."""
 
     def __init__(
@@ -34,7 +34,7 @@ class SiftsGlobalMappings:
         batch_size: int = 100000,
     ):
         """
-        Initialize SiftsGlobalMappings.
+        Initialize SiftsSequenceMatch.
 
         Args:
             input_file: Path to a mmCIF file (.cif / .cif.gz), a FASTA file
@@ -179,7 +179,7 @@ class SiftsGlobalMappings:
         hits_path = self.search(entry_name, fasta_path, result_dir)
 
         logger.info(f"Parsing {self.tool} hits.")
-        GlobMappingsParser(
+        SequenceMatchParser(
             self.tool,
             hits_path,
             result_dir,
@@ -254,7 +254,7 @@ def run() -> None:
     args = parser.parse_args()
     logger.info(vars(args))
 
-    pipeline = SiftsGlobalMappings(
+    pipeline = SiftsSequenceMatch(
         input_file=args.input_file,
         out_dir=args.output_dir,
         db_file=args.db_file,

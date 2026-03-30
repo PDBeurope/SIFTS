@@ -7,8 +7,8 @@ from pdbe_sifts.base.paths import (
     get_conf_user_target_db,
 )
 from pdbe_sifts.config import _USER_CONFIG_FILE, init_config, load_config
-from pdbe_sifts.global_mappings.target_database import TargetDb
-from pdbe_sifts.sifts_global_mappings import SiftsGlobalMappings
+from pdbe_sifts.sequence_match.target_database import TargetDb
+from pdbe_sifts.sifts_sequence_match import SiftsSequenceMatch
 
 
 def main():
@@ -19,7 +19,7 @@ def main():
     * ``init``             — write the default configuration file.
     * ``show``             — print the resolved configuration.
     * ``build_db``         — build a reference sequence database.
-    * ``global_mappings``  — run alignment and scoring to produce global mappings.
+    * ``sequence_match``   — run alignment and scoring to produce sequence matches.
     * ``fasta_build``      — extract query FASTA sequences from mmCIF files.
     * ``segments``         — generate SIFTS segments for a single entry.
     * ``db_load``          — bulk-load segment/residue CSVs into DuckDB.
@@ -105,10 +105,10 @@ def main():
         "--threads", type=int, default=1, help="Number of CPU threads to use."
     )
 
-    ######### RUN sifts_global_mappings
+    ######### RUN sifts_sequence_match
     global_parser = subparsers.add_parser(
-        "global_mappings",
-        help="Run alignment and scoring to generate global SIFTS mappings.",
+        "sequence_match",
+        help="Run alignment and scoring to generate SIFTS sequence matches.",
     )
     global_parser.add_argument(
         "-i",
@@ -343,8 +343,8 @@ def main():
         cfg = load_config(args.config)
         print(cfg)
 
-    elif args.command == "global_mappings":
-        gb_m = SiftsGlobalMappings(
+    elif args.command == "sequence_match":
+        gb_m = SiftsSequenceMatch(
             input_file=args.input_file,
             out_dir=args.output_dir,
             db_file=args.db_file,

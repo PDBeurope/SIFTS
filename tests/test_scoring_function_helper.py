@@ -1,8 +1,8 @@
 from unittest.mock import patch
 
-from pdbe_sifts.global_mappings.scoring_function_helper import get_tax_weight
+from pdbe_sifts.sequence_match.scoring_function_helper import get_tax_weight
 
-_PATCH = "pdbe_sifts.global_mappings.scoring_function_helper.NCBITaxa"
+_PATCH = "pdbe_sifts.sequence_match.scoring_function_helper.NCBITaxa"
 
 
 def test_same_taxid():

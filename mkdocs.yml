@@ -59,7 +59,7 @@ nav:
   - API Reference:
       - Overview: api/index.md
       - Pipeline classes:
-          - SiftsGlobalMappings: api/sifts_global_mappings.md
+          - SiftsSequenceMatch: api/sifts_sequence_match.md
           - SiftsAlign: api/sifts_segments_generation.md
           - FastaBuilder: api/sifts_fasta_builder.md
           - TargetDb: api/target_database.md
@@ -67,7 +67,7 @@ nav:
           - ExportSIFTSTommCIF: api/sifts_to_mmcif.md
       - Internals:
           - mmCIF parsing: api/mmcif.md
-          - Global mappings: api/global_mappings.md
+          - Sequence match: api/sequence_match.md
           - Segments generation: api/segments_generation.md
           - Batch & taxonomy: api/batch.md
           - UniProt client: api/unp.md

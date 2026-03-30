@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.global_mappings.database import ToolDatabase
+from pdbe_sifts.sequence_match.database import ToolDatabase
 
 
 class MakeBlastDb(ToolDatabase):

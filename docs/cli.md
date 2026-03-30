@@ -21,7 +21,7 @@ pdbe_sifts [--log-level LEVEL] <command> [options]
 | [`update_ncbi`](#update_ncbi) | Force-update the local NCBI taxonomy database (ete4) |
 | [`build_db`](#build_db) | Build a MMseqs2 or BLAST reference sequence database from a FASTA file |
 | [`fasta_build`](#fasta_build) | Extract entity sequences from mmCIF files and write a FASTA |
-| [`global_mappings`](#global_mappings) | Align PDB sequences against the reference DB and score hits into DuckDB |
+| [`sequence_match`](#sequence_match) | Align PDB sequences against the reference DB and score hits into DuckDB |
 | [`segments`](#segments) | Generate SIFTS segment and residue mappings for a **single** mmCIF entry |
 | [`db_load`](#db_load) | Bulk-load segment/residue CSVs from the `segments` step into DuckDB |
 | [`sifts2mmcif`](#sifts2mmcif) | Inject SIFTS mappings into an annotated mmCIF file |
@@ -92,12 +92,12 @@ pdbe_sifts fasta_build -i INPUT -o OUTPUT_DIR [--threads N] [--batch-size N]
 
 ---
 
-## `global_mappings`
+## `sequence_match`
 
 Align PDB entity sequences against the reference database, score hits with the SIFTS scoring function, and store results in DuckDB.
 
 ```bash
-pdbe_sifts global_mappings -i INPUT -o OUTPUT_DIR -d DB_FILE [options]
+pdbe_sifts sequence_match -i INPUT -o OUTPUT_DIR -d DB_FILE [options]
 ```
 
 | Flag | Required | Default | Description |
@@ -126,7 +126,7 @@ pdbe_sifts segments -i CIF -o OUTPUT_DIR (-d DB | -m MAPPING) [options]
 |------|----------|---------|-------------|
 | `-i`, `--input-cif` | ✓ | — | Input CIF file (`.cif` or `.cif.gz`) |
 | `-o`, `--output-dir` | ✓ | — | Output directory for per-entry CSV files |
-| `-d`, `--db-file` | ✗* | — | DuckDB hits file from `global_mappings` |
+| `-d`, `--db-file` | ✗* | — | DuckDB hits file from `sequence_match` |
 | `-m`, `--mapping` | ✗* | — | Manual mapping: `"A:P00963,B:P00963"` or path to a custom FASTA |
 | `--entry` | | derived from CIF | Override the PDB entry ID |
 | `--nf90` | | `False` | Enable NF90 mode (disables ≥ 90 % identity filter) |

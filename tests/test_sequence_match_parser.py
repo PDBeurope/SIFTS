@@ -2,7 +2,7 @@ from pathlib import Path
 
 import duckdb
 import pytest
-from pdbe_sifts.global_mappings.global_mappings_parser import GlobMappingsParser
+from pdbe_sifts.sequence_match.sequence_match_parser import SequenceMatchParser
 
 DATA_DIR = Path(__file__).parent / "data"
 BLASTP_TSV = DATA_DIR / "blastp_hits" / "hits_tmp.tsv"
@@ -10,7 +10,7 @@ MMSEQS_TSV = DATA_DIR / "mmseqs_hits" / "hits_tmp.tsv"
 
 
 def make_parser(fmt, tsv, tmp_path, unp_csv=None):
-    return GlobMappingsParser(
+    return SequenceMatchParser(
         format=fmt,
         result_file_path=tsv,
         out_dir=tmp_path,

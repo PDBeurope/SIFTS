@@ -74,7 +74,7 @@ class SiftsAlign:
             cif_file: Path to the mmCIF file to process (``.cif`` or ``.cif.gz``).
             out_dir: Root output directory; per-entry CSVs are written to
                 ``{out_dir}/{entry_id}/sifts/``.
-            db_conn_str: Path to a DuckDB file produced by ``global_mappings``.
+            db_conn_str: Path to a DuckDB file produced by ``sequence_match``.
                 Used to retrieve the best UniProt accession per chain.
                 Mutually exclusive with *unp_mode*.
             nf90_mode: When ``True``, disables the ≥ 90 % identity filter and
