@@ -317,19 +317,87 @@ def run_all(cif_file) -> list[dict]:
     return results
 
 
+def _print_results(results: list[dict]) -> None:
+    """Print a list of seq2seq results to stdout.
+
+    Args:
+        results: List of result dicts as returned by :func:`run_all`, each
+            containing ``entity_id``, ``chain_id``, and the fields produced
+            by :meth:`Seq2Seq.run`.
+    """
+    for r in results:
+        print(f"Entity {r['entity_id']}  chain {r['chain_id']}")
+        print(f"Canonical length  : {len(r['canonical'])}")
+        print(f"Coordinate length : {len(r['coordinate'])}")
+        print(f"Identity          : {r['identity']:.2f}")
+        print(f"Coverage          : {r['coverage']:.2f}")
+        print()
+        if r["annotated"]:
+            print(r["annotated"])
+        else:
+            print("No alignment produced.")
+        if len(results) > 1:
+            print("-" * 60)
+
+
+def cli_run(
+    input_cif: str,
+    entity_id: str | None,
+    chain_id: str | None,
+    parser=None,
+) -> None:
+    """Execute the seq2seq pipeline from parsed CLI arguments and print results.
+
+    Called by the main ``pdbe_sifts`` dispatcher after argument parsing.
+    Validates that *entity_id* and *chain_id* are both supplied or both
+    omitted, runs the alignment(s), and prints the output.
+
+    Args:
+        input_cif: Path to the mmCIF file.
+        entity_id: Entity identifier string (e.g. ``"1"``), or ``None`` to
+            process all polypeptide entities.
+        chain_id: Author chain identifier (e.g. ``"A"``), or ``None`` to
+            process all chains.
+        parser: Optional :class:`argparse.ArgumentParser` used to emit a
+            well-formatted error when exactly one of *entity_id* / *chain_id*
+            is provided.
+    """
+    if (entity_id is None) != (chain_id is None):
+        msg = (
+            "Arguments -e/--entity-id and -c/--chain-id must be supplied "
+            "together or both omitted."
+        )
+        if parser is not None:
+            parser.error(msg)
+        else:
+            raise ValueError(msg)
+
+    if entity_id and chain_id:
+        result = Seq2Seq(input_cif, entity_id, chain_id).run()
+        result["entity_id"] = entity_id
+        result["chain_id"] = chain_id
+        results = [result]
+    else:
+        results = run_all(input_cif)
+        if not results:
+            print("No polypeptide entity/chain pairs found in CIF.")
+            return
+
+    _print_results(results)
+
+
 def run() -> None:
     """Standalone command-line entry point for ``pdbe_sifts seq2seq``.
 
-    .. note::
-        The canonical entry point is ``pdbe_sifts seq2seq`` via ``cli.py``,
-        which additionally supports omitting ``-e``/``-c`` to process all
-        polypeptide entity/chain pairs automatically.  This function requires
-        both flags explicitly.
+    Parses ``-i``, ``-e`` (optional), and ``-c`` (optional) from
+    ``sys.argv`` and delegates to :func:`cli_run`.  When ``-e`` and ``-c``
+    are omitted all polypeptide entity/chain pairs are processed
+    automatically via :func:`run_all`.
 
     Args (parsed from command line):
         -i / --input-cif:  Path to the mmCIF file.
-        -e / --entity-id:  Entity identifier (e.g. ``1``).  Required.
-        -c / --chain-id:   Author chain identifier (e.g. ``A``).  Required.
+        -e / --entity-id:  Entity identifier (e.g. ``1``).  Optional.
+        -c / --chain-id:   Author chain identifier (e.g. ``A``).  Optional.
     """
     parser = argparse.ArgumentParser(
         prog="pdbe_sifts seq2seq",
@@ -339,22 +407,16 @@ def run() -> None:
         "-i", "--input-cif", required=True, help="mmCIF file path"
     )
     parser.add_argument(
-        "-e", "--entity-id", required=True, help="Entity ID (e.g. 1)"
+        "-e",
+        "--entity-id",
+        default=None,
+        help="Entity ID (e.g. 1). Omit to process all polypeptide entities.",
     )
     parser.add_argument(
-        "-c", "--chain-id", required=True, help="Author chain ID (e.g. A)"
+        "-c",
+        "--chain-id",
+        default=None,
+        help="Author chain ID (e.g. A). Omit to process all chains.",
     )
     args = parser.parse_args()
-
-    result = Seq2Seq(args.input_cif, args.entity_id, args.chain_id).run()
-
-    print(f"Entity {args.entity_id}  chain {args.chain_id}")
-    print(f"Canonical length  : {len(result['canonical'])}")
-    print(f"Coordinate length : {len(result['coordinate'])}")
-    print(f"Identity          : {result['identity']:.2f}")
-    print(f"Coverage          : {result['coverage']:.2f}")
-    print()
-    if result["annotated"]:
-        print(result["annotated"])
-    else:
-        print("No alignment produced.")
+    cli_run(args.input_cif, args.entity_id, args.chain_id, parser)
