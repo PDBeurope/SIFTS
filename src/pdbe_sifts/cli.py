@@ -531,10 +531,10 @@ def main():
     elif args.command == "seq2seq":
         from gemmi import cif as gemmi_cif
 
-        from pdbe_sifts.seq2seq import Seq2Seq
-        from pdbe_sifts.sifts_to_mmcif.poly_seq_scheme import (
+        from pdbe_sifts.mmcif.poly_seq_scheme import (
             get_all_entity_chain_pairs,
         )
+        from pdbe_sifts.seq2seq import Seq2Seq
 
         if (args.entity_id is None) != (args.chain_id is None):
             seq2seq_parser.error(

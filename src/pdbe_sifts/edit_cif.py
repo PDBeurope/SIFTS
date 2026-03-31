@@ -128,7 +128,7 @@ class EditCif:
             ``True`` when the category was added, ``False`` when it was
             already present or the reconstruction failed.
         """
-        from pdbe_sifts.sifts_to_mmcif.poly_seq_scheme import (
+        from pdbe_sifts.mmcif.poly_seq_scheme import (
             build_pdbx_poly_seq_scheme,
             build_pdbx_poly_seq_scheme_all,
             write_pdbx_poly_seq_scheme,
