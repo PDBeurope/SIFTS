@@ -271,6 +271,52 @@ class Seq2Seq:
         }
 
 
+def run_all(cif_file) -> list[dict]:
+    """Align canonical vs coordinate sequence for all polypeptide chains.
+
+    Convenience wrapper around :class:`Seq2Seq` that auto-discovers every
+    polypeptide (entity_id, chain_id) pair in *cif_file* via
+    :func:`~pdbe_sifts.mmcif.poly_seq_scheme.get_all_entity_chain_pairs`,
+    runs the alignment for each, and returns the collected results.
+
+    Args:
+        cif_file: Path to the mmCIF file (plain or gzip-compressed).
+
+    Returns:
+        List of result dicts — one per (entity_id, chain_id) pair — each
+        with the same keys as :meth:`Seq2Seq.run` plus two extra fields:
+
+        * ``entity_id`` (:class:`str`) — entity identifier.
+        * ``chain_id``  (:class:`str`) — author chain identifier.
+
+        Returns an empty list when no polypeptide pairs are found.
+
+    Raises:
+        FileNotFoundError: If *cif_file* does not exist.
+    """
+    from gemmi import cif as gemmi_cif
+
+    from pdbe_sifts.mmcif.poly_seq_scheme import get_all_entity_chain_pairs
+
+    cif_path = Path(cif_file)
+    if not cif_path.exists():
+        raise FileNotFoundError(f"CIF file not found: {cif_path}")
+
+    block = gemmi_cif.read(str(cif_path)).sole_block()
+    pairs = get_all_entity_chain_pairs(block)
+    if not pairs:
+        logger.warning("No polypeptide entity/chain pairs found in CIF.")
+        return []
+
+    results = []
+    for entity_id, chain_id in pairs:
+        result = Seq2Seq(cif_file, entity_id, chain_id).run()
+        result["entity_id"] = entity_id
+        result["chain_id"] = chain_id
+        results.append(result)
+    return results
+
+
 def run() -> None:
     """Standalone command-line entry point for ``pdbe_sifts seq2seq``.
 

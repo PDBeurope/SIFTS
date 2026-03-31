@@ -529,12 +529,7 @@ def main():
         print(f"Written: {out}")
 
     elif args.command == "seq2seq":
-        from gemmi import cif as gemmi_cif
-
-        from pdbe_sifts.mmcif.poly_seq_scheme import (
-            get_all_entity_chain_pairs,
-        )
-        from pdbe_sifts.seq2seq import Seq2Seq
+        from pdbe_sifts.seq2seq import Seq2Seq, run_all
 
         if (args.entity_id is None) != (args.chain_id is None):
             seq2seq_parser.error(
@@ -543,27 +538,30 @@ def main():
             )
 
         if args.entity_id and args.chain_id:
-            pairs = [(args.entity_id, args.chain_id)]
+            result = Seq2Seq(
+                args.input_cif, args.entity_id, args.chain_id
+            ).run()
+            result["entity_id"] = args.entity_id
+            result["chain_id"] = args.chain_id
+            results = [result]
         else:
-            block = gemmi_cif.read(str(args.input_cif)).sole_block()
-            pairs = get_all_entity_chain_pairs(block)
-            if not pairs:
+            results = run_all(args.input_cif)
+            if not results:
                 print("No polypeptide entity/chain pairs found in CIF.")
                 return
 
-        for entity_id, chain_id in pairs:
-            result = Seq2Seq(args.input_cif, entity_id, chain_id).run()
-            print(f"Entity {entity_id}  chain {chain_id}")
-            print(f"Canonical length  : {len(result['canonical'])}")
-            print(f"Coordinate length : {len(result['coordinate'])}")
-            print(f"Identity          : {result['identity']:.2f}")
-            print(f"Coverage          : {result['coverage']:.2f}")
+        for r in results:
+            print(f"Entity {r['entity_id']}  chain {r['chain_id']}")
+            print(f"Canonical length  : {len(r['canonical'])}")
+            print(f"Coordinate length : {len(r['coordinate'])}")
+            print(f"Identity          : {r['identity']:.2f}")
+            print(f"Coverage          : {r['coverage']:.2f}")
             print()
-            if result["annotated"]:
-                print(result["annotated"])
+            if r["annotated"]:
+                print(r["annotated"])
             else:
                 print("No alignment produced.")
-            if len(pairs) > 1:
+            if len(results) > 1:
                 print("-" * 60)
 
     else:
