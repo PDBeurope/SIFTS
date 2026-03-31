@@ -7,8 +7,9 @@ the missing data from what *is* present, and writes an enriched copy.
 
 Currently supported additions:
 
-* ``_pdbx_poly_seq_scheme`` — reconstructed from ``_entity_poly_seq`` and
-  ``_atom_site`` via a local pairwise alignment (``lalign36``).
+* ``_pdbx_poly_seq_scheme`` — reconstructed from ``_entity_poly_seq``
+  (or ``_entity_poly`` one-letter fields as a fallback) and ``_atom_site``
+  via a local pairwise alignment (``lalign36``).
 
 Usage::
 
@@ -115,10 +116,13 @@ class EditCif:
     def add_pdbx_poly_seq_scheme(self) -> bool:
         """Reconstruct and inject ``_pdbx_poly_seq_scheme`` if absent.
 
-        Uses ``_entity_poly_seq`` (with ``_entity_poly`` as fallback) and
-        ``_atom_site`` as sources, aligned via ``lalign36``, to build the
-        full residue-level scheme table.  Does nothing if the category is
-        already present.
+        Uses ``_entity_poly_seq`` as the primary sequence source, with
+        ``_entity_poly`` one-letter fields (``pdbx_seq_one_letter_code_can``
+        then ``pdbx_seq_one_letter_code``) as a fallback when
+        ``_entity_poly_seq`` is absent.  Observed residues are read from
+        ``_atom_site`` and the two sequences are aligned via ``lalign36``
+        to produce the full residue-level scheme table.  Does nothing if
+        the category is already present.
 
         When :attr:`entity_id` and :attr:`chain_id` are set, only that
         specific pair is processed.  Otherwise, all polypeptide entity/chain
@@ -211,9 +215,10 @@ def run() -> None:
                                     must be supplied together with ``-e`` or
                                     not at all.
         -o / --output-dir:          Output directory.
-        --add-poly-seq-scheme:      Inject ``_pdbx_poly_seq_scheme`` (default:
-                                    injected when absent).
-        --no-poly-seq-scheme:       Skip poly_seq_scheme reconstruction.
+        --add-poly-seq-scheme:      Force injection of ``_pdbx_poly_seq_scheme``
+                                    even if the category is already present.
+        --no-poly-seq-scheme:       Skip ``_pdbx_poly_seq_scheme`` reconstruction
+                                    entirely.
     """
     import argparse
 

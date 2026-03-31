@@ -2,8 +2,11 @@
 
 Reads two sequences from an mmCIF file:
 
-* **canonical** — the full sequence as deposited by the authors, from
-  ``_entity_poly_seq``.
+* **canonical** — the full sequence as deposited by the authors.  Read from
+  ``_entity_poly_seq`` (preferred); falls back to
+  ``_entity_poly.pdbx_seq_one_letter_code_can`` and then
+  ``_entity_poly.pdbx_seq_one_letter_code`` when ``_entity_poly_seq`` is
+  absent.
 * **coordinate** — the sequence actually observed in the atomic coordinates,
   reconstructed from ``_atom_site`` ATOM records (model 1 only, unique
   residues ordered by auth_seq_id).
@@ -39,9 +42,9 @@ def get_canonical_sequence(block, entity_id: str, cc: ChemCompMapping) -> str:
 
     Tries ``_entity_poly_seq`` first (three-letter codes resolved via *cc*).
     If that category is absent or yields an empty sequence for *entity_id*,
-    falls back to ``_entity_poly.pdbx_seq_one_letter_code_can``, which stores
-    the sequence already in one-letter form with modified residues replaced by
-    their standard equivalents.
+    falls back to ``_entity_poly`` one-letter fields in priority order:
+    ``pdbx_seq_one_letter_code_can`` (modified residues normalised to their
+    standard equivalents) then ``pdbx_seq_one_letter_code`` (raw form).
 
     Args:
         block: A :class:`gemmi.cif.Block` object.
@@ -179,8 +182,9 @@ class Seq2Seq:
         Returns:
             A dict with the following keys:
 
-            * ``canonical``  (:class:`str`) — full deposited sequence
-              from ``_entity_poly_seq``.
+            * ``canonical``  (:class:`str`) — full deposited sequence,
+              sourced from ``_entity_poly_seq`` or ``_entity_poly``
+              one-letter fields as a fallback.
             * ``coordinate`` (:class:`str`) — observed sequence from
               ``_atom_site`` ATOM records.
             * ``alignment``  (:class:`Bio.Align.MultipleSeqAlignment` or
@@ -268,12 +272,18 @@ class Seq2Seq:
 
 
 def run() -> None:
-    """Command-line entry point: ``pdbe_sifts seq2seq``.
+    """Standalone command-line entry point for ``pdbe_sifts seq2seq``.
+
+    .. note::
+        The canonical entry point is ``pdbe_sifts seq2seq`` via ``cli.py``,
+        which additionally supports omitting ``-e``/``-c`` to process all
+        polypeptide entity/chain pairs automatically.  This function requires
+        both flags explicitly.
 
     Args (parsed from command line):
         -i / --input-cif:  Path to the mmCIF file.
-        -e / --entity-id:  Entity identifier (e.g. ``1``).
-        -c / --chain-id:   Author chain identifier (e.g. ``A``).
+        -e / --entity-id:  Entity identifier (e.g. ``1``).  Required.
+        -c / --chain-id:   Author chain identifier (e.g. ``A``).  Required.
     """
     parser = argparse.ArgumentParser(
         prog="pdbe_sifts seq2seq",

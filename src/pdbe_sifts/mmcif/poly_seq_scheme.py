@@ -5,7 +5,8 @@ Some CIF files (in-house, experimental, or partial exports) lack the
 module provides a self-contained reconstruction pipeline:
 
 1. Read the canonical sequence from ``_entity_poly_seq`` (three-letter codes,
-   one row per position).  Falls back to ``_entity_poly.*``
+   one row per position).  Falls back to ``_entity_poly`` one-letter fields
+   (``pdbx_seq_one_letter_code_can``, then ``pdbx_seq_one_letter_code``)
    when ``_entity_poly_seq`` is absent.
 2. Read the observed residues from ``_atom_site`` ATOM records (model 1 only).
 3. Align the two one-letter sequences with ``lalign36`` to establish the
@@ -48,10 +49,11 @@ def get_canonical_residues(block, entity_id: str) -> list[tuple[int, str]]:
 
     Tries ``_entity_poly_seq`` first (preferred — three-letter codes per
     position).  When that category is absent or yields nothing for
-    *entity_id*, falls back to ``_entity_poly.*``,
-    which stores the sequence as a pre-formatted one-letter string; each
-    one-letter code is back-converted to a standard three-letter code via
-    `STANDARD_AA`.
+    *entity_id*, falls back to ``_entity_poly`` one-letter fields in priority
+    order: ``pdbx_seq_one_letter_code_can`` (modified residues normalised to
+    their standard equivalents) then ``pdbx_seq_one_letter_code`` (raw form).
+    Each one-letter code is back-converted to a standard three-letter code via
+    :data:`_ONE_TO_THREE`; unknown codes map to ``"UNK"``.
 
     Args:
         block: A :class:`gemmi.cif.Block` object.
