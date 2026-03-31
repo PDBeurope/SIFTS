@@ -26,6 +26,7 @@ def main():
     * ``update_ncbi``      — refresh the local NCBI taxonomy database.
     * ``sifts2mmcif``      — inject SIFTS mappings back into a mmCIF file.
     * ``seq2seq``          — align canonical deposited sequence vs coordinate sequence.
+    * ``edit_cif``         — enrich a CIF file by injecting missing mmCIF categories.
     """
     parser = argparse.ArgumentParser(
         prog="pdbe_sifts", description="PDBe SIFTS mapping pipeline"
@@ -313,6 +314,43 @@ def main():
         help="Compare sifts_only.mmcif from this directory for delta tracking.",
     )
 
+    ######### edit_cif
+    edit_cif_parser = subparsers.add_parser(
+        "edit_cif",
+        help="Enrich a CIF file by injecting missing mmCIF categories.",
+    )
+    edit_cif_parser.add_argument(
+        "-i", "--input-cif", required=True, help="Input mmCIF file."
+    )
+    edit_cif_parser.add_argument(
+        "-e",
+        "--entity-id",
+        default=None,
+        help="Entity ID (e.g. 1). Omit to process all polypeptide entities.",
+    )
+    edit_cif_parser.add_argument(
+        "-c",
+        "--chain-id",
+        default=None,
+        help="Author chain ID (e.g. A). Omit to process all chains.",
+    )
+    edit_cif_parser.add_argument(
+        "-o", "--output-dir", required=True, help="Output directory."
+    )
+    _edit_cif_grp = edit_cif_parser.add_mutually_exclusive_group()
+    _edit_cif_grp.add_argument(
+        "--add-poly-seq-scheme",
+        action="store_true",
+        default=False,
+        help="Force injection of _pdbx_poly_seq_scheme (even if already present).",
+    )
+    _edit_cif_grp.add_argument(
+        "--no-poly-seq-scheme",
+        action="store_true",
+        default=False,
+        help="Skip _pdbx_poly_seq_scheme reconstruction entirely.",
+    )
+
     ######### seq2seq
     seq2seq_parser = subparsers.add_parser(
         "seq2seq",
@@ -322,10 +360,16 @@ def main():
         "-i", "--input-cif", required=True, help="mmCIF file path."
     )
     seq2seq_parser.add_argument(
-        "-e", "--entity-id", required=True, help="Entity ID (e.g. 1)."
+        "-e",
+        "--entity-id",
+        default=None,
+        help="Entity ID (e.g. 1). Omit to process all polypeptide entities.",
     )
     seq2seq_parser.add_argument(
-        "-c", "--chain-id", required=True, help="Author chain ID (e.g. A)."
+        "-c",
+        "--chain-id",
+        default=None,
+        help="Author chain ID (e.g. A). Omit to process all chains.",
     )
 
     args = parser.parse_args()
@@ -464,20 +508,63 @@ def main():
             if obj.conn:
                 obj.conn.close()
 
-    elif args.command == "seq2seq":
-        from pdbe_sifts.seq2seq import Seq2Seq
+    elif args.command == "edit_cif":
+        from pdbe_sifts.edit_cif import EditCif
 
-        result = Seq2Seq(args.input_cif, args.entity_id, args.chain_id).run()
-        print(f"Entity {args.entity_id}  chain {args.chain_id}")
-        print(f"Canonical length  : {len(result['canonical'])}")
-        print(f"Coordinate length : {len(result['coordinate'])}")
-        print(f"Identity          : {result['identity']:.2f}")
-        print(f"Coverage          : {result['coverage']:.2f}")
-        print()
-        if result["annotated"]:
-            print(result["annotated"])
+        if (args.entity_id is None) != (args.chain_id is None):
+            edit_cif_parser.error(
+                "Arguments -e/--entity-id and -c/--chain-id must be supplied "
+                "together or both omitted."
+            )
+
+        ec = EditCif(
+            args.input_cif,
+            args.output_dir,
+            entity_id=args.entity_id,
+            chain_id=args.chain_id,
+        )
+        if not args.no_poly_seq_scheme:
+            ec.add_pdbx_poly_seq_scheme()
+        out = ec.write()
+        print(f"Written: {out}")
+
+    elif args.command == "seq2seq":
+        from gemmi import cif as gemmi_cif
+
+        from pdbe_sifts.seq2seq import Seq2Seq
+        from pdbe_sifts.sifts_to_mmcif.poly_seq_scheme import (
+            get_all_entity_chain_pairs,
+        )
+
+        if (args.entity_id is None) != (args.chain_id is None):
+            seq2seq_parser.error(
+                "Arguments -e/--entity-id and -c/--chain-id must be supplied "
+                "together or both omitted."
+            )
+
+        if args.entity_id and args.chain_id:
+            pairs = [(args.entity_id, args.chain_id)]
         else:
-            print("No alignment produced.")
+            block = gemmi_cif.read(str(args.input_cif)).sole_block()
+            pairs = get_all_entity_chain_pairs(block)
+            if not pairs:
+                print("No polypeptide entity/chain pairs found in CIF.")
+                return
+
+        for entity_id, chain_id in pairs:
+            result = Seq2Seq(args.input_cif, entity_id, chain_id).run()
+            print(f"Entity {entity_id}  chain {chain_id}")
+            print(f"Canonical length  : {len(result['canonical'])}")
+            print(f"Coordinate length : {len(result['coordinate'])}")
+            print(f"Identity          : {result['identity']:.2f}")
+            print(f"Coverage          : {result['coverage']:.2f}")
+            print()
+            if result["annotated"]:
+                print(result["annotated"])
+            else:
+                print("No alignment produced.")
+            if len(pairs) > 1:
+                print("-" * 60)
 
     else:
         parser.print_help()

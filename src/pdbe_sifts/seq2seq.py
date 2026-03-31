@@ -33,23 +33,57 @@ from pdbe_sifts.segments_generation.alignment import (
 
 logger = logging.getLogger(__name__)
 
-def get_sample_sequence(block, entity_id: str, cc: ChemCompMapping) -> str:
-    """Return the canonical sequence for *entity_id* from ``_entity_poly_seq``.
+
+def get_canonical_sequence(block, entity_id: str, cc: ChemCompMapping) -> str:
+    """Return the canonical sequence for *entity_id*, with a two-source fallback.
+
+    Tries ``_entity_poly_seq`` first (three-letter codes resolved via *cc*).
+    If that category is absent or yields an empty sequence for *entity_id*,
+    falls back to ``_entity_poly.pdbx_seq_one_letter_code_can``, which stores
+    the sequence already in one-letter form with modified residues replaced by
+    their standard equivalents.
 
     Args:
         block: A :class:`gemmi.cif.Block` object.
         entity_id: Entity identifier string (e.g. ``"1"``).
         cc: Chemical-component mapping used to convert three-letter codes to
-            one-letter codes.
+            one-letter codes (used by the primary source only).
 
     Returns:
         One-letter amino acid sequence string.  Returns an empty string when
-        the category is absent or the entity is not found.
+        neither source contains the entity.
     """
+    # Primary: _entity_poly_seq (full per-residue table)
     entity_poly_seq = block.get_mmcif_category("_entity_poly_seq")
-    if not entity_poly_seq:
-        return ""
-    return _build_sequence(entity_poly_seq, entity_id, cc)
+    if entity_poly_seq:
+        seq = _build_sequence(entity_poly_seq, entity_id, cc)
+        if seq:
+            return seq
+
+    # Fallback: _entity_poly.pdbx_seq_one_letter_code_can, then pdbx_seq_one_letter_code
+    logger.debug(
+        f"_entity_poly_seq not available for entity {entity_id}, "
+        "falling back to _entity_poly one-letter sequence fields"
+    )
+    entity_poly = block.get_mmcif_category("_entity_poly")
+    if entity_poly:
+        for idx, eid in enumerate(entity_poly.get("entity_id", [])):
+            if eid != entity_id:
+                continue
+            # Try canonical form first, then raw one-letter code
+            for field in (
+                "pdbx_seq_one_letter_code_can",
+                "pdbx_seq_one_letter_code",
+            ):
+                seq_list = entity_poly.get(field, [])
+                if idx >= len(seq_list):
+                    continue
+                raw = seq_list[idx]
+                if raw:
+                    # Strip FASTA-style newlines and whitespace
+                    return raw.replace("\n", "").replace(" ", "")
+
+    return ""
 
 
 def get_coordinate_sequence(
@@ -105,6 +139,7 @@ def get_coordinate_sequence(
         return ""
 
     return "".join(cc.get(seen[k]) for k in sorted(seen))
+
 
 class Seq2Seq:
     """Align the canonical deposited sequence against the coordinate sequence.
@@ -230,6 +265,7 @@ class Seq2Seq:
             "identity": identity,
             "coverage": coverage,
         }
+
 
 def run() -> None:
     """Command-line entry point: ``pdbe_sifts seq2seq``.
