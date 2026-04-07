@@ -354,7 +354,7 @@ def main():
     ######### seq2seq
     seq2seq_parser = subparsers.add_parser(
         "seq2seq",
-        help="Align canonical deposited sequence vs coordinate sequence (lalign36).",
+        help="Align canonical deposited sequence vs coordinate sequence.",
     )
     seq2seq_parser.add_argument(
         "-i", "--input-cif", required=True, help="mmCIF file path."
