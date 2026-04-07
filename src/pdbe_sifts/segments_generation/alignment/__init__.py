@@ -225,6 +225,17 @@ def get_identity(seq1, seq2):
     )
 
 
+__all__ = [
+    "do_alignment_lalign36",
+    "annotate_alignment",
+    "get_identity",
+    "get_score",
+    "get_conflicts",
+    "get_align_chunk",
+    "remove_range_alignment",
+]
+
+
 def get_score(seq1, seq2):
     """Return the alignment score for a sequence pair.
 

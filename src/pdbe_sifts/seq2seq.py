@@ -123,7 +123,9 @@ def get_coordinate_sequence(
 
     seen: dict[tuple, str] = {}
     for i, group in enumerate(groups):
-        if group != "ATOM":
+        # Accept both ATOM and HETATM: modified residues (e.g. HYP, MSE) that
+        # are part of a polypeptide entity may be tagged HETATM in the CIF.
+        if group not in ("ATOM", "HETATM"):
             continue
         if entity_ids[i] != entity_id:
             continue
@@ -147,8 +149,8 @@ def get_coordinate_sequence(
 class Seq2Seq:
     """Align the canonical deposited sequence against the coordinate sequence.
 
-    Reads both sequences from a single mmCIF file and runs a local pairwise
-    alignment (``lalign36``) between them.
+    Reads both sequences from a single mmCIF file and aligns them using
+    ``lalign36``.
 
     Args:
         cif_file: Path to the mmCIF file (plain or gzip-compressed).
@@ -161,7 +163,12 @@ class Seq2Seq:
         chain_id: Chain identifier string.
     """
 
-    def __init__(self, cif_file, entity_id: str, chain_id: str) -> None:
+    def __init__(
+        self,
+        cif_file,
+        entity_id: str,
+        chain_id: str,
+    ) -> None:
         """Initialise Seq2Seq with a CIF file and target entity/chain.
 
         Args:
@@ -190,6 +197,12 @@ class Seq2Seq:
             * ``alignment``  (:class:`Bio.Align.MultipleSeqAlignment` or
               ``None``) — best (first) alignment object returned by
               lalign36; ``None`` if alignment failed.
+            * ``alignments`` (list[:class:`Bio.Align.MultipleSeqAlignment`]) —
+              all local alignment chunks returned by lalign36, ordered by
+              score.  Each chunk exposes ``[0]._al_start`` / ``[0]._al_stop``
+              (canonical positions) and ``[1]._al_start`` / ``[1]._al_stop``
+              (coordinate positions), both 1-based.  Empty list when
+              alignment failed.
             * ``annotated``  (:class:`str`) — human-readable three-line
               UNP/ALG/PDB block; empty string on failure.
             * ``identity``   (:class:`float`) — fraction of identical
@@ -226,6 +239,7 @@ class Seq2Seq:
                 "canonical": canonical,
                 "coordinate": coordinate,
                 "alignment": None,
+                "alignments": [],
                 "annotated": "",
                 "identity": 0.0,
                 "coverage": 0.0,
@@ -235,14 +249,16 @@ class Seq2Seq:
             alignments = list(do_alignment_lalign36(canonical, coordinate))
             best = alignments[0] if alignments else None
         except Exception as exc:
-            logger.error(f"lalign36 failed: {exc}")
+            logger.error(f"Alignment (lalign36) failed: {exc}")
+            alignments = []
             best = None
 
         if best is None:
             return {
                 "canonical": canonical,
                 "coordinate": coordinate,
-                "alignment": best,
+                "alignment": None,
+                "alignments": [],
                 "annotated": "",
                 "identity": 0.0,
                 "coverage": 0.0,
@@ -265,6 +281,7 @@ class Seq2Seq:
             "canonical": canonical,
             "coordinate": coordinate,
             "alignment": best,
+            "alignments": alignments,
             "annotated": annotated,
             "identity": identity,
             "coverage": coverage,
