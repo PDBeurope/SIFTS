@@ -262,6 +262,7 @@ def build_uniprot_pdb_duckdb(
     Skips the build if *db_path* already exists and *force* is False.
     """
     import duckdb
+    import pandas as pd
 
     if db_path.exists() and not force:
         logger.info(
@@ -269,18 +270,14 @@ def build_uniprot_pdb_duckdb(
         )
         return db_path
     logger.info("Building pdb_xref DuckDB index from %s …", tsv_path)
+    df = pd.read_csv(tsv_path, sep="\t", compression="gzip")
+    df = df.rename(columns={"SP_PRIMARY": "accession"})
+    df["pdb_xref"] = df["PDB"].str.split(";").str.len()
+    df = df[["accession", "pdb_xref"]]
     con = duckdb.connect(str(db_path))
-    con.execute(
-        """
-        CREATE OR REPLACE TABLE pdb_xref_by_acc AS
-        SELECT SP_PRIMARY AS accession,
-               len(string_split(PDB, ';')) AS pdb_xref
-        FROM read_csv(?, delim='\t', header=true, compression='gzip')
-        """,
-        [str(tsv_path)],
-    )
+    con.execute("CREATE OR REPLACE TABLE pdb_xref_by_acc AS SELECT * FROM df")
     con.close()
-    logger.info("DuckDB index written to %s", db_path)
+    logger.info("DuckDB index written to %s (%d accessions)", db_path, len(df))
     return db_path
 
 
