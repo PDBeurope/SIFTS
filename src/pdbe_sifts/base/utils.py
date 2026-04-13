@@ -270,7 +270,17 @@ def build_uniprot_pdb_duckdb(
         )
         return db_path
     logger.info("Building pdb_xref DuckDB index from %s …", tsv_path)
-    df = pd.read_csv(tsv_path, sep="\t", compression="gzip")
+    import gzip as _gzip
+
+    skip = 0
+    with _gzip.open(tsv_path, "rt") as _f:
+        for _line in _f:
+            if _line.startswith("#"):
+                skip += 1
+            else:
+                break
+    df = pd.read_csv(tsv_path, sep="\t", compression="gzip", skiprows=skip)
+    logger.info("uniprot_pdb.tsv columns: %s", df.columns.tolist())
     df = df.rename(columns={"SP_PRIMARY": "accession"})
     df["pdb_xref"] = df["PDB"].str.split(";").str.len()
     df = df[["accession", "pdb_xref"]]
