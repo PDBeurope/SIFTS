@@ -12,7 +12,12 @@ from dateutil.relativedelta import WE, relativedelta
 
 from pdbe_sifts.base.exceptions import AccessionNotFound, ObsoleteUniProtError
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.base.paths import uniprot_cache_dir as get_uniprot_cache_dir
+from pdbe_sifts.base.paths import (
+    UNIPROT_PDB_TSV_URL,
+)
+from pdbe_sifts.base.paths import (
+    uniprot_cache_dir as get_uniprot_cache_dir,
+)
 
 UNIPROT_REGEX = (
     r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}"
@@ -230,6 +235,53 @@ class SiftsAction(argparse.Action):
     ) -> None:
         """Store the parsed value on the namespace."""
         setattr(namespace, self.dest, values)
+
+
+def download_uniprot_pdb_tsv(dest: Path, force: bool = False) -> Path:
+    """Download the EBI SIFTS uniprot_pdb.tsv.gz to *dest*.
+
+    Skips the download if the file already exists and *force* is False.
+    """
+    if dest.exists() and not force:
+        logger.info(
+            "uniprot_pdb.tsv.gz already present at %s — skipping download", dest
+        )
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    download_file_from_url(UNIPROT_PDB_TSV_URL, str(dest))
+    return dest
+
+
+def build_uniprot_pdb_duckdb(
+    tsv_path: Path, db_path: Path, force: bool = False
+) -> Path:
+    """Build a DuckDB index from uniprot_pdb.tsv.gz.
+
+    The TSV has two columns: SP_PRIMARY and PDB (semicolon-separated list of PDB IDs).
+    Creates table ``pdb_xref_by_acc (accession VARCHAR, pdb_xref INTEGER)``.
+    Skips the build if *db_path* already exists and *force* is False.
+    """
+    import duckdb
+
+    if db_path.exists() and not force:
+        logger.info(
+            "DuckDB index already present at %s — skipping build", db_path
+        )
+        return db_path
+    logger.info("Building pdb_xref DuckDB index from %s …", tsv_path)
+    con = duckdb.connect(str(db_path))
+    con.execute(
+        """
+        CREATE OR REPLACE TABLE pdb_xref_by_acc AS
+        SELECT SP_PRIMARY AS accession,
+               len(string_split(PDB, ';')) AS pdb_xref
+        FROM read_csv(?, delim='\t', header=true)
+        """,
+        [str(tsv_path)],
+    )
+    con.close()
+    logger.info("DuckDB index written to %s", db_path)
+    return db_path
 
 
 def download_file_from_url(url: str, output_file: str) -> None:

@@ -9,6 +9,8 @@ from platformdirs import user_config_dir
 
 _USER_CONFIG_DIR = Path(user_config_dir("pdbe_sifts"))
 _USER_CONFIG_FILE = _USER_CONFIG_DIR / "config.yaml"
+_UNIPROT_PDB_TSV_FILE = _USER_CONFIG_DIR / "uniprot_pdb.tsv.gz"
+_UNIPROT_PDB_DB_FILE = _USER_CONFIG_DIR / "uniprot_pdb.duckdb"
 
 
 def get_template_path() -> Path:
@@ -36,6 +38,15 @@ def init_config(dest: Path | None = None) -> Path:
     print(f"Config template copied to: {target}")
     print("Please edit it before running the pipeline.")
     return target
+
+
+def set_unp_pdb_xrefs_path(db_path: Path) -> None:
+    """Write user.unp_pdb_xrefs into the user config.yaml."""
+    if not _USER_CONFIG_FILE.exists():
+        return
+    cfg = OmegaConf.load(_USER_CONFIG_FILE)
+    OmegaConf.update(cfg, "user.unp_pdb_xrefs", str(db_path))
+    OmegaConf.save(cfg, _USER_CONFIG_FILE)
 
 
 def load_config(user_config: str | Path | None = None) -> DictConfig:

@@ -2,6 +2,7 @@ user:
   base_dir: null
   nobackup_dir: null
   target_db: null
+  unp_pdb_xrefs: null   # path to uniprot_pdb.duckdb — set automatically by `pdbe_sifts init`
 
 
 location:

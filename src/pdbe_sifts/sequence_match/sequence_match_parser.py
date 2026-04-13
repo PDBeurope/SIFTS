@@ -16,6 +16,7 @@ import duckdb
 import pandas as pd
 
 from pdbe_sifts.base.log import logger
+from pdbe_sifts.base.paths import get_conf_unp_pdb_xrefs_path
 from pdbe_sifts.sequence_match.scoring_function_helper import get_tax_weight
 from pdbe_sifts.unp.unp import fetch_accessions
 
@@ -226,9 +227,11 @@ class SequenceMatchParser:
             out_dir: Directory where the output DuckDB database will be written.
                 Created automatically if it does not exist.
             unp_csv: Optional path to a CSV file containing pre-fetched UniProt
-                metadata (columns: ``accession``, ``provenance``, ``pdb_xref``,
+                metadata (columns: ``accession``, ``provenance``,
                 ``annotation_score``).  Missing accessions are fetched from the
-                UniProt API at runtime.
+                UniProt API at runtime.  Note: ``pdb_cross_references`` is now
+                populated from the local DuckDB index built by ``pdbe_sifts init``
+                (``user.unp_pdb_xrefs`` in config.yaml).
             max_workers: Number of worker processes for parallel taxonomy
                 scoring.  Defaults to :func:`os.cpu_count`.
             identity_cutoff: Minimum sequence identity (0–1) required to retain
@@ -324,8 +327,7 @@ class SequenceMatchParser:
 
         This method:
         - Creates the accession_info table if needed
-        - Loads initial UniProt metadata from CSV if provided
-        - Fetches missing accessions from UniProt
+        - Fetches provenance and annotation_score from the UniProt API
         - Computes dataset-level scores based on provenance and annotation score
         """
         conn = duckdb.connect(str(self.db_path))
@@ -334,7 +336,6 @@ class SequenceMatchParser:
             CREATE TABLE IF NOT EXISTS accession_info (
                 accession VARCHAR,
                 provenance VARCHAR,
-                pdb_xref INTEGER,
                 annotation_score DOUBLE,
                 dataset_score DOUBLE
             );
@@ -344,18 +345,9 @@ class SequenceMatchParser:
         if self.unp_csv:
             conn.execute(
                 """
-                INSERT INTO accession_info
-                SELECT
-                    accession,
-                    provenance,
-                    pdb_xref,
-                    annotation_score,
-                    NULL AS dataset_score
-                FROM read_csv(
-                    ?,
-                    delim=',',
-                    header=true
-                );
+                INSERT INTO accession_info (accession, provenance, annotation_score)
+                SELECT accession, provenance, annotation_score
+                FROM read_csv(?, delim=',', header=true);
             """,
                 [str(self.unp_csv)],
             )
@@ -372,22 +364,16 @@ class SequenceMatchParser:
         """).fetchall()
         ]
 
-        # 4) Fetch accession, provenance, annotation_score and number of pdb xrefs if any:
+        # 4) Fetch accession, provenance, annotation_score from UniProt API:
         if missing:
             rows = fetch_accessions(missing)
             df = pd.DataFrame(
-                rows,
-                columns=[
-                    "accession",
-                    "provenance",
-                    "pdb_xref",
-                    "annotation_score",
-                ],
+                rows, columns=["accession", "provenance", "annotation_score"]
             )
             conn.register("tmp_accession_info", df)
             conn.execute("""
-                INSERT INTO accession_info (accession, provenance, pdb_xref, annotation_score)
-                SELECT accession, provenance, pdb_xref, annotation_score
+                INSERT INTO accession_info (accession, provenance, annotation_score)
+                SELECT accession, provenance, annotation_score
                 FROM tmp_accession_info
                 WHERE accession NOT IN (
                     SELECT accession FROM accession_info
@@ -412,15 +398,37 @@ class SequenceMatchParser:
         conn.close()
 
     def compute_dataset_score(self) -> None:
-        """Propagate dataset_score and pdb_cross_references from accession_info into hits."""
+        """Propagate dataset_score from accession_info into hits."""
         conn = duckdb.connect(str(self.db_path))
         conn.execute("""
             UPDATE hits
-            SET dataset_score = ai.dataset_score,
-                pdb_cross_references = ai.pdb_xref
+            SET dataset_score = ai.dataset_score
             FROM accession_info ai
             WHERE hits.accession = ai.accession;
         """)
+        conn.close()
+
+    def fill_pdb_cross_references(self) -> None:
+        """Fill hits.pdb_cross_references from the local DuckDB index.
+
+        The index (uniprot_pdb.duckdb) is built once by ``pdbe_sifts init`` from
+        the EBI SIFTS uniprot_pdb.tsv.gz flatfile and its path is stored in
+        ``user.unp_pdb_xrefs`` in config.yaml.  No-op if not configured.
+        """
+        db_path = get_conf_unp_pdb_xrefs_path()
+        if db_path is None or not db_path.exists():
+            return
+        conn = duckdb.connect(str(self.db_path))
+        conn.execute(f"ATTACH '{db_path}' AS unp_db (READ_ONLY)")
+        conn.execute("""
+            UPDATE hits
+            SET pdb_cross_references = (
+                SELECT pdb_xref
+                FROM unp_db.pdb_xref_by_acc u
+                WHERE u.accession = hits.accession
+            )
+        """)
+        conn.execute("DETACH unp_db")
         conn.close()
 
     def compute_sifts_score(self) -> None:
@@ -556,6 +564,7 @@ class SequenceMatchParser:
         self.compute_adjusted_score()
         self.compute_tax_score()
         self.compute_dataset_score()
+        self.fill_pdb_cross_references()
         self.compute_sifts_score()
         self.compute_rank()
         logger.info(f"Parsed results ready at: {self.db_path}")
@@ -564,15 +573,22 @@ class SequenceMatchParser:
 def main() -> None:
     """Command-line entry point for parsing BLASTP or MMseqs2 alignment results.
 
-    Accepts ``--format``, ``--input``, ``--output``, and optional ``--unp-csv``,
-    ``--workers``, and ``--identity-cutoff`` arguments, then delegates to
+    Accepts ``--format``, ``--input``, ``--output``, ``--workers``, and
+    ``--identity-cutoff`` arguments, then delegates to
     :meth:`SequenceMatchParser.parse`.
     """
     parser = argparse.ArgumentParser(description="Parse BLAST/MMSEQS2 results")
     parser.add_argument("--format", choices=["mmseqs", "blastp"], required=True)
     parser.add_argument("--input", required=True, help="Path to TSV file")
     parser.add_argument("--output", required=True, help="Output directory")
-    parser.add_argument("--unp-csv", help="Path to UniProt CSV file (optional)")
+    parser.add_argument(
+        "--unp-csv",
+        default=None,
+        help=(
+            "Optional CSV with pre-fetched UniProt metadata "
+            "(columns: accession, provenance, annotation_score)."
+        ),
+    )
     parser.add_argument("--workers", type=int, help="Number of workers")
     parser.add_argument(
         "--identity-cutoff",

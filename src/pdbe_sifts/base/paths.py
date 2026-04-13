@@ -10,6 +10,8 @@ from pdbe_sifts.config import load_config
 
 conf = load_config()
 
+UNIPROT_PDB_TSV_URL = "https://ftp.ebi.ac.uk/pub/databases/msd/sifts/flatfiles/tsv/uniprot_pdb.tsv.gz"
+
 
 def uniprot_cache_dir(accession: str, base_dir: str | None = None) -> str:
     """Local cache directory for a UniProt accession.
@@ -80,3 +82,9 @@ def get_conf_mmseqs_index_subset() -> int:
 def get_conf_blastp_evalue() -> float:
     """Return the BLASTP e-value cutoff from configuration."""
     return conf.alignment.blastp.evalue
+
+
+def get_conf_unp_pdb_xrefs_path() -> Path | None:
+    """Return the path to the uniprot_pdb DuckDB index from config, or None."""
+    val = conf.user.unp_pdb_xrefs
+    return Path(val) if val else None

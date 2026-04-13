@@ -42,8 +42,10 @@ class SiftsSequenceMatch:
                         paths (.txt).
             out_dir: Directory where results will be written.
             db_file: Path to the preformatted sequence database (MMseqs or BLAST).
-            unp_csv: Optional CSV with accession metadata
-                     (accession, provenance, pdb_xref, annotation_score).
+            unp_csv: Optional CSV with pre-fetched UniProt metadata
+                     (columns: accession, provenance, annotation_score).
+                     pdb_cross_references are populated separately from the
+                     local DuckDB index built by ``pdbe_sifts init``.
             tool: Alignment tool ('mmseqs' or 'blastp'). Default: 'mmseqs'.
             threads: Number of CPU threads to use.
             batch_size: Number of CIF files per batch when processing a .txt list.
@@ -56,18 +58,10 @@ class SiftsSequenceMatch:
         self.threads = threads
         self.batch_size = batch_size
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
     @property
     def entry_name(self) -> str:
         """Entry/run name derived from the input filename (all known suffixes stripped)."""
         return FastaBuilder.entry_name_from(self.input_file)
-
-    # ------------------------------------------------------------------
-    # Input processing — delegated to FastaBuilder
-    # ------------------------------------------------------------------
 
     def process_input_file(self, result_dir: Path) -> tuple[Path, str]:
         """Process the input file and return (fasta_path, entry_name).
@@ -234,8 +228,8 @@ def run() -> None:
         "--unp-csv-file",
         default=None,
         help=(
-            "Path to CSV with accession metadata "
-            "(accession, provenance, pdb_xref, annotation_score)."
+            "Optional CSV with pre-fetched UniProt metadata "
+            "(columns: accession, provenance, annotation_score)."
         ),
     )
     parser.add_argument(

@@ -6,7 +6,18 @@ from pdbe_sifts.base.paths import (
     get_conf_user_base_dir,
     get_conf_user_target_db,
 )
-from pdbe_sifts.config import _USER_CONFIG_FILE, init_config, load_config
+from pdbe_sifts.base.utils import (
+    build_uniprot_pdb_duckdb,
+    download_uniprot_pdb_tsv,
+)
+from pdbe_sifts.config import (
+    _UNIPROT_PDB_DB_FILE,
+    _UNIPROT_PDB_TSV_FILE,
+    _USER_CONFIG_FILE,
+    init_config,
+    load_config,
+    set_unp_pdb_xrefs_path,
+)
 from pdbe_sifts.sequence_match.target_database import TargetDb
 from pdbe_sifts.sifts_sequence_match import SiftsSequenceMatch
 
@@ -16,7 +27,7 @@ def main():
 
     Parses sub-commands and dispatches to the appropriate pipeline component:
 
-    * ``init``             — write the default configuration file.
+    * ``init``             — write the default configuration file and download xrefs file.
     * ``show``             — print the resolved configuration.
     * ``build_db``         — build a reference sequence database.
     * ``sequence_match``   — run alignment and scoring to produce sequence matches.
@@ -26,7 +37,6 @@ def main():
     * ``update_ncbi``      — refresh the local NCBI taxonomy database.
     * ``sifts2mmcif``      — inject SIFTS mappings back into a mmCIF file.
     * ``seq2seq``          — align canonical deposited sequence vs coordinate sequence.
-    * ``edit_cif``         — enrich a CIF file by injecting missing mmCIF categories.
     """
     parser = argparse.ArgumentParser(
         prog="pdbe_sifts", description="PDBe SIFTS mapping pipeline"
@@ -52,7 +62,12 @@ def main():
     #########  INIT — copies the YAML template to user config dir
     init_parser = subparsers.add_parser(
         "init",
-        help="Copy the config template to ~/.config/pdbe_sifts/config.yaml",
+        help=(
+            "Copy the config template to ~/.config/pdbe_sifts/config.yaml, "
+            "download the SIFTS uniprot_pdb.tsv.gz flatfile, and build a local "
+            "DuckDB index (uniprot_pdb.duckdb) used to populate pdb_cross_references "
+            "during sequence matching."
+        ),
     )
     init_parser.add_argument(
         "--dest",
@@ -110,7 +125,11 @@ def main():
     ######### RUN sifts_sequence_match
     global_parser = subparsers.add_parser(
         "sequence_match",
-        help="Run alignment and scoring to generate SIFTS sequence matches.",
+        help=(
+            "Run alignment and scoring to generate SIFTS sequence matches. "
+            "pdb_cross_references per UniProt accession are read from the local "
+            "DuckDB index built by `pdbe_sifts init`."
+        ),
     )
     global_parser.add_argument(
         "-i",
@@ -144,7 +163,12 @@ def main():
     global_parser.add_argument(
         "--unp-csv-file",
         default=None,
-        help="Path to CSV with accession metadata: accession, provenance, pdb_xref, annotation_score.",
+        help=(
+            "Optional CSV with pre-fetched UniProt metadata "
+            "(columns: accession, provenance, annotation_score). "
+            "pdb_cross_references are populated separately from the local "
+            "DuckDB index built by `pdbe_sifts init`."
+        ),
     )
     global_parser.add_argument(
         "--threads",
@@ -314,43 +338,6 @@ def main():
         help="Compare sifts_only.mmcif from this directory for delta tracking.",
     )
 
-    ######### edit_cif
-    edit_cif_parser = subparsers.add_parser(
-        "edit_cif",
-        help="Enrich a CIF file by injecting missing mmCIF categories.",
-    )
-    edit_cif_parser.add_argument(
-        "-i", "--input-cif", required=True, help="Input mmCIF file."
-    )
-    edit_cif_parser.add_argument(
-        "-e",
-        "--entity-id",
-        default=None,
-        help="Entity ID (e.g. 1). Omit to process all polypeptide entities.",
-    )
-    edit_cif_parser.add_argument(
-        "-c",
-        "--chain-id",
-        default=None,
-        help="Author chain ID (e.g. A). Omit to process all chains.",
-    )
-    edit_cif_parser.add_argument(
-        "-o", "--output-dir", required=True, help="Output directory."
-    )
-    _edit_cif_grp = edit_cif_parser.add_mutually_exclusive_group()
-    _edit_cif_grp.add_argument(
-        "--add-poly-seq-scheme",
-        action="store_true",
-        default=False,
-        help="Force injection of _pdbx_poly_seq_scheme (even if already present).",
-    )
-    _edit_cif_grp.add_argument(
-        "--no-poly-seq-scheme",
-        action="store_true",
-        default=False,
-        help="Skip _pdbx_poly_seq_scheme reconstruction entirely.",
-    )
-
     ######### seq2seq
     seq2seq_parser = subparsers.add_parser(
         "seq2seq",
@@ -388,6 +375,17 @@ def main():
         if args.force and _USER_CONFIG_FILE.exists():
             _USER_CONFIG_FILE.unlink()
         init_config(dest=args.dest)
+        try:
+            logger.info("Downloading SIFTS uniprot_pdb.tsv.gz …")
+            download_uniprot_pdb_tsv(_UNIPROT_PDB_TSV_FILE, force=args.force)
+            logger.info("Building pdb_xref DuckDB index …")
+            build_uniprot_pdb_duckdb(
+                _UNIPROT_PDB_TSV_FILE, _UNIPROT_PDB_DB_FILE, force=args.force
+            )
+            set_unp_pdb_xrefs_path(_UNIPROT_PDB_DB_FILE)
+            logger.info("unp_pdb_xrefs path written to config.yaml")
+        except Exception as e:
+            logger.warning("Failed to build pdb_xref index: %s", e)
         logger.info(
             "Initializing NCBI taxonomy database (first run may download ~70 MB)..."
         )
@@ -507,26 +505,6 @@ def main():
         finally:
             if obj.conn:
                 obj.conn.close()
-
-    elif args.command == "edit_cif":
-        from pdbe_sifts.edit_cif import EditCif
-
-        if (args.entity_id is None) != (args.chain_id is None):
-            edit_cif_parser.error(
-                "Arguments -e/--entity-id and -c/--chain-id must be supplied "
-                "together or both omitted."
-            )
-
-        ec = EditCif(
-            args.input_cif,
-            args.output_dir,
-            entity_id=args.entity_id,
-            chain_id=args.chain_id,
-        )
-        if not args.no_poly_seq_scheme:
-            ec.add_pdbx_poly_seq_scheme()
-        out = ec.write()
-        print(f"Written: {out}")
 
     elif args.command == "seq2seq":
         from pdbe_sifts.seq2seq import cli_run

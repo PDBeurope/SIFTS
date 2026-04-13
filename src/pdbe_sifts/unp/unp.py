@@ -94,7 +94,7 @@ def fetch_uniprot_batch(accessions: list[str]) -> list[dict]:
     url = (
         "https://rest.uniprot.org/uniprotkb/stream"
         f"?query=({query})"
-        "&fields=annotation_score,xref_pdb"
+        "&fields=annotation_score"
     )
 
     r = requests.get(url, timeout=30)
@@ -109,16 +109,12 @@ def fetch_uniprot_batch(accessions: list[str]) -> list[dict]:
         entry_type = e.get("entryType", "")
         provenance = "Swiss-Prot" if "Swiss-Prot" in entry_type else "TrEMBL"
 
-        xrefs = e.get("uniProtKBCrossReferences", [])
-        pdb_xref = sum(1 for x in xrefs if x.get("database") == "PDB")
-
         annotation_score = e.get("annotationScore")
 
         rows.append(
             {
                 "accession": accession,
                 "provenance": provenance,
-                "pdb_xref": pdb_xref,
                 "annotation_score": annotation_score,
             }
         )
@@ -143,8 +139,7 @@ def fetch_accessions(
 
     Returns:
         list[dict]: Combined results from all batches.  Each dict contains
-        ``accession``, ``provenance``, ``pdb_xref``, and
-        ``annotation_score`` keys.
+        ``accession``, ``provenance``, and ``annotation_score`` keys.
     """
     batches = [
         all_accessions[i : i + batch_size]
