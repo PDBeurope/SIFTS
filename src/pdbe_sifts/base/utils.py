@@ -275,7 +275,7 @@ def build_uniprot_pdb_duckdb(
         CREATE OR REPLACE TABLE pdb_xref_by_acc AS
         SELECT SP_PRIMARY AS accession,
                len(string_split(PDB, ';')) AS pdb_xref
-        FROM read_csv(?, delim='\t', header=true)
+        FROM read_csv(?, delim='\t', header=true, compression='gzip')
         """,
         [str(tsv_path)],
     )
