@@ -14,6 +14,7 @@ from pdbe_sifts.base.exceptions import NotAPolyPeptide, ObsoleteUniProtError
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.utils import SiftsAction
 from pdbe_sifts.mmcif.chem_comp import ChemCompMapping
+from pdbe_sifts.mmcif.curator.cif_sequence_update import CifSequenceUpdater
 from pdbe_sifts.mmcif.entry import Entry
 from pdbe_sifts.segments_generation.alignment import helper
 from pdbe_sifts.segments_generation.alignment.helper import (
@@ -123,6 +124,35 @@ class SiftsAlign:
         self.cc = ChemCompMapping()
 
     @log_durations(logger.debug)
+    def _ensure_poly_seq_scheme(self, cif_path: str) -> str:
+        """Return *cif_path* unchanged if ``_pdbx_poly_seq_scheme`` is present.
+
+        If the category is missing, generates an enriched CIF via
+        :class:`~pdbe_sifts.mmcif.curator.cif_sequence_update.CifSequenceUpdater`
+        and returns the new path.  The enriched file is written alongside the
+        input with a ``_pdbx_added`` suffix, e.g.::
+
+            9b4h_updated.cif    → 9b4h_updated_pdbx_added.cif
+            9b4h_updated.cif.gz → 9b4h_updated_pdbx_added.cif
+        """
+        block = gemmi.cif.read(str(cif_path)).sole_block()
+        if block.get_mmcif_category("_pdbx_poly_seq_scheme"):
+            return cif_path
+
+        p = Path(cif_path)
+        if p.name.endswith(".cif.gz"):
+            enriched = p.parent / (p.name[:-7] + "_pdbx_added.cif")
+        else:
+            enriched = p.with_name(p.stem + "_pdbx_added" + p.suffix)
+
+        logger.info(
+            "_pdbx_poly_seq_scheme missing in %s — generating enriched CIF: %s",
+            p.name,
+            enriched.name,
+        )
+        CifSequenceUpdater(str(cif_path), str(enriched)).process()
+        return str(enriched)
+
     def process_entry(self, entry_id):
         """Run the full SIFTS segment and residue mapping pipeline for one entry.
 
@@ -139,6 +169,8 @@ class SiftsAlign:
                 f"{entry_id}: Modification in non-used cif category detected. Skipping."
             )
             return
+
+        cif_file = self._ensure_poly_seq_scheme(cif_file)
 
         try:
             logger.info(f"Processing [{entry_id}]")

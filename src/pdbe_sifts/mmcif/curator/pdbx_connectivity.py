@@ -768,3 +768,63 @@ class GapConnectivityChecker:
             output[key] = chunk_results
 
         return output
+
+    def get_merged_alignment(self) -> dict[tuple[str, str], dict]:
+        """Return one merged alignment per (entity_id, chain_id).
+
+        Orchestrates the full connectivity pipeline:
+
+        1. :meth:`process_alignments` — select non-overlapping chunks.
+        2. :meth:`get_corrected_sequences` — correct gap boundaries.
+        3. Merge all corrected chunks into a single canonical-length pair.
+
+        Each chunk's corrected coordinate sequence is projected back onto the
+        canonical sequence using the chunk's ``_al_start`` position and the
+        canonical gapped sequence to track alignment columns.  Canonical
+        positions not covered by any chunk remain ``"-"``.
+
+        Returns:
+            Dict mapping ``(entity_id, chain_id)`` to:
+
+            * ``"canonical"`` (:class:`str`) — full canonical sequence, no gaps.
+            * ``"coord"``     (:class:`str`) — same length; ``"-"`` where unobserved.
+            * ``"n_fixes"``   (:class:`int`) — chunks where corrections were applied.
+        """
+        self.process_alignments()
+        corrected = self.get_corrected_sequences()
+        merged: dict[tuple[str, str], dict] = {}
+
+        for r in self.results:
+            key = (r["entity_id"], r["chain_id"])
+            canonical = r["canonical"]
+            chunks = self.unchunked_alignments.get(key, [])
+            chunk_corrections = {
+                c["chunk_idx"]: c["corrected"] for c in corrected.get(key, [])
+            }
+
+            coord_merged = ["-"] * len(canonical)
+            for i, chunk in enumerate(chunks):
+                coord_gapped = chunk_corrections.get(i, str(chunk[1].seq))
+                can_gapped = str(chunk[0].seq)
+                can_pos = chunk[0]._al_start - 1  # 0-based index into canonical
+
+                for can_ch, coord_ch in zip(
+                    can_gapped, coord_gapped, strict=False
+                ):
+                    if can_ch != "-":
+                        if coord_ch != "-":
+                            coord_merged[can_pos] = coord_ch
+                        can_pos += 1
+
+            n_fixes = sum(
+                1
+                for c in corrected.get(key, [])
+                if c["corrected"] != c["original"]
+            )
+            merged[key] = {
+                "canonical": canonical,
+                "coord": "".join(coord_merged),
+                "n_fixes": n_fixes,
+            }
+
+        return merged
