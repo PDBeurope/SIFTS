@@ -182,6 +182,14 @@ def main():
         default=100000,
         help="Number of CIF files to process per batch when using a .txt list (default: 100000).",
     )
+    global_parser.add_argument(
+        "--tax-tsv",
+        default=None,
+        help=(
+            "Optional TSV file overriding query_tax_id per (entry, entity) "
+            "(columns: entry, entity, tax_id)."
+        ),
+    )
 
     ######### BUILD FASTA
     fasta_parser = subparsers.add_parser(
@@ -262,6 +270,14 @@ def main():
         required=False,
         default=None,
         help="PDB entry ID. If omitted, derived from _entry.id in the CIF.",
+    )
+    segments_parser.add_argument(
+        "--tax-tsv",
+        default=None,
+        help=(
+            "Optional TSV file overriding the taxonomy ID per entity "
+            "(columns: entity_id, tax_id)."
+        ),
     )
 
     ######### DB LOAD
@@ -358,6 +374,15 @@ def main():
         default=None,
         help="Author chain ID (e.g. A). Omit to process all chains.",
     )
+    seq2seq_parser.add_argument(
+        "--sample-fasta",
+        default=None,
+        help=(
+            "FASTA file providing canonical sequences per entity instead of "
+            "reading from the mmCIF file. "
+            "Header format: >{entity_id}|{chain_id1},{chain_id2}"
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -410,6 +435,7 @@ def main():
             tool=args.tool,
             threads=args.threads,
             batch_size=args.batch_size,
+            tax_tsv=args.tax_tsv,
         )
         gb_m.process()
 
@@ -458,6 +484,7 @@ def main():
             nf90_mode=args.nf90,
             unp_mode=args.mapping,
             connectivity_mode=args.connectivity,
+            tax_tsv=args.tax_tsv,
         )
         sifts_align.process_entry(entry_id)
         if sifts_align.conn:
@@ -509,7 +536,13 @@ def main():
     elif args.command == "seq2seq":
         from pdbe_sifts.seq2seq import cli_run
 
-        cli_run(args.input_cif, args.entity_id, args.chain_id, seq2seq_parser)
+        cli_run(
+            args.input_cif,
+            args.entity_id,
+            args.chain_id,
+            seq2seq_parser,
+            sample_fasta=args.sample_fasta,
+        )
 
     else:
         parser.print_help()

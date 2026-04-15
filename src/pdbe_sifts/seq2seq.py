@@ -24,6 +24,7 @@ import argparse
 import logging
 from pathlib import Path
 
+from Bio import SeqIO
 from gemmi import cif
 
 from pdbe_sifts.mmcif import _build_sequence
@@ -35,6 +36,32 @@ from pdbe_sifts.segments_generation.alignment import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def parse_sample_fasta(
+    fasta_path: str | Path,
+) -> dict[str, tuple[str, list[str]]]:
+    """Parse a sample FASTA file providing canonical sequences per entity.
+
+    The expected header format is ``>{entity_id}|{chain_id1},{chain_id2},...``.
+    The chain IDs list the author asymmetric-unit chains covered by that entity
+    sequence and are used to replace the auto-discovered pairs from
+    ``get_all_entity_chain_pairs()``.
+
+    Args:
+        fasta_path: Path to the FASTA file.
+
+    Returns:
+        Dict mapping ``entity_id`` → ``(sequence, [chain_ids])``.
+    """
+    result: dict[str, tuple[str, list[str]]] = {}
+    with open(fasta_path) as fh:
+        for record in SeqIO.parse(fh, "fasta"):
+            parts = record.id.split("|")
+            entity_id = parts[0]
+            chain_ids = parts[1].split(",") if len(parts) > 1 else []
+            result[entity_id] = (str(record.seq), chain_ids)
+    return result
 
 
 def get_canonical_sequence(block, entity_id: str, cc: ChemCompMapping) -> str:
@@ -168,6 +195,7 @@ class Seq2Seq:
         cif_file,
         entity_id: str,
         chain_id: str,
+        canonical_override: str | None = None,
     ) -> None:
         """Initialise Seq2Seq with a CIF file and target entity/chain.
 
@@ -175,10 +203,13 @@ class Seq2Seq:
             cif_file: Path to the mmCIF file.
             entity_id: Entity identifier string (e.g. ``"1"``).
             chain_id: Author chain identifier (e.g. ``"A"``).
+            canonical_override: When provided, use this one-letter sequence as
+                the canonical sequence instead of reading from the mmCIF file.
         """
         self.cif_file = Path(cif_file)
         self.entity_id = str(entity_id)
         self.chain_id = str(chain_id)
+        self.canonical_override = canonical_override
 
     def run(self) -> dict:
         """Execute the canonical-vs-coordinate alignment.
@@ -219,7 +250,10 @@ class Seq2Seq:
         cc = ChemCompMapping()
         block = cif.read(str(self.cif_file)).sole_block()
 
-        canonical = get_canonical_sequence(block, self.entity_id, cc)
+        if self.canonical_override is not None:
+            canonical = self.canonical_override
+        else:
+            canonical = get_canonical_sequence(block, self.entity_id, cc)
         coordinate = get_coordinate_sequence(
             block, self.entity_id, self.chain_id, cc
         )
@@ -288,7 +322,7 @@ class Seq2Seq:
         }
 
 
-def run_all(cif_file) -> list[dict]:
+def run_all(cif_file, sample_fasta: str | Path | None = None) -> list[dict]:
     """Align canonical vs coordinate sequence for all polypeptide chains.
 
     Convenience wrapper around :class:`Seq2Seq` that auto-discovers every
@@ -298,6 +332,12 @@ def run_all(cif_file) -> list[dict]:
 
     Args:
         cif_file: Path to the mmCIF file (plain or gzip-compressed).
+        sample_fasta: Optional path to a FASTA file providing canonical
+            sequences per entity.  Header format:
+            ``>{entity_id}|{chain_id1},{chain_id2}``.  When supplied, the
+            FASTA sequences replace the sequences read from the mmCIF, and
+            the chain IDs listed in each header are used instead of the
+            auto-discovered pairs.
 
     Returns:
         List of result dicts — one per (entity_id, chain_id) pair — each
@@ -319,15 +359,32 @@ def run_all(cif_file) -> list[dict]:
     if not cif_path.exists():
         raise FileNotFoundError(f"CIF file not found: {cif_path}")
 
-    block = gemmi_cif.read(str(cif_path)).sole_block()
-    pairs = get_all_entity_chain_pairs(block)
+    sample: dict[str, tuple[str, list[str]]] = (
+        parse_sample_fasta(sample_fasta) if sample_fasta else {}
+    )
+
+    if sample:
+        pairs = [
+            (eid, cid)
+            for eid, (_, chain_ids) in sample.items()
+            for cid in chain_ids
+        ]
+    else:
+        block = gemmi_cif.read(str(cif_path)).sole_block()
+        pairs = get_all_entity_chain_pairs(block)
+
     if not pairs:
         logger.warning("No polypeptide entity/chain pairs found in CIF.")
         return []
 
     results = []
     for entity_id, chain_id in pairs:
-        result = Seq2Seq(cif_file, entity_id, chain_id).run()
+        canonical_override = (
+            sample[entity_id][0] if entity_id in sample else None
+        )
+        result = Seq2Seq(
+            cif_file, entity_id, chain_id, canonical_override=canonical_override
+        ).run()
         result["entity_id"] = entity_id
         result["chain_id"] = chain_id
         results.append(result)
@@ -362,6 +419,7 @@ def cli_run(
     entity_id: str | None,
     chain_id: str | None,
     parser=None,
+    sample_fasta: str | Path | None = None,
 ) -> None:
     """Execute the seq2seq pipeline from parsed CLI arguments and print results.
 
@@ -378,6 +436,10 @@ def cli_run(
         parser: Optional :class:`argparse.ArgumentParser` used to emit a
             well-formatted error when exactly one of *entity_id* / *chain_id*
             is provided.
+        sample_fasta: Optional path to a FASTA file providing canonical
+            sequences per entity (header: ``>{entity_id}|{chain_id1},{chain_id2}``).
+            Ignored when *entity_id* and *chain_id* are both supplied explicitly
+            (use *canonical_override* on :class:`Seq2Seq` directly in that case).
     """
     if (entity_id is None) != (chain_id is None):
         msg = (
@@ -390,12 +452,21 @@ def cli_run(
             raise ValueError(msg)
 
     if entity_id and chain_id:
-        result = Seq2Seq(input_cif, entity_id, chain_id).run()
+        canonical_override = None
+        if sample_fasta:
+            sample = parse_sample_fasta(sample_fasta)
+            canonical_override = sample.get(entity_id, (None,))[0]
+        result = Seq2Seq(
+            input_cif,
+            entity_id,
+            chain_id,
+            canonical_override=canonical_override,
+        ).run()
         result["entity_id"] = entity_id
         result["chain_id"] = chain_id
         results = [result]
     else:
-        results = run_all(input_cif)
+        results = run_all(input_cif, sample_fasta=sample_fasta)
         if not results:
             print("No polypeptide entity/chain pairs found in CIF.")
             return

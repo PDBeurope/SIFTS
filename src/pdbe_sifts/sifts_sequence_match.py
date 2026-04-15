@@ -32,6 +32,7 @@ class SiftsSequenceMatch:
         tool: str = "mmseqs",
         threads: int = 1,
         batch_size: int = 100000,
+        tax_tsv: str | Path | None = None,
     ):
         """
         Initialize SiftsSequenceMatch.
@@ -49,6 +50,8 @@ class SiftsSequenceMatch:
             tool: Alignment tool ('mmseqs' or 'blastp'). Default: 'mmseqs'.
             threads: Number of CPU threads to use.
             batch_size: Number of CIF files per batch when processing a .txt list.
+            tax_tsv: Optional TSV file overriding query_tax_id per entity
+                     (columns: entry_id, entity_id, tax_id).
         """
         self.input_file = Path(input_file)
         self.out_dir = Path(out_dir)
@@ -57,6 +60,7 @@ class SiftsSequenceMatch:
         self.tool = tool
         self.threads = threads
         self.batch_size = batch_size
+        self.tax_tsv = Path(tax_tsv) if tax_tsv is not None else None
 
     @property
     def entry_name(self) -> str:
@@ -178,6 +182,7 @@ class SiftsSequenceMatch:
             hits_path,
             result_dir,
             unp_csv=self.unp_csv,
+            tax_tsv=self.tax_tsv,
         ).parse()
 
         end = timer()
@@ -244,6 +249,14 @@ def run() -> None:
         default=100000,
         help="Number of CIF files to process per batch when using a .txt list (default: 100000).",
     )
+    parser.add_argument(
+        "--tax-tsv",
+        default=None,
+        help=(
+            "Optional TSV file overriding query_tax_id per entity "
+            "(columns: entry_id, entity_id, tax_id)."
+        ),
+    )
 
     args = parser.parse_args()
     logger.info(vars(args))
@@ -256,6 +269,7 @@ def run() -> None:
         tool=args.tool,
         threads=args.threads,
         batch_size=args.batch_size,
+        tax_tsv=args.tax_tsv,
     )
     pipeline.process()
 

@@ -68,6 +68,7 @@ class SiftsAlign:
         nf90_mode=False,
         unp_mode=None,
         connectivity_mode=True,
+        tax_tsv=None,
     ):
         """Initialise the per-entry SIFTS segment and residue mapping pipeline.
 
@@ -88,6 +89,10 @@ class SiftsAlign:
             connectivity_mode: When ``True`` (default), applies the connectivity
                 correction step that reassigns gap residues to adjacent segments
                 when a covalent peptide bond is detected.
+            tax_tsv: Optional path to a TSV file overriding the taxonomy ID per
+                entity (columns: ``entity_id``, ``tax_id``).  When supplied,
+                each chain whose entity_id appears in the TSV will have its
+                ``tax_id`` replaced before alignment.
         """
         self.cif_file = str(cif_file)
 
@@ -120,6 +125,24 @@ class SiftsAlign:
             if db_conn_str
             else None
         )
+
+        # Build entity_id → tax_id override map from TSV
+        self.tax_override: dict[str, int] = {}
+        if tax_tsv:
+            import pandas as _pd
+
+            df = _pd.read_csv(
+                tax_tsv, sep="\t", dtype={"entity_id": str, "tax_id": int}
+            )
+            self.tax_override = dict(
+                zip(df["entity_id"], df["tax_id"], strict=False)
+            )
+            logger.info(
+                "Loaded %d tax_id overrides from %s",
+                len(self.tax_override),
+                tax_tsv,
+            )
+
         logger.info("Loading chem comp three-letter to one-letter mapping")
         self.cc = ChemCompMapping()
 
@@ -180,6 +203,17 @@ class SiftsAlign:
                 f"No pdbx_poly_seq_scheme category found for {entry_id}. Skipping"
             )
             return
+
+        if self.tax_override:
+            for chain in entry.chains.values():
+                if chain.entity_id in self.tax_override:
+                    chain.tax_id = self.tax_override[chain.entity_id]
+                    logger.debug(
+                        "Overriding tax_id for entity %s chain %s → %d",
+                        chain.entity_id,
+                        chain.auth_asym_id,
+                        chain.tax_id,
+                    )
 
         chain_lst = list(entry.chains.keys())
         if not chain_lst:

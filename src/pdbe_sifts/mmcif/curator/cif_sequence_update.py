@@ -7,15 +7,21 @@ from typing import Any
 import gemmi
 
 from pdbe_sifts.mmcif.curator.pdbx_connectivity import GapConnectivityChecker
-from pdbe_sifts.seq2seq import Seq2Seq
+from pdbe_sifts.seq2seq import Seq2Seq, parse_sample_fasta
 
 logger = logging.getLogger(__name__)
 
 
 class CifSequenceUpdater:
-    def __init__(self, input_path: str, output_path: str):
+    def __init__(
+        self,
+        input_path: str,
+        output_path: str,
+        sample_fasta: str | None = None,
+    ):
         self.input_path = input_path
         self.output_path = output_path
+        self.sample_fasta = sample_fasta
         self.doc: gemmi.cif.Document = gemmi.cif.read(input_path)
         self.block: gemmi.cif.Block = self.doc.sole_block()
 
@@ -322,12 +328,19 @@ class CifSequenceUpdater:
 
     def process(self) -> None:
         """Main execution flow."""
+        sample = (
+            parse_sample_fasta(self.sample_fasta) if self.sample_fasta else {}
+        )
         mappings = self._get_polymer_mapping()
         results = {}
         results_list = []
         for m in mappings:
+            canonical_override = sample.get(m["entity_id"], (None,))[0]
             data = Seq2Seq(
-                self.input_path, m["entity_id"], m["auth_asym_id"]
+                self.input_path,
+                m["entity_id"],
+                m["auth_asym_id"],
+                canonical_override=canonical_override,
             ).run()
             data["entity_id"] = m["entity_id"]
             data["chain_id"] = m["auth_asym_id"]

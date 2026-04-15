@@ -217,6 +217,7 @@ class SequenceMatchParser:
         unp_csv: str | Path | None = None,
         max_workers: int | None = None,
         identity_cutoff: float = IDENTITY_CUTOFF,
+        tax_tsv: str | Path | None = None,
     ) -> None:
         """Initialise the parser with alignment result paths and scoring parameters.
 
@@ -236,6 +237,10 @@ class SequenceMatchParser:
                 scoring.  Defaults to :func:`os.cpu_count`.
             identity_cutoff: Minimum sequence identity (0–1) required to retain
                 an alignment hit.  Defaults to :data:`IDENTITY_CUTOFF`.
+            tax_tsv: Optional path to a TSV file overriding ``query_tax_id`` per
+                entity (columns: columns ``entry``, ``entity``, and ``tax_id``).
+                Applied after the hits table is initialised, before taxonomy
+                scoring.
         """
         self.format = format
         self.result_file_path = Path(result_file_path)
@@ -245,6 +250,7 @@ class SequenceMatchParser:
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.out_dir / "hits.duckdb"
         self.max_workers = max_workers or os.cpu_count()
+        self.tax_tsv = Path(tax_tsv) if tax_tsv else None
 
     def _init_database(self) -> None:
         """
@@ -558,9 +564,39 @@ class SequenceMatchParser:
         finally:
             conn.close()
 
+    def apply_tax_tsv(self) -> None:
+        """Override hits.query_tax_id from a user-provided TSV (entry + entity → tax_id).
+
+        No-op when ``self.tax_tsv`` is ``None`` or the file does not exist.
+        The TSV must have a header row with columns ``entry``, ``entity``,
+        and ``tax_id``.  Both ``entry`` and ``entity`` are required because
+        a single ``sequence_match`` run can span many PDB entries — entity "1"
+        from "1abc" is distinct from entity "1" from "5xyz".
+        """
+        if self.tax_tsv is None or not self.tax_tsv.exists():
+            return
+        df = pd.read_csv(
+            self.tax_tsv,
+            sep="\t",
+            dtype={"entry": str, "entity": str, "tax_id": int},
+        )
+        conn = duckdb.connect(str(self.db_path))
+        conn.register("tmp_tax", df)
+        conn.execute("""
+            UPDATE hits
+            SET query_tax_id = tmp_tax.tax_id
+            FROM tmp_tax
+            WHERE hits.entry = tmp_tax.entry
+              AND hits.entity = tmp_tax.entity
+        """)
+        conn.unregister("tmp_tax")
+        conn.close()
+        logger.info("Applied tax_tsv overrides to query_tax_id.")
+
     def parse(self) -> None:
         """Main parsing pipeline"""
         self._init_database()
+        self.apply_tax_tsv()
         self.compute_adjusted_score()
         self.compute_tax_score()
         self.compute_dataset_score()
