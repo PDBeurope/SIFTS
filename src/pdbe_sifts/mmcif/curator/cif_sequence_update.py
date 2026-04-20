@@ -326,6 +326,16 @@ class CifSequenceUpdater:
                 c_idx = chain_lookup[lid].get(counts[lid])
                 seq_id_col[i] = str(c_idx) if c_idx else "."
 
+    def show(self, context: int = 8) -> None:
+        """Print a human-readable summary of gap connectivity results.
+
+        Must be called after :meth:`process`.
+        Delegates to :meth:`GapConnectivityChecker.show`.
+        """
+        if not hasattr(self, "_gap_checker"):
+            raise RuntimeError("Call process() before show().")
+        self._gap_checker.show(context=context)
+
     def process(self) -> None:
         """Main execution flow."""
         sample = (
@@ -349,9 +359,10 @@ class CifSequenceUpdater:
             )
             results_list.append(data)
 
-        merged = GapConnectivityChecker(
+        self._gap_checker = GapConnectivityChecker(
             self.input_path, results_list
-        ).get_merged_alignment()
+        )
+        merged = self._gap_checker.get_merged_alignment()
 
         for (eid, _, aid), data in results.items():
             ma = merged.get((eid, aid))
@@ -381,11 +392,19 @@ def run():
     parser.add_argument(
         "-o", "--output", required=True, help="Output CIF file path"
     )
+    parser.add_argument(
+        "-s",
+        "--show",
+        action="store_true",
+        help="Print gap connectivity summary after processing.",
+    )
 
     args = parser.parse_args()
 
     updater = CifSequenceUpdater(args.input, args.output)
     updater.process()
+    if args.show:
+        updater.show()
 
 
 if __name__ == "__main__":
