@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+
+"""
+Author: Preeti Choudhary
+Description: Main program to write sifts annotations in mmCIF file
+"""
+
 import argparse
 import gzip
 import shutil

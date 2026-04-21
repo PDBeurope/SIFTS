@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-@following categories/items written in sifts.cif.gz
+Author: Preeti Choudhary
+Description: @following categories/items written in sifts.cif.gz
 """
 
 SIFTS_NEW_CAT = [
