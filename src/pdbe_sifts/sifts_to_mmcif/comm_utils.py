@@ -1,12 +1,13 @@
+"""
+Author: Preeti Choudhary
+Description: Common utility functions used in sifts_to_mmcif
+"""
+
 import numpy as np
 from gemmi import cif
 
 from pdbe_sifts.base.log import logger
 
-"""
-Author: Preeti Choudhary
-Description: Common utility functions used in sifts_to_mmcif
-"""
 
 
 def add_mmcif_cat(cif_cat_obj, my_cat_name, my_cat_val):

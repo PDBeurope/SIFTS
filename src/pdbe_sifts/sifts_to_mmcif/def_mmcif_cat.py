@@ -1,7 +1,10 @@
-#!/usr/bin/env python3
 """
 Author: Preeti Choudhary
-Description: @following categories/items written in sifts.cif.gz
+Description: has @following cif categories/items info
+    1. new sifts categories written in sifts.cif.gz
+    2. categories used to track the changes in mapping
+    3. categories which should always be present (primary keys)
+    4. database for which mappings is written
 """
 
 SIFTS_NEW_CAT = [
