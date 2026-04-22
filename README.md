@@ -40,14 +40,20 @@ conda env create -f environment.yml
 # Activate environment
 conda activate pdbe_sifts
 
-# Install package in editable mode
+# Install pdbe_sifts package in editable mode
 pip install -e .
 
 # Or install directly
 pip install pdbe_sifts
+
+# install mmseq2
+conda install -c conda-forge mmseqs2
+
+# install fasta3 to get lalign36
+conda install -c bioconda fasta3
 ```
 
-### B. Install using uv (fast alternative)
+### B. Install using uv (fast alternative if only pdbe_sifts python package is needed)
 
 
 #### 1. Install uv (if not already installed)
