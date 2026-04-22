@@ -164,7 +164,7 @@ class SiftsAlign:
 
         p = Path(cif_path)
         if p.name.endswith(".cif.gz"):
-            enriched = p.parent / (p.name[:-7] + "_pdbx_added.cif")
+            enriched = Path(p.parent, (p.name[:-7] + "_pdbx_added.cif"))
         else:
             enriched = p.with_name(p.stem + "_pdbx_added" + p.suffix)
 
