@@ -18,7 +18,7 @@ class Entry:
     :class:`~pdbe_sifts.mmcif.chain.Chain` objects for each one.
 
     Attributes:
-        pdbid (str): Four-letter PDB identifier.
+        pdbid (str): PDB identifier.
         mmcif (mmcif_helper.mmCIF): Parsed mmCIF data accessor.
         chains (Mapping[str, Chain]): Author chain ID → Chain object for
             every polypeptide chain in the entry.
@@ -36,7 +36,7 @@ class Entry:
         silently skipped.
 
         Args:
-            pdbid: Four-letter PDB identifier (e.g. ``"1abc"``).
+            pdbid: PDB identifier (e.g. ``"1abc"``).
             chem_comp_dict: A :class:`~pdbe_sifts.mmcif.chem_comp.ChemCompMapping`
                 instance used to convert three-letter residue codes to
                 one-letter codes.
