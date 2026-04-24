@@ -184,7 +184,7 @@ class SiftsAlign:
         writes output CSV files to ``self.out_dir``.
 
         Args:
-            entry_id: Four-letter PDB identifier (e.g. ``"1abc"``).
+            entry_id: PDB identifier (e.g. ``"1abc"``).
         """
         cif_file = self.cif_file
         if self.no_used_cif_category_modified(cif_file):
