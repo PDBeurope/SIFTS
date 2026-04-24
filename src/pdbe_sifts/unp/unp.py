@@ -4,8 +4,8 @@ This allows for faster access to a small subset of required information
 from a large XML file.
 """
 
+import json
 import os
-import pickle
 import random
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,7 +21,11 @@ from lxml.etree import XMLSyntaxError
 from pdbe_sifts.base.exceptions import ObsoleteUniProtError
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.paths import uniprot_cache_dir as get_uniprot_cache_dir
-from pdbe_sifts.base.utils import fetch_uniprot_file
+from pdbe_sifts.base.utils import (
+    fetch_uniprot_file,
+    safe_join,
+    validate_uniprot_accession,
+)
 
 COLORS = {
     "white": 0,
@@ -326,60 +330,77 @@ class UNP:
     secondary_accessions: list[str] = []
 
     def _load_uniprot_data(self, accession: str) -> None:
-        """Load the data for the accession from the uniprot XML file
+        """Load the data for the accession from the UniProt XML file.
 
-        Will try to load from a pickle file if it exists. If not, will fetch from uniprot and cache it.
-        if env var SIFTS_NO_CACHE_ALL is set to True, will not cache the data nor load from cache.
+        Tries to load from a JSON cache file if one exists.  On a cache miss
+        the data is fetched from the UniProt API and written to a JSON file
+        for future calls.  Setting the ``SIFTS_NO_CACHE_ALL`` environment
+        variable to ``False`` disables both reading and writing of the cache.
+
+        Pickle (``.pkl``) cache files from older versions are deleted on first
+        encounter and replaced by safe JSON caches (CWE-502 mitigation).
 
         Args:
-            accession (str): The accession to load
-
+            accession (str): The accession to load (isoform suffix already stripped).
         """
         cache = bool(os.getenv("SIFTS_NO_CACHE_ALL", True))
+        cache_dir = Path(get_uniprot_cache_dir(accession))
+        json_path = safe_join(cache_dir, f"{accession}.json")
 
-        pickle_file_path = os.path.join(
-            get_uniprot_cache_dir(accession), f"{accession}.pkl"
-        )
+        # Migration: remove stale unsafe pickle files (CWE-502).
+        old_pkl = cache_dir / f"{accession}.pkl"
+        if old_pkl.exists():
+            old_pkl.unlink()
+            logger.info(f"Removed stale unsafe pickle cache: {old_pkl}")
 
-        loaded = False
-        if cache and Path(pickle_file_path).exists():
-            loaded = self._load_from_pickle(accession, pickle_file_path)
-            if loaded:
-                return
+        if (
+            cache
+            and json_path.exists()
+            and self._load_from_json(accession, json_path)
+        ):
+            return
 
         self._load_from_uniprot_api(accession)
 
         if cache:
-            Path(pickle_file_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(pickle_file_path, "wb") as f:
-                pickle.dump(self.__dict__, f, pickle.HIGHEST_PROTOCOL)
+            json_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                with open(json_path, "w", encoding="utf-8") as f:
+                    json.dump(self.__dict__, f)
+            except (TypeError, ValueError) as e:
+                logger.warning(
+                    f"Could not write JSON cache for {accession}: {e}. "
+                    "Data will be re-fetched on next call."
+                )
 
-    def _load_from_pickle(self, accession: str, pickle_file_path: str) -> bool:
-        """Attempt to populate this instance from a cached pickle file.
+    def _load_from_json(self, accession: str, json_path: Path) -> bool:
+        """Populate this instance from a JSON cache file.
 
-        If the pickle cannot be loaded (e.g. it is corrupt or from an
-        incompatible version), the file is deleted so that a fresh fetch
-        is attempted on the next call.
+        JSON deserialization executes no code — unlike ``pickle.load()`` —
+        so this method is safe to call on any cache file reachable from the
+        configured cache directory (CWE-502 mitigation).
+
+        If the file is corrupt or incompatible it is deleted so that a fresh
+        fetch is attempted on the next call.
 
         Args:
-            accession (str): The UniProt accession, used only for logging.
-            pickle_file_path (str): Absolute path to the pickle cache file.
+            accession: The UniProt accession, used only for logging.
+            json_path: Absolute path to the JSON cache file.
 
         Returns:
-            bool: ``True`` if the pickle was loaded successfully, ``False``
-            otherwise.
+            ``True`` if the cache was loaded successfully, ``False`` otherwise.
         """
-        with open(pickle_file_path, "rb") as f:
-            try:
-                self.__dict__ = pickle.load(f)
-                logger.info(f"Loaded UNP pickle from {pickle_file_path}")
-                return True
-
-            except Exception:
-                logger.warning(
-                    f"Could not load pickle file for {accession}. Will delete it and fetch from uniprot"
-                )
-                os.unlink(pickle_file_path)
+        try:
+            with open(json_path, encoding="utf-8") as f:
+                self.__dict__ = json.load(f)
+            logger.info(f"Loaded UNP JSON cache from {json_path}")
+            return True
+        except Exception:
+            logger.warning(
+                f"Could not load JSON cache for {accession}. "
+                "Will delete it and fetch from UniProt."
+            )
+            json_path.unlink(missing_ok=True)
         return False
 
     @funcy.retry(3, errors=XMLSyntaxError, timeout=0.2)
@@ -441,6 +462,9 @@ class UNP:
             accession (str): A UniProt accession, optionally with an isoform
                 suffix (e.g. ``"P12345-2"``).
         """
+        validate_uniprot_accession(
+            accession
+        )  # reject traversal / malformed input
         self.seq_isoforms: Mapping[str, Any] = {}
         self.isoforms: Mapping[str, Any] = {}
         self.features: Mapping[str, str] = {}
