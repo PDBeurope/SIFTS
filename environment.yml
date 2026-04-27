@@ -7,9 +7,9 @@ dependencies:
   - pip
   - ipython
   - setuptools
-  - mmseqs2
-  - blast
-  - fasta3
+  - bioconda::mmseqs2
+  - bioconda::blast
+  - bioconda::fasta3
   - pip:
     - tqdm
     - biopython
