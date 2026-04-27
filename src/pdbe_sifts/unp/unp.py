@@ -388,7 +388,7 @@ class UNP:
         Args:
             accession (str): The accession to load (isoform suffix already stripped).
         """
-        cache = bool(os.getenv("SIFTS_NO_CACHE_ALL", True))
+        cache = not os.getenv("SIFTS_NO_CACHE_ALL")
         cache_dir = Path(get_uniprot_cache_dir(accession))
         pkl_path = safe_join(cache_dir, f"{accession}.pkl")
 
