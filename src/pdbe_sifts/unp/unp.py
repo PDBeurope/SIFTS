@@ -4,8 +4,8 @@ This allows for faster access to a small subset of required information
 from a large XML file.
 """
 
-import json
 import os
+import pickle
 import random
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -34,6 +34,51 @@ COLORS = {
     "yellow": 33,
     "blue": 34,
 }
+
+# ---------------------------------------------------------------------------
+# Safe pickle deserializer (CWE-502 mitigation)
+# ---------------------------------------------------------------------------
+
+_SAFE_BUILTINS = frozenset(
+    {
+        "str",
+        "int",
+        "float",
+        "bool",
+        "bytes",
+        "bytearray",
+        "list",
+        "tuple",
+        "dict",
+        "set",
+        "frozenset",
+        "NoneType",
+    }
+)
+
+
+class _RestrictedUnpickler(pickle.Unpickler):
+    """Pickle deserializer restricted to primitive builtin types.
+
+    Overrides :meth:`find_class` to raise :exc:`pickle.UnpicklingError` for
+    any class outside the :data:`_SAFE_BUILTINS` allowlist.  This prevents
+    arbitrary code execution even if a malicious ``.pkl`` file reaches the
+    cache directory (CWE-502 / OWASP A08:2021 mitigation).
+
+    The :class:`UNP` cache only ever stores plain Python primitives
+    (str, int, float, bool, None, list, tuple, dict), so this restriction
+    is lossless for legitimate cache files.
+    """
+
+    def find_class(self, module: str, name: str):
+        if module == "builtins" and name in _SAFE_BUILTINS:
+            import builtins
+
+            return getattr(builtins, name)
+        raise pickle.UnpicklingError(
+            f"Forbidden pickle class: {module}.{name} — "
+            "only primitive builtins are allowed in the UNP cache."
+        )
 
 
 @memoize
@@ -330,77 +375,80 @@ class UNP:
     secondary_accessions: list[str] = []
 
     def _load_uniprot_data(self, accession: str) -> None:
-        """Load the data for the accession from the UniProt XML file.
+        """Load the data for the accession from the UniProt cache or API.
 
-        Tries to load from a JSON cache file if one exists.  On a cache miss
-        the data is fetched from the UniProt API and written to a JSON file
-        for future calls.  Setting the ``SIFTS_NO_CACHE_ALL`` environment
-        variable to ``False`` disables both reading and writing of the cache.
+        Tries to load from a ``.pkl`` cache file using
+        :class:`_RestrictedUnpickler` (CWE-502 mitigation).  On a cache miss
+        the data is fetched from the UniProt API and serialised to a new
+        ``.pkl`` file.  Setting ``SIFTS_NO_CACHE_ALL`` disables caching.
 
-        Pickle (``.pkl``) cache files from older versions are deleted on first
-        encounter and replaced by safe JSON caches (CWE-502 mitigation).
+        Any ``.json`` files left over from the intermediate JSON-cache
+        migration are removed on first encounter.
 
         Args:
             accession (str): The accession to load (isoform suffix already stripped).
         """
         cache = bool(os.getenv("SIFTS_NO_CACHE_ALL", True))
         cache_dir = Path(get_uniprot_cache_dir(accession))
-        json_path = safe_join(cache_dir, f"{accession}.json")
+        pkl_path = safe_join(cache_dir, f"{accession}.pkl")
 
-        # Migration: remove stale unsafe pickle files (CWE-502).
-        old_pkl = cache_dir / f"{accession}.pkl"
-        if old_pkl.exists():
-            old_pkl.unlink()
-            logger.info(f"Removed stale unsafe pickle cache: {old_pkl}")
+        # Migration: remove transient .json files written during the intermediate
+        # JSON-cache phase (no longer used).
+        old_json = cache_dir / f"{accession}.json"
+        if old_json.exists():
+            old_json.unlink()
+            logger.info(f"Removed intermediate JSON cache: {old_json}")
 
         if (
             cache
-            and json_path.exists()
-            and self._load_from_json(accession, json_path)
+            and pkl_path.exists()
+            and self._load_from_pickle(accession, pkl_path)
         ):
             return
 
         self._load_from_uniprot_api(accession)
 
         if cache:
-            json_path.parent.mkdir(parents=True, exist_ok=True)
+            pkl_path.parent.mkdir(parents=True, exist_ok=True)
             try:
-                with open(json_path, "w", encoding="utf-8") as f:
-                    json.dump(self.__dict__, f)
-            except (TypeError, ValueError) as e:
+                with open(pkl_path, "wb") as f:
+                    pickle.dump(
+                        self.__dict__, f, protocol=pickle.HIGHEST_PROTOCOL
+                    )
+            except Exception as e:
                 logger.warning(
-                    f"Could not write JSON cache for {accession}: {e}. "
+                    f"Could not write pickle cache for {accession}: {e}. "
                     "Data will be re-fetched on next call."
                 )
 
-    def _load_from_json(self, accession: str, json_path: Path) -> bool:
-        """Populate this instance from a JSON cache file.
+    def _load_from_pickle(self, accession: str, pkl_path: Path) -> bool:
+        """Populate this instance from a safe pickle cache (CWE-502 mitigation).
 
-        JSON deserialization executes no code — unlike ``pickle.load()`` —
-        so this method is safe to call on any cache file reachable from the
-        configured cache directory (CWE-502 mitigation).
+        Uses :class:`_RestrictedUnpickler` which only permits primitive
+        builtin types.  Any attempt to deserialize a custom class raises
+        :exc:`pickle.UnpicklingError`, preventing arbitrary code execution.
 
-        If the file is corrupt or incompatible it is deleted so that a fresh
-        fetch is attempted on the next call.
+        If the file is corrupt or contains a forbidden class it is deleted
+        so that a fresh fetch is attempted on the next call.
 
         Args:
             accession: The UniProt accession, used only for logging.
-            json_path: Absolute path to the JSON cache file.
+            pkl_path: Absolute path to the ``.pkl`` cache file.
 
         Returns:
             ``True`` if the cache was loaded successfully, ``False`` otherwise.
         """
         try:
-            with open(json_path, encoding="utf-8") as f:
-                self.__dict__ = json.load(f)
-            logger.info(f"Loaded UNP JSON cache from {json_path}")
+            with open(pkl_path, "rb") as f:
+                self.__dict__ = _RestrictedUnpickler(f).load()
+            logger.info(f"Loaded UNP pickle cache from {pkl_path}")
             return True
         except Exception:
             logger.warning(
-                f"Could not load JSON cache for {accession}. "
-                "Will delete it and fetch from UniProt."
+                f"Could not load pickle cache for {accession} — "
+                "deleting and re-fetching from UniProt."
             )
-            json_path.unlink(missing_ok=True)
+            pkl_path.unlink(missing_ok=True)
         return False
 
     @funcy.retry(3, errors=XMLSyntaxError, timeout=0.2)
