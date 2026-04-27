@@ -1,3 +1,8 @@
+"""
+Author: Preeti Choudhary
+Description: read sifts csv files to export sifts data in mmCIF file
+"""
+
 import csv
 import gzip
 import os

@@ -1,8 +1,32 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import duckdb
 import pytest
 from pdbe_sifts.sequence_match.sequence_match_parser import SequenceMatchParser
+
+_STUB_ACCESSIONS = [
+    {
+        "accession": "P29373",
+        "provenance": "Swiss-Prot",
+        "annotation_score": 5.0,
+    },
+    {
+        "accession": "P83346",
+        "provenance": "Swiss-Prot",
+        "annotation_score": 3.0,
+    },
+]
+
+
+@pytest.fixture(autouse=True)
+def mock_fetch_accessions():
+    with patch(
+        "pdbe_sifts.sequence_match.sequence_match_parser.fetch_accessions",
+        return_value=_STUB_ACCESSIONS,
+    ):
+        yield
+
 
 DATA_DIR = Path(__file__).parent / "data"
 BLASTP_TSV = DATA_DIR / "blastp_hits" / "hits_tmp.tsv"

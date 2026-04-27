@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+"""
+Author: Preeti Choudhary
+Description: Main program to write sifts annotations in mmCIF file
+"""
+
 import argparse
 import gzip
 import shutil
@@ -10,6 +14,7 @@ from gemmi import cif
 
 from pdbe_sifts.base.exceptions import EntryFailedException, NoSegmentsError
 from pdbe_sifts.base.log import logger
+from pdbe_sifts.base.utils import safe_join, validate_entry_id
 from pdbe_sifts.sifts_to_mmcif import comm_utils
 from pdbe_sifts.sifts_to_mmcif.def_mmcif_cat import (
     NEW_MMCIF_CAT,
@@ -343,19 +348,27 @@ class ExportSIFTSTommCIF:
             FileNotFoundError: If the input CIF file does not exist.
             NoSegmentsError: If no SIFTS segments could be written for the entry.
             EntryFailedException: If any output file fails its post-write checks.
+            ValueError: If *entry_id* fails the path-safety allowlist check.
         """
+        validate_entry_id(entry_id)
         out = Path(self.output_dir)
         out.mkdir(parents=True, exist_ok=True)
-        self.sifts_updated_cif = out / f"{entry_id}_sifts_updated.cif.gz"
-        self.sifts_only_cif = out / f"{entry_id}_sifts_only.cif.gz"
+        self.sifts_updated_cif = safe_join(
+            out, f"{entry_id}_sifts_updated.cif.gz"
+        )
+        self.sifts_only_cif = safe_join(out, f"{entry_id}_sifts_only.cif.gz")
 
         if self.sifts_csv_base:
             seg_cursor = None
-            sifts_seg_csv = Path(self.sifts_csv_base) / f"{entry_id}_seg.csv.gz"
+            sifts_seg_csv = safe_join(
+                self.sifts_csv_base, f"{entry_id}_seg.csv.gz"
+            )
             if not sifts_seg_csv.exists():
                 logger.error(f"{sifts_seg_csv} does not exist")
 
-            sifts_res_csv = Path(self.sifts_csv_base) / f"{entry_id}_res.csv.gz"
+            sifts_res_csv = safe_join(
+                self.sifts_csv_base, f"{entry_id}_res.csv.gz"
+            )
             if not sifts_res_csv.exists():
                 logger.error(f"{sifts_res_csv} does not exist")
         else:
@@ -526,10 +539,12 @@ def run():
     if not Path(args.input_cif).is_file():
         parser.error(f"-i must be a CIF file, got: {args.input_cif}")
 
-    entry_id = args.entry
-    if not entry_id:
+    if args.entry:
+        entry_id = validate_entry_id(args.entry.lower())
+    else:
         block = cif.read(str(args.input_cif)).sole_block()
-        entry_id = block.find_value("_entry.id").strip('"').lower()
+        raw_id = block.find_value("_entry.id").strip('"').lower()
+        entry_id = validate_entry_id(raw_id)
 
     track_changes = not args.no_track_changes
     obj = ExportSIFTSTommCIF(

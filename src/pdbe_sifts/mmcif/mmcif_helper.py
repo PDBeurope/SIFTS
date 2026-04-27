@@ -59,7 +59,7 @@ class mmCIF:
         """Initialise by reading and caching all required mmCIF categories.
 
         Args:
-            pdbid: Four-letter PDB identifier (e.g. ``"1abc"``).
+            pdbid: PDB identifier (e.g. ``"1abc"``).
             chem_comp_dict: A :class:`ChemCompMapping` instance used to
                 convert three-letter residue codes to one-letter codes.
             cif_file: Path to the ``.cif`` or ``.cif.gz`` file.

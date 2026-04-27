@@ -12,7 +12,7 @@ from funcy.debug import log_durations
 import pdbe_sifts.segments_generation.generate_xref_csv as generate_xref_csv
 from pdbe_sifts.base.exceptions import NotAPolyPeptide, ObsoleteUniProtError
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.base.utils import SiftsAction
+from pdbe_sifts.base.utils import SiftsAction, validate_entry_id
 from pdbe_sifts.mmcif.chem_comp import ChemCompMapping
 from pdbe_sifts.mmcif.curator.cif_sequence_update import CifSequenceUpdater
 from pdbe_sifts.mmcif.entry import Entry
@@ -164,7 +164,7 @@ class SiftsAlign:
 
         p = Path(cif_path)
         if p.name.endswith(".cif.gz"):
-            enriched = p.parent / (p.name[:-7] + "_pdbx_added.cif")
+            enriched = Path(p.parent, (p.name[:-7] + "_pdbx_added.cif"))
         else:
             enriched = p.with_name(p.stem + "_pdbx_added" + p.suffix)
 
@@ -184,8 +184,13 @@ class SiftsAlign:
         writes output CSV files to ``self.out_dir``.
 
         Args:
-            entry_id: Four-letter PDB identifier (e.g. ``"1abc"``).
+
+            entry_id: PDB identifier (e.g. ``"1abc"``).
+
+        Raises:
+            ValueError: If *entry_id* fails the path-safety allowlist check.
         """
+        validate_entry_id(entry_id)
         cif_file = self.cif_file
         if self.no_used_cif_category_modified(cif_file):
             logger.info(
@@ -562,10 +567,11 @@ def run():
         parser.error(f"-i must be a CIF file, got: {cif_input}")
 
     if args.entry:
-        entry_id = args.entry
+        entry_id = validate_entry_id(args.entry.lower())
     else:
         block = gemmi.cif.read(str(cif_input)).sole_block()
-        entry_id = block.find_value("_entry.id").strip('"').lower()
+        raw_id = block.find_value("_entry.id").strip('"').lower()
+        entry_id = validate_entry_id(raw_id)
         logger.info(f"Derived entry_id '{entry_id}' from mmCIF _entry.id field")
 
     logger.info(vars(args))

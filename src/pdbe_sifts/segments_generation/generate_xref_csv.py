@@ -5,13 +5,13 @@ import ast
 import csv
 import gzip
 import os
-from pathlib import Path
 from typing import NamedTuple
 
 from funcy.debug import log_durations
 
 import pdbe_sifts.segments_generation.alignment as align
 from pdbe_sifts.base.log import logger
+from pdbe_sifts.base.utils import safe_join
 from pdbe_sifts.mmcif.chain import Chain
 from pdbe_sifts.mmcif.entry import Entry
 from pdbe_sifts.unp.unp import UNP
@@ -304,9 +304,9 @@ def write_seg_csv(out_dir, pdbid, data, nf90_mode):
         because the mapping was unchanged.
     """
     write_flag = False
-    file_name = Path(out_dir, f"{pdbid}_seg.csv.gz")
-    nf90_file_name = Path(out_dir, f"{pdbid}_nf90_seg.csv.gz")
-    del_file_name = Path(out_dir, f"{pdbid}_delta.csv.gz")
+    file_name = safe_join(out_dir, f"{pdbid}_seg.csv.gz")
+    nf90_file_name = safe_join(out_dir, f"{pdbid}_nf90_seg.csv.gz")
+    del_file_name = safe_join(out_dir, f"{pdbid}_delta.csv.gz")
     if nf90_mode:
         logger.info(f"Writing csv for {nf90_file_name}")
         write_flag = True
@@ -324,7 +324,7 @@ def write_seg_csv(out_dir, pdbid, data, nf90_mode):
                 sw.writerow(item)
     else:
         # track if uniprot mapping has changed or not
-        res_file_name = Path(out_dir, f"{pdbid}_res.csv.gz")
+        res_file_name = safe_join(out_dir, f"{pdbid}_res.csv.gz")
         unp_delta = []
         unp_delta = track_mapping_change(data, file_name, res_file_name)
 
@@ -410,7 +410,7 @@ def write_res_csv(out_dir, pdbid, data):
             The outer iterable groups residues by chain; the inner iterable
             contains the individual residue rows.
     """
-    file_name = Path(out_dir, f"{pdbid}_res.csv.gz")
+    file_name = safe_join(out_dir, f"{pdbid}_res.csv.gz")
     logger.info(f"Writing csv for {file_name}")
     with gzip.open(file_name, "wt") as f:
         sw = csv.writer(
