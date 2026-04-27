@@ -32,25 +32,19 @@ The following binaries must be installed and available on `PATH`:
 | [FASTA36](https://fasta.bioch.virginia.edu/wrpearson/fasta/) (`lalign36`) | Local pairwise alignment | `conda install -c bioconda fasta3` |
 | [BLAST+](https://blast.ncbi.nlm.nih.gov/) | Optional alternative to MMseqs2 | `conda install -c bioconda blast` |
 
-### A. Install using conda (recommended)
+### A. Install using micromamba (recommended)
 ```bash
 # Create environment from file
-conda env create -f environment.yml
+micromamba env create -f environment.yml
 
 # Activate environment
-conda activate pdbe_sifts
+micromamba activate pdbe_sifts
 
 # Install pdbe_sifts package in editable mode
 pip install -e .
 
 # Or install directly
 pip install pdbe_sifts
-
-# install mmseq2
-conda install -c conda-forge mmseqs2
-
-# install fasta3 to get lalign36
-conda install -c bioconda fasta3
 ```
 
 ### B. Install using uv (fast alternative if only pdbe_sifts python package is needed)
