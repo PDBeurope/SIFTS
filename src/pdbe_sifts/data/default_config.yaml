@@ -1,7 +1,7 @@
 user:
-  base_dir: null
-  nobackup_dir: null
-  target_db: null
+  base_dir: null        # path where to save sifts results
+  nobackup_dir: null    # path where to save sifts results (temp)
+  target_db: null       # path to your search database
   unp_pdb_xrefs: null   # path to uniprot_pdb.duckdb — set automatically by `pdbe_sifts init`
 
 
