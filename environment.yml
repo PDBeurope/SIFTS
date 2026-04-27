@@ -3,16 +3,19 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - python>=3.10
+  - python>=3.10,<3.13
   - pip
   - ipython
   - setuptools
   - bioconda::mmseqs2
   - bioconda::blast
   - bioconda::fasta3
+  - numpy
+  - biopython
+  - scikit-learn
+  - conda-forge::ete4
   - pip:
     - tqdm
-    - biopython
     - funcy
     - lxml
     - requests
@@ -20,11 +23,8 @@ dependencies:
     - pymmseqs
     - coloredlogs
     - pyyaml
-    - scikit-learn
-    - ete4
     - omegaconf
     - gemmi
     - duckdb
     - platformdirs
     - python-dateutil
-    - numpy
