@@ -17,6 +17,7 @@ import pandas as pd
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.paths import get_conf_unp_pdb_xrefs_path
+from pdbe_sifts.base.utils import safe_join
 from pdbe_sifts.sequence_match.scoring_function_helper import get_tax_weight
 from pdbe_sifts.unp.unp import fetch_accessions
 
@@ -116,7 +117,7 @@ FROM read_csv(
     delim='\\t',
     header=false
 )
-WHERE fident >= {identity_cutoff};
+WHERE fident >= ?;
 """
 
 # Read TSV from blastp with IDENTITY FILTER
@@ -171,7 +172,7 @@ FROM read_csv(
     delim='\\t',
     header=false
 )
-WHERE pident / 100.0 >= {identity_cutoff};
+WHERE pident / 100.0 >= ?;
 """
 
 
@@ -262,34 +263,47 @@ class SequenceMatchParser:
         - Applies identity filtering at import time
         - Initializes the accession metadata table
         """
+        # --- Security: validate file path and identity_cutoff before any SQL ---
+        # 1. Resolve to absolute path and verify it is a regular file.
+        resolved = self.result_file_path.resolve()
+        if not resolved.exists():
+            raise FileNotFoundError(f"Result file not found: {resolved}")
+        # safe_join confirms the resolved file stays within its own directory
+        # (guards against symlink traversal; reuses the utility from base/utils).
+        safe_join(resolved.parent, resolved.name)
+
+        # 2. Validate identity_cutoff is a proper float in [0.0, 1.0].
+        if not (0.0 <= float(self.identity_cutoff) <= 1.0):
+            raise ValueError(
+                f"identity_cutoff must be in [0.0, 1.0], got {self.identity_cutoff!r}"
+            )
+
+        # 3. SQL-escape the resolved path (defence-in-depth for read_csv(), which
+        #    does not support DuckDB ? parameters — the path must be a literal).
+        safe_path = str(resolved).replace("'", "''")
+        # -----------------------------------------------------------------------
+
         conn = duckdb.connect(str(self.db_path))
 
         # Create table
         conn.execute(CREATE_TABLE_HITS)
 
-        # Insert data with identity filter
+        # Insert data with identity filter.
+        # tsv_path is interpolated (SQL-escaped above); identity_cutoff uses ? param.
         if self.format == "mmseqs":
-            sql = INSERT_MMSEQS_TABLE_HITS.format(
-                tsv_path=str(self.result_file_path),
-                identity_cutoff=self.identity_cutoff,
-            )
+            sql = INSERT_MMSEQS_TABLE_HITS.format(tsv_path=safe_path)
         elif self.format == "blastp":
-            sql = INSERT_BLASTP_TABLE_HITS.format(
-                tsv_path=str(self.result_file_path),
-                identity_cutoff=self.identity_cutoff,
-            )
+            sql = INSERT_BLASTP_TABLE_HITS.format(tsv_path=safe_path)
         else:
             raise ValueError(f"Unsupported format: {self.format}")
 
         logger.info(f"Loading data with identity >= {self.identity_cutoff}...")
-        if self.result_file_path.stat().st_size == 0:
-            logger.warning(
-                f"Empty result file: {self.result_file_path}. No hits to load."
-            )
+        if resolved.stat().st_size == 0:
+            logger.warning(f"Empty result file: {resolved}. No hits to load.")
             conn.close()
             self.create_accession_table()
             return
-        conn.execute(sql)
+        conn.execute(sql, [float(self.identity_cutoff)])
 
         # Log how many rows were loaded
         count = conn.execute("SELECT COUNT(*) FROM hits").fetchone()[0]

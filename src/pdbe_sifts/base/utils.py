@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import re
 from datetime import date, datetime
 from pathlib import Path
 from xml.etree import ElementTree
@@ -23,6 +24,101 @@ UNIPROT_REGEX = (
     r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}"
 )
 UNIPROT_API_BASE_URL = "https://rest.uniprot.org/uniprotkb"
+
+_ENTRY_ID_RE = re.compile(r"\A[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}\Z")
+
+# UniProt accession allowlist — covers both 6-char and 10-char formats,
+# plus optional isoform suffix (-N).  Never relaxed: any traversal sequence,
+# space, or special char falls outside the set.
+_ACCESSION_RE = re.compile(
+    r"\A(?:[OPQ][0-9][A-Z0-9]{3}[0-9]"
+    r"|[A-NR-Z][0-9](?:[A-Z][A-Z0-9]{2}[0-9]){1,2})"
+    r"(?:-\d+)?\Z"
+)
+
+
+def validate_entry_id(entry_id: str) -> str:
+    """Validate that *entry_id* is safe for use in output file paths.
+
+    Accepts only lowercase alphanumeric characters, hyphens, and underscores,
+    starting with an alphanumeric character (1–64 characters total).  This
+    allowlist prevents CWE-22 path-traversal attacks that could arise when
+    ``entry_id`` is derived from the untrusted ``_entry.id`` mmCIF field or
+    the ``--entry`` CLI argument.
+
+    Args:
+        entry_id: The entry identifier to validate.
+
+    Returns:
+        The unchanged *entry_id* when it passes validation.
+
+    Raises:
+        ValueError: If *entry_id* contains path separators, traversal
+            sequences (``..``), null bytes, or any other character outside
+            the ``[a-z0-9_-]`` allowlist.
+    """
+    if not _ENTRY_ID_RE.match(entry_id or ""):
+        raise ValueError(
+            f"Invalid entry_id {entry_id!r}: must match [a-z0-9][a-z0-9_-]{{0,63}}. "
+            "Path separators and traversal sequences are not permitted."
+        )
+    return entry_id
+
+
+def safe_join(base_dir: "Path | str", filename: str) -> Path:
+    """Join *filename* to *base_dir* and verify the result stays inside *base_dir*.
+
+    Both paths are resolved to their canonical absolute forms before
+    comparison, so symlinks and ``..`` components cannot escape the
+    intended directory (CWE-22 / CWE-73 defence in depth).
+
+    Args:
+        base_dir: The intended output directory.
+        filename: A plain filename (no directory separators expected).
+
+    Returns:
+        The resolved target :class:`~pathlib.Path`.
+
+    Raises:
+        ValueError: If the resulting path would be outside *base_dir*.
+    """
+    base = Path(base_dir).resolve()
+    target = (base / filename).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        raise ValueError(
+            f"Path traversal detected: {target!r} escapes base directory {base!r}"
+        ) from None
+    return target
+
+
+def validate_uniprot_accession(accession: str) -> str:
+    """Validate that *accession* is a well-formed UniProt accession.
+
+    Accepts both the 6-character (``P12345``) and 10-character
+    (``A0A000B1C2``) formats, plus an optional isoform suffix (``-N``).
+    This allowlist prevents CWE-502 / path-traversal attacks that arise
+    when the accession is used to construct the on-disk pickle/JSON cache
+    path via :func:`~pdbe_sifts.base.paths.uniprot_cache_dir`.
+
+    Args:
+        accession: The raw accession string to validate.
+
+    Returns:
+        The unchanged *accession* when it passes validation.
+
+    Raises:
+        ValueError: If *accession* contains path separators, traversal
+            sequences, or any character outside the UniProt allowlist.
+    """
+    if not _ACCESSION_RE.match(accession or ""):
+        raise ValueError(
+            f"Invalid UniProt accession {accession!r}: "
+            "must match the UniProt format (e.g. P12345, Q9Y6K9-2). "
+            "Path separators and traversal sequences are not permitted."
+        )
+    return accession
 
 
 def fetch_uniprot_file(
