@@ -443,9 +443,9 @@ class UNP:
                 self.__dict__ = _RestrictedUnpickler(f).load()
             logger.info(f"Loaded UNP pickle cache from {pkl_path}")
             return True
-        except Exception:
+        except Exception as e:
             logger.warning(
-                f"Could not load pickle cache for {accession} — "
+                f"Could not load pickle cache for {accession}: {e!r} — "
                 "deleting and re-fetching from UniProt."
             )
             pkl_path.unlink(missing_ok=True)
