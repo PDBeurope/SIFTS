@@ -81,6 +81,28 @@ class _RestrictedUnpickler(pickle.Unpickler):
         )
 
 
+def _to_plain_python(obj):
+    """Recursively convert lxml / other str-subclasses to plain Python types.
+
+    lxml XPath results are :class:`lxml.etree._ElementUnicodeResult` instances
+    — subclasses of :class:`str` that pickle serialises under the lxml module
+    name, causing :class:`_RestrictedUnpickler` to reject them.  Converting
+    the whole ``__dict__`` to plain builtins before writing the cache ensures
+    that the pkl is always safe to reload.
+    """
+    if isinstance(obj, dict):
+        return {
+            _to_plain_python(k): _to_plain_python(v) for k, v in obj.items()
+        }
+    if isinstance(obj, list | tuple):
+        converted = [_to_plain_python(v) for v in obj]
+        return tuple(converted) if isinstance(obj, tuple) else converted
+    # str subclasses (e.g. _ElementUnicodeResult) → plain str; str(str) is a no-op
+    if isinstance(obj, str):
+        return str(obj)
+    return obj
+
+
 @memoize
 def get_unp_object(acc: str) -> "UNP | None":
     """Return a memoised :class:`UNP` instance for the given accession.
@@ -413,7 +435,9 @@ class UNP:
             try:
                 with open(pkl_path, "wb") as f:
                     pickle.dump(
-                        self.__dict__, f, protocol=pickle.HIGHEST_PROTOCOL
+                        _to_plain_python(self.__dict__),
+                        f,
+                        protocol=pickle.HIGHEST_PROTOCOL,
                     )
             except Exception as e:
                 logger.warning(
