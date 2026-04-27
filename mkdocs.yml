@@ -1,7 +1,7 @@
 site_name: pdbe_sifts
 site_description: Run the SIFTS pipeline locally — EMBL-EBI PDBe
-repo_url: https://github.com/PDBe-KB/pdbe_sifts
-repo_name: PDBe-KB/pdbe_sifts
+repo_url: https://github.com/PDBeurope/SIFTS
+repo_name: PDBeurope/pdbe_sifts
 copyright: "MIT License — EMBL-EBI PDBe team"
 
 theme:

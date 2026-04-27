@@ -1,3 +1,8 @@
+"""
+Author: Preeti Choudhary
+Description: Keeps track of change in mappings in sifts when compared to last run
+"""
+
 import csv
 import gzip
 import os
@@ -5,6 +10,8 @@ import os
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.utils import get_next_release_date
 from pdbe_sifts.sifts_to_mmcif.def_mmcif_cat import MAPPED_DB
+
+
 
 
 def read_sifts_segments(block):

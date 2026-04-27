@@ -32,21 +32,72 @@ The following binaries must be installed and available on `PATH`:
 | [FASTA36](https://fasta.bioch.virginia.edu/wrpearson/fasta/) (`lalign36`) | Local pairwise alignment | `conda install -c bioconda fasta3` |
 | [BLAST+](https://blast.ncbi.nlm.nih.gov/) | Optional alternative to MMseqs2 | `conda install -c bioconda blast` |
 
-### Python package
-
+### A. Install using micromamba (recommended)
 ```bash
-# Recommended: conda environment
-conda env create -f environment.yml
-conda activate pdbe_sifts
+# Create environment from file
+micromamba env create -f environment.yml
+
+# Activate environment
+micromamba activate pdbe_sifts
+
+# Install pdbe_sifts package in editable mode
 pip install -e .
 
-# Or directly
+# Or install directly
 pip install pdbe_sifts
+```
+
+### B. Install using uv (fast alternative if only pdbe_sifts python package is needed)
+
+
+#### 1. Install uv (if not already installed)
+
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Alternative via pip
+pip install uv
+```
+
+#### 2. Clone the repository
+
+```bash
+git clone https://github.com/PDBeurope/SIFTS
+cd SIFTS
+```
+
+#### 3. Create virtual environment and install dependencies
+
+```bash
+# Create a virtual environment and install all dependencies
+uv sync
+
+# This will:
+# - Create a .venv directory
+# - Install Python 3.10 if needed
+# - Install all dependencies from pyproject.toml
+# - Lock versions in uv.lock
+```
+
+#### 4. Activate the virtual environment
+
+```bash
+# macOS/Linux
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
 ```
 
 **Requirements:** Python ≥ 3.10 · 16 GB RAM minimum (32 GB+ recommended for large datasets)
 
 ---
+
+
 
 ## Quick Start
 

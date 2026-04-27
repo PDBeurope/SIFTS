@@ -40,7 +40,7 @@ class Chain:
 
         Args:
             mmcif: Parsed mmCIF object for the parent entry.
-            pdbid: Four-letter PDB identifier (e.g. ``"1abc"``).
+            pdbid: PDB identifier (e.g. ``"1abc"``).
             auth_asym_id: Author chain ID as deposited in the PDB.
             entity_id: mmCIF entity identifier for this chain.
             struct_asym_id: Structural asymmetric unit chain ID.

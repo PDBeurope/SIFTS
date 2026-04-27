@@ -164,7 +164,7 @@ class SiftsAlign:
 
         p = Path(cif_path)
         if p.name.endswith(".cif.gz"):
-            enriched = p.parent / (p.name[:-7] + "_pdbx_added.cif")
+            enriched = Path(p.parent, (p.name[:-7] + "_pdbx_added.cif"))
         else:
             enriched = p.with_name(p.stem + "_pdbx_added" + p.suffix)
 
@@ -184,7 +184,8 @@ class SiftsAlign:
         writes output CSV files to ``self.out_dir``.
 
         Args:
-            entry_id: Four-letter PDB identifier (e.g. ``"1abc"``).
+
+            entry_id: PDB identifier (e.g. ``"1abc"``).
 
         Raises:
             ValueError: If *entry_id* fails the path-safety allowlist check.
