@@ -41,12 +41,17 @@ class ChemCompMapping:
     _dictionary: Mapping[str, str] = {}
 
     def __init__(self):
-        """Load the three-to-one-letter mapping from the bundled data file."""
-        cc_file = files("pdbe_sifts.data").joinpath(
-            "three_to_one_letter_mapping.csv"
-        )
+        """Load the three-to-one-letter mapping, preferring the user cache over bundled data."""
+        from pdbe_sifts.base.paths import get_conf_three_to_one_csv_path
 
-        self.hydrate(cc_file)
+        cache_path = get_conf_three_to_one_csv_path()
+        if cache_path and cache_path.exists():
+            self.hydrate(cache_path)
+        else:
+            cc_file = files("pdbe_sifts.data").joinpath(
+                "three_to_one_letter_mapping.csv"
+            )
+            self.hydrate(cc_file)
 
     def hydrate(self, cc_file):
         """Populate the internal mapping dictionary from a CSV file.
