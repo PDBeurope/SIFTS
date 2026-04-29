@@ -188,6 +188,8 @@ pdbe_sifts sifts2mmcif \
 | `pdbe_sifts segments` | Generate SIFTS mappings for a **single** mmCIF entry |
 | `pdbe_sifts db_load` | Bulk-load segment/residue CSVs from segments generation into DuckDB |
 | `pdbe_sifts sifts2mmcif` | Inject SIFTS mappings into an annotated mmCIF file |
+| `pdbe_sifts update_ccd_mapping` | Check whether the remote CCD file is newer than the cached three-to-one letter mapping CSV and regenerate it if so |
+| `pdbe_sifts seq2seq` | Align canonical deposited sequence vs coordinate sequence |
 
 ---
 
@@ -318,9 +320,9 @@ src/pdbe_sifts/
 ├── sifts_segments_generation.py   # Single-entry segment generation (SiftsAlign)
 ├── sifts_fasta_builder.py         # Extract sequences from mmCIF → FASTA (FastaBuilder)
 ├── sifts_database_loader.py       # Standalone bulk-loader script (wraps SiftsDB)
-├── config/                        # OmegaConf configuration loading
+├── config/                        # OmegaConf configuration loading — defines load_config()
 ├── base/
-│   ├── paths.py                   # Single load_config() + all configuration getters
+│   ├── paths.py                   # All configuration getters (imports load_config() from config/)
 │   ├── utils.py                   # UniProt fetch, CPU helpers, SiftsAction
 │   ├── log.py                     # Logging setup (StreamHandler, coloredlogs)
 │   └── exceptions.py              # All custom exceptions (centralised)
@@ -349,4 +351,4 @@ EMBL-EBI PDBe team: Adam Bellaiche, Preeti Choudhary, Sreenath Sasidharan Nair, 
 
 ## License
 
-MIT
+Apache-2.0
