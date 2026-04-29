@@ -88,3 +88,9 @@ def get_conf_unp_pdb_xrefs_path() -> Path | None:
     """Return the path to the uniprot_pdb DuckDB index from config, or None."""
     val = conf.user.unp_pdb_xrefs
     return Path(val) if val else None
+
+
+def get_conf_three_to_one_csv_path() -> Path | None:
+    """Return the cache path for three_to_one_letter_mapping.csv, or None if unset."""
+    val = conf.cache.three_to_one
+    return Path(val) if val else None

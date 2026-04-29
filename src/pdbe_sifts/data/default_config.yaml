@@ -19,6 +19,7 @@ cache:
   base: ${location.nobackup_dir}/sifts_data_cache/
   uniprot: ${cache.base}/uniprot/
   ccd: ${cache.base}/ccd/
+  three_to_one: ${cache.base}/three_to_one_letter_mapping.csv
 
 
 # ---------------------------------------------------------------------------

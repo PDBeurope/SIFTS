@@ -34,9 +34,10 @@ def main():
     * ``fasta_build``      — extract query FASTA sequences from mmCIF files.
     * ``segments``         — generate SIFTS segments for a single entry.
     * ``db_load``          — bulk-load segment/residue CSVs into DuckDB.
-    * ``update_ncbi``      — refresh the local NCBI taxonomy database.
-    * ``sifts2mmcif``      — inject SIFTS mappings back into a mmCIF file.
-    * ``seq2seq``          — align canonical deposited sequence vs coordinate sequence.
+    * ``update_ncbi``         — refresh the local NCBI taxonomy database.
+    * ``update_ccd_mapping``  — refresh the cached three-to-one letter mapping CSV if outdated.
+    * ``sifts2mmcif``         — inject SIFTS mappings back into a mmCIF file.
+    * ``seq2seq``             — align canonical deposited sequence vs coordinate sequence.
     """
     parser = argparse.ArgumentParser(
         prog="pdbe_sifts", description="PDBe SIFTS mapping pipeline"
@@ -304,6 +305,15 @@ def main():
         help="Update the local NCBI taxonomy database (ete4).",
     )
 
+    ######### UPDATE CCD MAPPING
+    subparsers.add_parser(
+        "update_ccd_mapping",
+        help=(
+            "Check whether the remote CCD file is newer than the cached "
+            "three_to_one_letter_mapping.csv and regenerate it if so."
+        ),
+    )
+
     ######### SIFTS → mmCIF
     sifts2mmcif_parser = subparsers.add_parser(
         "sifts2mmcif",
@@ -421,6 +431,24 @@ def main():
             logger.info("NCBI taxonomy database ready.")
         except Exception as e:
             logger.warning(f"NCBI taxonomy initialization failed: {e}")
+        try:
+            logger.info("Generating CCD three-to-one letter mapping …")
+            from pdbe_sifts.base.paths import get_conf_three_to_one_csv_path
+            from pdbe_sifts.mmcif.generate_ccd_mapping import (
+                DEFAULT_CCD_URL,
+                generate_mapping_to_cache,
+            )
+
+            csv_path = get_conf_three_to_one_csv_path()
+            if csv_path:
+                generate_mapping_to_cache(DEFAULT_CCD_URL, csv_path)
+                logger.info("CCD mapping written to %s", csv_path)
+            else:
+                logger.warning(
+                    "conf.cache.three_to_one is unset; skipping CCD mapping."
+                )
+        except Exception as e:
+            logger.warning("Failed to generate CCD mapping: %s", e)
 
     elif args.command == "show":
         cfg = load_config(args.config)
@@ -509,6 +537,38 @@ def main():
         ncbi = NCBITaxa()
         ncbi.update_taxonomy_database()
         logger.info("NCBI taxonomy database updated.")
+
+    elif args.command == "update_ccd_mapping":
+        from pdbe_sifts.base.paths import get_conf_three_to_one_csv_path
+        from pdbe_sifts.mmcif.generate_ccd_mapping import (
+            DEFAULT_CCD_URL,
+            generate_mapping_to_cache,
+            get_cached_ccd_date,
+            get_remote_ccd_date,
+        )
+
+        csv_path = get_conf_three_to_one_csv_path()
+        if not csv_path:
+            logger.error(
+                "conf.cache.three_to_one is unset. Run `pdbe_sifts init` first."
+            )
+        else:
+            readme_path = csv_path.with_suffix(".README")
+            cached_date = get_cached_ccd_date(readme_path)
+            remote_date = get_remote_ccd_date(DEFAULT_CCD_URL)
+            if cached_date is None or remote_date > cached_date:
+                logger.info(
+                    "Updating CCD mapping (remote: %s) …",
+                    remote_date.isoformat(),
+                )
+                generate_mapping_to_cache(DEFAULT_CCD_URL, csv_path)
+                logger.info("CCD mapping updated at %s", csv_path)
+            else:
+                logger.info(
+                    "CCD mapping is already up-to-date (cached: %s, remote: %s).",
+                    cached_date.isoformat(),
+                    remote_date.isoformat(),
+                )
 
     elif args.command == "sifts2mmcif":
         from gemmi import cif as gcif
