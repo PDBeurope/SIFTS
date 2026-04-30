@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/pdbe-sifts
+      url: https://pypi.org/project/pdbe_sifts
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
 
