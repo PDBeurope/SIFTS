@@ -1,6 +1,6 @@
 # Contributing to pdbe_sifts
 
-Thank you for your interest in contributing to **pdbe_sifts** — the open-source SIFTS pipeline from EMBL-EBI PDBe!
+Thank you for your interest in contributing to **pdbe_sifts**, the open-source SIFTS pipeline from EMBL-EBI PDBe!
 This document covers everything you need to go from zero to an accepted pull request.
 
 ---
@@ -31,11 +31,11 @@ Please be respectful and constructive in all interactions.
 
 You do not need to write code to contribute meaningfully. We welcome:
 
-- **Bug reports** — something broken? Open an issue.
-- **Documentation** — typos, unclear steps, missing examples.
-- **Tests** — additional unit or integration tests are always valuable.
-- **Feature requests** — open an issue to discuss before implementing.
-- **Code fixes and features** — bug fixes, performance improvements, new capabilities.
+- **Bug reports** -- something broken? Open an issue.
+- **Documentation** -- typos, unclear steps, missing examples.
+- **Tests** -- additional unit or integration tests are always valuable.
+- **Feature requests** -- open an issue to discuss before implementing.
+- **Code fixes and features** -- bug fixes, performance improvements, new capabilities.
 
 If you are unsure where to start, look for open issues or check the areas flagged in the README.
 
@@ -55,7 +55,7 @@ The following tools must be installed and available on your `PATH` before you be
 
 **Python ≥ 3.10** and **16 GB RAM minimum** (32 GB+ recommended for large datasets) are also required.
 
-### Option A — uv (recommended for development)
+### Option A -- uv (recommended for development)
 
 ```bash
 # 1. Fork the repository on GitHub, then clone your fork
@@ -79,7 +79,7 @@ pip install -e ".[dev]"
 pre-commit install
 ```
 
-### Option B — micromamba
+### Option B -- micromamba
 
 ```bash
 micromamba env create -f environment.yml
@@ -207,7 +207,7 @@ improving them also improves the published documentation.
    - Any **testing** you did beyond the automated suite.
 5. A maintainer will review your PR. Please respond to review comments promptly.
 
-Keep PRs **focused** — one logical change per PR is much easier to review
+Keep PRs **focused** -- one logical change per PR is much easier to review
 and merge than a large mixed-purpose change.
 
 ---
