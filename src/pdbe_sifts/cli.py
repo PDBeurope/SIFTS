@@ -1,6 +1,11 @@
 import argparse
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as metadata_version
 from pathlib import Path
 
+from omegaconf import OmegaConf
+
+from pdbe_sifts import __version__
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.paths import (
     get_conf_user_base_dir,
@@ -21,12 +26,85 @@ from pdbe_sifts.config import (
 from pdbe_sifts.sequence_match.target_database import TargetDb
 from pdbe_sifts.sifts_sequence_match import SiftsSequenceMatch
 
+CACHE_PATH_CHOICES = ("base", "uniprot", "ccd", "three_to_one")
+CACHE_CONFIG_KEYS = {
+    "base": "cache.base",
+    "uniprot": "cache.uniprot",
+    "ccd": "cache.ccd",
+    "three_to_one": "cache.three_to_one",
+}
+
+
+def _get_pdbe_sifts_version() -> str:
+    """Return the installed package version."""
+    try:
+        return metadata_version("pdbe_sifts")
+    except PackageNotFoundError:
+        return __version__
+
+
+def _resolved_config_path(cfg, key: str) -> Path | None:
+    """Return a resolved config value as a path, or None when it is unset."""
+    value = OmegaConf.select(cfg, key)
+    if value is None:
+        return None
+
+    raw_value = str(value).strip()
+    if not raw_value or raw_value.lower() in {"none", "null"}:
+        return None
+
+    path = Path(raw_value).expanduser()
+    if any(part.lower() in {"none", "null"} for part in path.parts):
+        return None
+    return path
+
+
+def _resolve_cache_paths(cfg) -> dict[str, Path]:
+    """Resolve the configured cache paths from a loaded config."""
+    cache_paths = {}
+    missing_keys = []
+    for name, key in CACHE_CONFIG_KEYS.items():
+        try:
+            path = _resolved_config_path(cfg, key)
+        except Exception:
+            path = None
+        if path is None:
+            missing_keys.append(key)
+        else:
+            cache_paths[name] = path
+
+    if missing_keys:
+        keys = ", ".join(missing_keys)
+        raise ValueError(
+            "Cache configuration is incomplete "
+            f"({keys}). Set user.nobackup_dir or cache.base in config.yaml."
+        )
+    return cache_paths
+
+
+def _setup_cache(
+    config_path: Path | None = None, create: bool = True
+) -> dict[str, Path]:
+    """Create configured cache directories and return their paths."""
+    cfg = load_config(config_path)
+    cache_paths = _resolve_cache_paths(cfg)
+
+    if create:
+        for key in ("base", "uniprot", "ccd"):
+            cache_paths[key].mkdir(parents=True, exist_ok=True)
+        cache_paths["three_to_one"].parent.mkdir(parents=True, exist_ok=True)
+
+    return cache_paths
+
 
 def main():
     """Entry point for the ``pdbe_sifts`` command-line interface.
 
     Parses sub-commands and dispatches to the appropriate pipeline component:
 
+    * ``version``          — print the installed pdbe_sifts version.
+    * ``setup_cache``      — create configured cache directories and print their
+      path.
     * ``init``             — write the default configuration file and download xrefs file.
     * ``show``             — print the resolved configuration.
     * ``build_db``         — build a reference sequence database.
@@ -57,8 +135,43 @@ def main():
             "Default: INFO."
         ),
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {_get_pdbe_sifts_version()}",
+        help="Print the installed pdbe_sifts version and exit.",
+    )
 
     subparsers = parser.add_subparsers(dest="command")
+
+    ######### VERSION
+    subparsers.add_parser(
+        "version",
+        help="Print the installed pdbe_sifts version.",
+    )
+
+    ######### SETUP CACHE
+    setup_cache_parser = subparsers.add_parser(
+        "setup_cache",
+        help="Create configured cache directories and print the cache path.",
+    )
+    setup_cache_parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Path to a custom config file.",
+    )
+    setup_cache_parser.add_argument(
+        "--path",
+        choices=CACHE_PATH_CHOICES,
+        default="base",
+        help="Cache path to print after setup (default: base).",
+    )
+    setup_cache_parser.add_argument(
+        "--no-create",
+        action="store_true",
+        help="Only print the configured path without creating directories.",
+    )
 
     #########  INIT — copies the YAML template to user config dir
     init_parser = subparsers.add_parser(
@@ -406,7 +519,17 @@ def main():
         except ImportError:
             pass
 
-    if args.command == "init":
+    if args.command == "version":
+        print(_get_pdbe_sifts_version())
+
+    elif args.command == "setup_cache":
+        try:
+            cache_paths = _setup_cache(args.config, create=not args.no_create)
+        except Exception as e:
+            setup_cache_parser.error(str(e))
+        print(cache_paths[args.path].resolve())
+
+    elif args.command == "init":
         if args.force and _USER_CONFIG_FILE.exists():
             _USER_CONFIG_FILE.unlink()
         init_config(dest=args.dest)
