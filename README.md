@@ -179,8 +179,6 @@ pdbe_sifts sifts2mmcif \
 
 | Command | Description |
 |---------|-------------|
-| `pdbe_sifts version` | Print the installed package version |
-| `pdbe_sifts setup_cache` | Create configured cache directories and print the cache path |
 | `pdbe_sifts init` | Copy default config to `~/.config/pdbe_sifts/config.yaml` and init NCBI taxonomy DB |
 | `pdbe_sifts show` | Print the fully resolved configuration |
 | `pdbe_sifts update_ncbi` | Force-update the local NCBI taxonomy database (ete4) |

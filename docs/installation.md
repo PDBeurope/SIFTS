@@ -48,15 +48,7 @@ Open `~/.config/pdbe_sifts/config.yaml` and set the following fields:
 | `user.nobackup_dir` | Large-file cache directory (UniProt, CCD files) |
 | `user.target_db` | Path to the pre-built reference database (after running `build_db`) |
 
-### 3. Set up the cache directory
-
-```bash
-pdbe_sifts setup_cache
-```
-
-This creates the configured cache directories and prints the base cache path.
-
-### 4. Verify the resolved configuration
+### 3. Verify the resolved configuration
 
 ```bash
 pdbe_sifts show

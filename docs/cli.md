@@ -11,14 +11,11 @@ pdbe_sifts [--log-level LEVEL] <command> [options]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--log-level LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Overrides the `SIFTS_LOG_LEVEL` environment variable. |
-| `--version` | — | Print the installed `pdbe_sifts` version and exit. |
 
 ## Command overview
 
 | Command | Description |
 |---------|-------------|
-| [`version`](#version) | Print the installed `pdbe_sifts` version |
-| [`setup_cache`](#setup_cache) | Create configured cache directories and print the cache path |
 | [`init`](#init) | Copy the default config to `~/.config/pdbe_sifts/config.yaml` and initialise the NCBI taxonomy DB |
 | [`show`](#show) | Print the fully resolved configuration |
 | [`update_ncbi`](#update_ncbi) | Force-update the local NCBI taxonomy database (ete4) |
@@ -28,37 +25,6 @@ pdbe_sifts [--log-level LEVEL] <command> [options]
 | [`segments`](#segments) | Generate SIFTS segment and residue mappings for a **single** mmCIF entry |
 | [`db_load`](#db_load) | Bulk-load segment/residue CSVs from the `segments` step into DuckDB |
 | [`sifts2mmcif`](#sifts2mmcif) | Inject SIFTS mappings into an annotated mmCIF file |
-
----
-
-## `version`
-
-Print the installed package version.
-
-```bash
-pdbe_sifts version
-pdbe_sifts --version
-```
-
-No flags.
-
----
-
-## `setup_cache`
-
-Create the configured cache directories and print the selected cache path.
-
-```bash
-pdbe_sifts setup_cache [--config PATH] [--path base|uniprot|ccd|three_to_one] [--no-create]
-```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--config PATH` | `~/.config/pdbe_sifts/config.yaml` | Path to a custom config file |
-| `--path` | `base` | Cache path to print after setup |
-| `--no-create` | `False` | Only print the configured path without creating directories |
-
-The command uses `cache.base`, `cache.uniprot`, `cache.ccd`, and `cache.three_to_one` from the resolved config. With the default template, set `user.nobackup_dir` before running it.
 
 ---
 
