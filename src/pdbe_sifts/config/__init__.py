@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 from importlib.resources import files
 from pathlib import Path
@@ -24,9 +25,10 @@ def get_template_path() -> Path:
 def init_config(dest: Path | None = None) -> Path:
     """Copy the built-in config template to the user config directory.
 
-    If dest is None, copies to ~/.config/pdbe_sifts/config.yaml
+    If dest is None, copies to ``$PDBE_SIFTS_CONFIG`` when set, otherwise
+    ``~/.config/pdbe_sifts/config.yaml``.
     """
-    target = dest or _USER_CONFIG_FILE
+    target = dest or _get_env_config_file() or _USER_CONFIG_FILE
     target.parent.mkdir(parents=True, exist_ok=True)
 
     if target.exists():
@@ -40,30 +42,53 @@ def init_config(dest: Path | None = None) -> Path:
     return target
 
 
-def set_unp_pdb_xrefs_path(db_path: Path) -> None:
+def set_unp_pdb_xrefs_path(
+    db_path: Path, config_file: str | Path | None = None
+) -> None:
     """Write user.unp_pdb_xrefs into the user config.yaml."""
-    if not _USER_CONFIG_FILE.exists():
+    config_path = (
+        Path(config_file)
+        if config_file
+        else (_get_env_config_file() or _USER_CONFIG_FILE)
+    )
+    if not config_path.exists():
         return
-    cfg = OmegaConf.load(_USER_CONFIG_FILE)
+    cfg = OmegaConf.load(config_path)
     OmegaConf.update(cfg, "user.unp_pdb_xrefs", str(db_path))
-    OmegaConf.save(cfg, _USER_CONFIG_FILE)
+    OmegaConf.save(cfg, config_path)
+
+
+def _get_env_config_file() -> Path | None:
+    """Return the config path from PDBE_SIFTS_CONFIG when it is set."""
+    env_config = os.environ.get("PDBE_SIFTS_CONFIG")
+    if not env_config:
+        return None
+    return Path(env_config)
 
 
 def load_config(user_config: str | Path | None = None) -> DictConfig:
     """Load config with the following priority:
     1. Explicit --config path
-    2. ~/.config/pdbe_sifts/config.yaml (set via pdbe_sifts init)
-    3. Built-in defaults
+    2. PDBE_SIFTS_CONFIG environment variable
+    3. ~/.config/pdbe_sifts/config.yaml (set via pdbe_sifts init)
+    4. Built-in defaults
     """
     # Built-in defaults
     cfg = OmegaConf.load(get_template_path())
 
     # Auto-detect user config if no explicit path given
-    config_path = (
-        Path(user_config)
-        if user_config
-        else (_USER_CONFIG_FILE if _USER_CONFIG_FILE.exists() else None)
-    )
+    if user_config:
+        config_path = Path(user_config)
+    else:
+        config_path = _get_env_config_file()
+        if config_path is not None and not config_path.exists():
+            raise FileNotFoundError(
+                f"PDBE_SIFTS_CONFIG points to missing file: {config_path}"
+            )
+        if config_path is None:
+            config_path = (
+                _USER_CONFIG_FILE if _USER_CONFIG_FILE.exists() else None
+            )
 
     if config_path is not None:
         if not config_path.exists():

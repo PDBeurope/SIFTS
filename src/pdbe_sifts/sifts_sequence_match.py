@@ -184,7 +184,11 @@ class SiftsSequenceMatch:
             unp_csv=self.unp_csv,
             tax_tsv=self.tax_tsv,
         ).parse()
-
+        duckdb_file_path = Path(result_dir) / "hits.duckdb"
+        if duckdb_file_path.stat().st_size == 0:
+            logger.info(
+                "Success run. However not hit returned. Please adapt your parameters in the config file.(ex: min-seq-id)."
+            )
         end = timer()
         logger.info(
             f"Total time (extraction → ranked mappings): {end - start:.2f} s."

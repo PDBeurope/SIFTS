@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 import math
+import re
 
-import regex as re
 from Bio.Seq import Seq
 
 from pdbe_sifts.base.log import logger

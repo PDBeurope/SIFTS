@@ -1,25 +1,68 @@
 import argparse
+import os
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as metadata_version
 from pathlib import Path
 
+from pdbe_sifts import __version__
 from pdbe_sifts.base.log import logger
-from pdbe_sifts.base.paths import (
-    get_conf_user_base_dir,
-    get_conf_user_target_db,
-)
-from pdbe_sifts.base.utils import (
-    build_uniprot_pdb_duckdb,
-    download_uniprot_pdb_tsv,
-)
 from pdbe_sifts.config import (
-    _UNIPROT_PDB_DB_FILE,
-    _UNIPROT_PDB_TSV_FILE,
     _USER_CONFIG_FILE,
     init_config,
     load_config,
     set_unp_pdb_xrefs_path,
 )
-from pdbe_sifts.sequence_match.target_database import TargetDb
-from pdbe_sifts.sifts_sequence_match import SiftsSequenceMatch
+
+
+def _get_pdbe_sifts_version() -> str:
+    """Return the installed package version, with a source-tree fallback."""
+    try:
+        return metadata_version("pdbe_sifts")
+    except PackageNotFoundError:
+        return __version__
+
+
+def _setup_cache(config_path: str | Path | None = None, create: bool = True):
+    """Resolve and optionally create cache directories from a config file."""
+    cfg = load_config(config_path)
+    if not cfg.user.nobackup_dir:
+        raise ValueError("Cache configuration is incomplete")
+
+    cache_paths = {
+        "base": Path(cfg.cache.base),
+        "uniprot": Path(cfg.cache.uniprot),
+        "ccd": Path(cfg.cache.ccd),
+        "three_to_one": Path(cfg.cache.three_to_one),
+    }
+
+    if create:
+        cache_paths["base"].mkdir(parents=True, exist_ok=True)
+        cache_paths["uniprot"].mkdir(parents=True, exist_ok=True)
+        cache_paths["ccd"].mkdir(parents=True, exist_ok=True)
+        cache_paths["three_to_one"].parent.mkdir(parents=True, exist_ok=True)
+
+    return cache_paths
+
+
+def _update_init_config(
+    config_path: Path,
+    base_dir: str | None = None,
+    nobackup_dir: str | None = None,
+    target_db: str | None = None,
+) -> None:
+    """Patch user-facing path settings in an init-generated config."""
+    from omegaconf import OmegaConf
+
+    updates = {
+        "user.base_dir": base_dir,
+        "user.nobackup_dir": nobackup_dir,
+        "user.target_db": target_db,
+    }
+    cfg = OmegaConf.load(config_path)
+    for key, value in updates.items():
+        if value is not None and str(value).strip():
+            OmegaConf.update(cfg, key, str(value), merge=True)
+    OmegaConf.save(cfg, config_path)
 
 
 def main():
@@ -28,6 +71,7 @@ def main():
     Parses sub-commands and dispatches to the appropriate pipeline component:
 
     * ``init``             — write the default configuration file and download xrefs file.
+    * ``prepare_build_db`` — prepare FASTA and taxonomy mapping files for build_db.
     * ``show``             — print the resolved configuration.
     * ``build_db``         — build a reference sequence database.
     * ``sequence_match``   — run alignment and scoring to produce sequence matches.
@@ -41,6 +85,11 @@ def main():
     """
     parser = argparse.ArgumentParser(
         prog="pdbe_sifts", description="PDBe SIFTS mapping pipeline"
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"pdbe_sifts {_get_pdbe_sifts_version()}",
     )
 
     # Global flag: applies to every subcommand.
@@ -74,10 +123,61 @@ def main():
         "--dest",
         type=Path,
         default=None,
-        help="Custom destination path (default: ~/.config/pdbe_sifts/config.yaml)",
+        help=(
+            "Custom destination path. Defaults to PDBE_SIFTS_CONFIG when set, "
+            "otherwise ~/.config/pdbe_sifts/config.yaml."
+        ),
     )
     init_parser.add_argument(
         "--force", action="store_true", help="Overwrite existing config file."
+    )
+    init_parser.add_argument(
+        "--base-dir",
+        default=None,
+        help="Path where PDBe-SIFTS result files should be written.",
+    )
+    init_parser.add_argument(
+        "--nobackup-dir",
+        default=None,
+        help="Path for large cache and temporary files.",
+    )
+    init_parser.add_argument(
+        "--target-db",
+        default=None,
+        help="Optional path to the search database used by later commands.",
+    )
+
+    ######### PREPARE BUILD DATABASE INPUTS
+    prepare_build_db_parser = subparsers.add_parser(
+        "prepare_build_db",
+        help=(
+            "Prepare FASTA and taxonomy mapping inputs for target database "
+            "creation. Downloads UniProt Swiss-Prot when no input FASTA is "
+            "provided."
+        ),
+    )
+    prepare_build_db_parser.add_argument(
+        "--input-fasta",
+        type=Path,
+        default=None,
+        help="Existing UniProtKB FASTA file (.fasta or .fasta.gz). If not provided, it downloads UniProt/SwissProt.",
+    )
+    prepare_build_db_parser.add_argument(
+        "--output-fasta",
+        type=Path,
+        required=True,
+        help="Destination FASTA path (.gz).",
+    )
+    prepare_build_db_parser.add_argument(
+        "--output-tax-mapping",
+        type=Path,
+        required=True,
+        help="Destination ACCESSION-to-taxid TSV path.",
+    )
+    prepare_build_db_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite an existing output FASTA.",
     )
 
     #########  SHOW — display resolved config
@@ -146,15 +246,21 @@ def main():
         "-o",
         "--output-dir",
         required=False,
-        default=get_conf_user_base_dir(),
-        help="Directory where all results will be written.",
+        default=None,
+        help=(
+            "Directory where all results will be written. Defaults to "
+            "user.base_dir from the resolved config."
+        ),
     )
     global_parser.add_argument(
         "-d",
         "--db-file",
         required=False,
-        default=get_conf_user_target_db(),
-        help="Path to the preformatted sequence database (MMseqs or BLAST).",
+        default=None,
+        help=(
+            "Path to the preformatted sequence database (MMseqs or BLAST). "
+            "Defaults to user.target_db from the resolved config."
+        ),
     )
     global_parser.add_argument(
         "--tool",
@@ -407,17 +513,33 @@ def main():
             pass
 
     if args.command == "init":
-        if args.force and _USER_CONFIG_FILE.exists():
-            _USER_CONFIG_FILE.unlink()
-        init_config(dest=args.dest)
+        config_path = args.dest or (
+            Path(os.environ["PDBE_SIFTS_CONFIG"])
+            if os.environ.get("PDBE_SIFTS_CONFIG")
+            else _USER_CONFIG_FILE
+        )
+        if args.force and config_path.exists():
+            config_path.unlink()
+        config_path = init_config(dest=args.dest)
+        _update_init_config(
+            config_path,
+            base_dir=args.base_dir,
+            nobackup_dir=args.nobackup_dir,
+            target_db=args.target_db,
+        )
+        tsv_path = config_path.parent / "uniprot_pdb.tsv.gz"
+        db_path = config_path.parent / "uniprot_pdb.duckdb"
         try:
-            logger.info("Downloading SIFTS uniprot_pdb.tsv.gz …")
-            download_uniprot_pdb_tsv(_UNIPROT_PDB_TSV_FILE, force=args.force)
-            logger.info("Building pdb_xref DuckDB index …")
-            build_uniprot_pdb_duckdb(
-                _UNIPROT_PDB_TSV_FILE, _UNIPROT_PDB_DB_FILE, force=args.force
+            from pdbe_sifts.base.utils import (
+                build_uniprot_pdb_duckdb,
+                download_uniprot_pdb_tsv,
             )
-            set_unp_pdb_xrefs_path(_UNIPROT_PDB_DB_FILE)
+
+            logger.info("Downloading SIFTS uniprot_pdb.tsv.gz …")
+            download_uniprot_pdb_tsv(tsv_path, force=args.force)
+            logger.info("Building pdb_xref DuckDB index …")
+            build_uniprot_pdb_duckdb(tsv_path, db_path, force=args.force)
+            set_unp_pdb_xrefs_path(db_path, config_path)
             logger.info("unp_pdb_xrefs path written to config.yaml")
         except Exception as e:
             logger.warning("Failed to build pdb_xref index: %s", e)
@@ -450,15 +572,33 @@ def main():
         except Exception as e:
             logger.warning("Failed to generate CCD mapping: %s", e)
 
+    elif args.command == "prepare_build_db":
+        from pdbe_sifts.prepare_build_db import prepare_build_db
+
+        fasta_path, tax_mapping_path = prepare_build_db(
+            input_fasta=args.input_fasta,
+            output_fasta=args.output_fasta,
+            output_tax_mapping=args.output_tax_mapping,
+            force=args.force,
+        )
+        print(f"FASTA written to: {fasta_path}")
+        print(f"Taxonomy mapping written to: {tax_mapping_path}")
+
     elif args.command == "show":
         cfg = load_config(args.config)
         print(cfg)
 
     elif args.command == "sequence_match":
+        from pdbe_sifts.base.paths import (
+            get_conf_user_base_dir,
+            get_conf_user_target_db,
+        )
+        from pdbe_sifts.sifts_sequence_match import SiftsSequenceMatch
+
         gb_m = SiftsSequenceMatch(
             input_file=args.input_file,
-            out_dir=args.output_dir,
-            db_file=args.db_file,
+            out_dir=args.output_dir or get_conf_user_base_dir(),
+            db_file=args.db_file or get_conf_user_target_db(),
             unp_csv=args.unp_csv_file,
             tool=args.tool,
             threads=args.threads,
@@ -468,6 +608,8 @@ def main():
         gb_m.process()
 
     elif args.command == "build_db":
+        from pdbe_sifts.sequence_match.target_database import TargetDb
+
         db_b = TargetDb(
             input_path=args.input_file,
             output_path=args.output_path,

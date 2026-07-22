@@ -80,6 +80,11 @@ class TargetDb(ToolDatabase):
                     tax_mapping_file=self.tax_mapping_file,
                     threads=self.threads,
                 ).run()
+                db_mapping_file_path = Path(
+                    self.target_db.to_path() + "_mapping"
+                )
+                if db_mapping_file_path.stat().st_size == 0:
+                    logger.info(f"Empty mapping file {db_mapping_file_path}")
                 CreateIndexConfig(
                     self.target_db.to_path(),
                     tmp_dir=tmp_fold,

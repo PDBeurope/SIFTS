@@ -1,8 +1,15 @@
 user:
-  base_dir: null        # path where to save sifts results
-  nobackup_dir: null    # path where to save sifts results (temp)
-  target_db: null       # path to your search database
-  unp_pdb_xrefs: null   # path to uniprot_pdb.duckdb — set automatically by `pdbe_sifts init`
+  # Directory where PDBe-SIFTS writes final results.
+  base_dir: null
+  # Directory for large cache and temporary files. Prefer a fast scratch or
+  # nobackup filesystem when available.
+  nobackup_dir: null
+  # Search database path used by later build_db / sequence_match workflows.
+  # This can stay null during init and be filled after the DB is built.
+  target_db: null
+  # Local UniProt-to-PDB cross-reference DuckDB. Set automatically by
+  # `pdbe_sifts init`.
+  unp_pdb_xrefs: null
 
 
 location:

@@ -22,6 +22,8 @@ The whole pipeline can work on non-UniProt or non-PDB entries. However, it will 
 
 ## Installation
 
+The notebook https://github.com/PDBeurope/SIFTS/blob/master/notebooks/quickstart.ipynb also go throught the installation.
+
 ### System dependencies
 
 The following binaries must be installed and available on `PATH`:
@@ -32,13 +34,13 @@ The following binaries must be installed and available on `PATH`:
 | [FASTA36](https://fasta.bioch.virginia.edu/wrpearson/fasta/) (`lalign36`) | Local pairwise alignment | `conda install -c bioconda fasta3` |
 | [BLAST+](https://blast.ncbi.nlm.nih.gov/) | Optional alternative to MMseqs2 | `conda install -c bioconda blast` |
 
-### A. Install using micromamba (recommended)
+### A. Install using conda (recommended)
 ```bash
 # Create environment from file
-micromamba env create -f environment.yml
+conda env create -f environment.yml
 
 # Activate environment
-micromamba activate pdbe_sifts
+conda activate pdbe_sifts
 
 # Install pdbe_sifts package in editable mode
 pip install -e .
@@ -47,7 +49,7 @@ pip install -e .
 pip install pdbe_sifts
 ```
 
-### B. Install using uv (fast alternative if only pdbe_sifts python package is needed)
+### B. Install using uv
 
 
 #### 1. Install uv (if not already installed)
@@ -93,46 +95,92 @@ source .venv/bin/activate
 .venv\Scripts\activate
 ```
 
-**Requirements:** Python ≥ 3.10 · 16 GB RAM minimum (32 GB+ recommended for large datasets)
+**Requirements:** Python ≥ 3.10 · 8 GB RAM minimum (32 GB+ recommended for large datasets)
 
+
+#### 4. Manual installation
+Install BLAST+:
+```bash
+brew install blast # MacOS
+sudo apt install ncbi-blast+ # Linux
+
+# Windows
+# Download the latest version executable and follow the installation guide
+https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/
+```
+
+Install MMseqs2
+```bash
+brew install mmseqs2 # MacOS or Linux
+
+# Windows
+# Not supported yet (it is recommanded to use the linux subsytem from Windows.)
+```
 ---
 
+Install FASTA36
+
+```bash
+git clone https://github.com/wrpearson/fasta36.git
+cd ~/fasta36/src
+make -f ../make/Makfile.linux64_sse2 all
+
+# Windows
+# Not supported yet (it is recommanded to use the linux subsytem from Windows.)
+```
 
 
 ## Quick Start
 
-### 1 — Initialise your config
+### 1.1 — Initialise your required files to run PDBe-SIFTS
+
+You first need a fasta file containing sequences and a taxonomic mapping file. For that you can use the command:
+
+```bash
+pdbe_sifts prepare_build_db --output-fasta /my/path/to/myfile.fasta.gz --output-tax-mapping /my/path/to/taxonomy_mapping.tsv
+```
+
+You can also specify a exiting fasta file using the argument `--input-fasta`. Without it, the command will download by default the  UniProtKB/SwissProt fasta file.
+
+This command assume the fasta header follow the UniProtKB conventions.
+
+### 1.2 — Initialise your config
 
 ```bash
 pdbe_sifts init
 # → creates ~/.config/pdbe_sifts/config.yaml
-# → downloads the NCBI taxonomy database (~70 MB, first run only)
+# → downloads the NCBI taxonomy database (~70 MB, first run only) (this is not the two-column TSV file.)
 ```
 
 Edit the config to set your paths (`base_dir`, `nobackup_dir`, `target_db` (after building it), etc.). You can also setup different alignment parameters.
+`base_dir`: path to where you want the results to be saved
+`nobackup_dir`:path to where you want the tmp files to be saved
+`target_db`: path to the database created using build_db
 
 ### 2 — Build a reference database
 
 ```bash
 pdbe_sifts build_db \
-  -i uniprot_sprot.fasta \
-  -o ./my_db \
+  -i myfile.fasta # .gz accepted with mmseqs\
+  -o ./my/folder/prefix \
   -t taxonomy_mapping.tsv   # TSV: sequence_id <tab> tax_id
 ```
+
+This will create a database using the fasta file provided. The argument -o allow to create, in your current location, several files with the prefix given.
 
 ### 3 — Run structure to sequence matching
 
 ```bash
 # Single CIF entry
-pdbe_sifts sequence_match -i 1abc.cif -o ./results -d ./my_db/target_db
+pdbe_sifts sequence_match -i 1abc.cif -o ./results -d ./my/db/folder/prefix
 
 # Batch (one mmCIF path per line)
-pdbe_sifts sequence_match -i entries.txt -o ./results -d ./my_db/target_db --threads 8
+pdbe_sifts sequence_match -i entries.txt -o ./results -d ./my/db/folder/prefix --threads 8
 ```
 
 At this step you can also provide a .csv file to faster the scoring function. This CSV file must contains per row: row_num, uniprot_accession, dataset (Swiss-Prot or TrEMBL), pdb cross-references, annotation score.
 
-Produces `hits.duckdb` and `hits.tsv` — a scored and raw table of sequence candidates per structure entity.
+This command produces `hits.duckdb` and `hits.tsv` — a scored and raw table of sequence candidates per structure entity. The files will be located in `results` in a subfolder named according to your input in the argument `-i`. In this case, it will be in `./results/mmseqs_entries/hits.duckdb` for example. The template is `./results/usedTool_inputName/`.
 
 ### 4 — Generate SIFTS segments and residue mappings
 
@@ -159,13 +207,19 @@ Bulk-loads the segment and residue CSVs produced in step 4 into the `sifts_xref_
 
 ### 6 — Annotate mmCIF files with residue level mappings and SIFTS data
 
+If you run the `db_load` command, you can use the command below because the `-d` argument requires two tables created by the db_load 
+step.
+
 ```bash
 # Reading from DuckDB (after step 5)
 pdbe_sifts sifts2mmcif \
   -i 1abc.cif.gz \
   -o ./sifts_mmcif \
   -d hits.duckdb
+```
 
+If not please use:
+```bash
 # Or reading segment CSVs directly (skip step 5)
 pdbe_sifts sifts2mmcif \
   -i 1abc.cif.gz \
@@ -182,6 +236,7 @@ pdbe_sifts sifts2mmcif \
 | `pdbe_sifts init` | Copy default config to `~/.config/pdbe_sifts/config.yaml` and init NCBI taxonomy DB |
 | `pdbe_sifts show` | Print the fully resolved configuration |
 | `pdbe_sifts update_ncbi` | Force-update the local NCBI taxonomy database (ete4) |
+| `pdbe_sifts prepare_build_db` | Prepare FASTA and taxonomy mapping inputs for target database creation |
 | `pdbe_sifts build_db` | Build a reference sequence database (MMseqs2 or BLASTP) from a FASTA file |
 | `pdbe_sifts fasta_build` | Extract entity sequences from mmCIF files and write a FASTA |
 | `pdbe_sifts sequence_match` | Align structure sequences against the reference DB; score and store hits in DuckDB |
