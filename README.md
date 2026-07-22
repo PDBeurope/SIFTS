@@ -227,6 +227,8 @@ pdbe_sifts sifts2mmcif \
   -s ./segments/
 ```
 
+This integrates the computed SIFTS annotations into the source PDBx/mmCIF file by populating the `_pdbx_sifts_unp_segments`. Additionally, the `atom_site` category is extended to include the sequence accession and residue number from the best available mapping, enabling each atomic coordinate to be associated directly with the corresponding mapped residue.
+
 ---
 
 ## CLI Reference
