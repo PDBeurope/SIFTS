@@ -154,7 +154,9 @@ pdbe_sifts init
 
 Edit the config to set your paths (`base_dir`, `nobackup_dir`, `target_db` (after building it), etc.). You can also setup different alignment parameters.
 `base_dir`: path to where you want the results to be saved
+
 `nobackup_dir`:path to where you want the tmp files to be saved
+
 `target_db`: path to the database created using build_db
 
 ### 2 — Build a reference database
