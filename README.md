@@ -191,9 +191,6 @@ This command produces `hits.duckdb` and `hits.tsv` — a scored and raw table of
 # With DuckDB hits (from structure to sequence matching step)
 pdbe_sifts segments -i 1abc.cif.gz -o ./segments -d hits.duckdb
 
-# Manual structure-sequence mapping (chain:accession)
-pdbe_sifts segments -i 1abc.cif.gz -o ./segments -m "A:P00963,B:P00963"
-
 # Custom FASTA mapping (headers: >{structure_id}|{auth_asym_id}|{sequence_id})
 pdbe_sifts segments -i 1abc.cif.gz -o ./segments -m custom_seqs.fasta
 ```
@@ -310,11 +307,11 @@ sa = SiftsAlign(
     db_conn_str="hits.duckdb",
 )
 
-# Mode 2: provide a manual mapping (accessions or custom FASTA)
+# Mode 2: provide a custom FASTA mapping
 sa = SiftsAlign(
     cif_file="1abc.cif",
     out_dir="./segments/",
-    unp_mode="A:P00963,B:P00963",   # or path to a FASTA file
+    mapping_fasta="custom_seqs.fasta",
 )
 
 sa.process_entry("1abc")

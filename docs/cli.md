@@ -119,7 +119,7 @@ pdbe_sifts sequence_match -i INPUT -o OUTPUT_DIR -d DB_FILE [options]
 Generate residue-level SIFTS segment and residue mappings for a single mmCIF entry.
 
 ```bash
-pdbe_sifts segments -i CIF -o OUTPUT_DIR (-d DB | -m MAPPING) [options]
+pdbe_sifts segments -i CIF -o OUTPUT_DIR (-d DB | -m MAPPING_FASTA) [options]
 ```
 
 | Flag | Required | Default | Description |
@@ -127,7 +127,7 @@ pdbe_sifts segments -i CIF -o OUTPUT_DIR (-d DB | -m MAPPING) [options]
 | `-i`, `--input-cif` | ✓ | — | Input CIF file (`.cif` or `.cif.gz`) |
 | `-o`, `--output-dir` | ✓ | — | Output directory for per-entry CSV files |
 | `-d`, `--db-file` | ✗* | — | DuckDB hits file from `sequence_match` |
-| `-m`, `--mapping` | ✗* | — | Manual mapping: `"A:P00963,B:P00963"` or path to a custom FASTA |
+| `-m`, `--mapping` | ✗* | — | Existing custom FASTA with headers `>{entry_id}|{auth_asym_id}|{sequence_id}[|{name}]` |
 | `--entry` | | derived from CIF | Override the PDB entry ID |
 | `--nf90` | | `False` | Enable NF90 mode (disables ≥ 90 % identity filter) |
 | `--no-connectivity` | | connectivity on | Disable connectivity correction |

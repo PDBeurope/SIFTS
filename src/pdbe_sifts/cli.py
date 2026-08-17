@@ -14,6 +14,16 @@ from pdbe_sifts.config import (
 )
 
 
+def _mapping_fasta_path(value: str) -> Path:
+    """Return an existing mapping FASTA path for argparse."""
+    path = Path(value)
+    if not path.is_file():
+        raise argparse.ArgumentTypeError(
+            f"mapping FASTA file does not exist: {value}"
+        )
+    return path
+
+
 def _get_pdbe_sifts_version() -> str:
     """Return the installed package version, with a source-tree fallback."""
     try:
@@ -367,9 +377,10 @@ def main():
     segments_parser.add_argument(
         "-m",
         "--mapping",
+        type=_mapping_fasta_path,
         help=(
-            "User-defined mapping: UniProt accessions 'A:P00963,B:P00963' "
-            "or path to a FASTA file with headers >{auth_asym_id}|{sequence_id}."
+            "Path to a custom FASTA mapping with headers "
+            ">{entry_id}|{auth_asym_id}|{sequence_id}[|{name}]."
         ),
     )
     segments_parser.add_argument(
@@ -652,11 +663,14 @@ def main():
             args.output_dir,
             args.db_file,
             nf90_mode=args.nf90,
-            unp_mode=args.mapping,
+            mapping_fasta=args.mapping,
             connectivity_mode=args.connectivity,
             tax_tsv=args.tax_tsv,
         )
-        sifts_align.process_entry(entry_id)
+        try:
+            sifts_align.process_entry(entry_id)
+        except (OSError, ValueError) as exc:
+            segments_parser.error(str(exc))
         if sifts_align.conn:
             sifts_align.conn.close()
 

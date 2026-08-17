@@ -1,4 +1,6 @@
+import sys
 from importlib.metadata import PackageNotFoundError
+from unittest.mock import MagicMock
 
 import pytest
 from pdbe_sifts import cli
@@ -56,3 +58,70 @@ def test_setup_cache_rejects_unconfigured_cache(tmp_path):
 
     with pytest.raises(ValueError, match="Cache configuration is incomplete"):
         cli._setup_cache(config_path)
+
+
+def test_mapping_fasta_path_rejects_legacy_literal():
+    with pytest.raises(
+        cli.argparse.ArgumentTypeError,
+        match="mapping FASTA file does not exist",
+    ):
+        cli._mapping_fasta_path("A:P29373")
+
+
+def test_segments_cli_rejects_legacy_mapping(monkeypatch, capsys):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "pdbe_sifts",
+            "segments",
+            "-i",
+            "entry.cif",
+            "-o",
+            "segments",
+            "-m",
+            "A:P29373",
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="2"):
+        cli.main()
+
+    assert (
+        "mapping FASTA file does not exist: A:P29373" in capsys.readouterr().err
+    )
+
+
+def test_segments_cli_passes_mapping_fasta(tmp_path, monkeypatch):
+    cif_path = tmp_path / "entry.cif"
+    cif_path.write_text("data_1cbs\n_entry.id 1cbs\n", encoding="utf-8")
+    fasta_path = tmp_path / "mapping.fasta"
+    fasta_path.write_text(">1cbs|A|MYREF\nACDE\n", encoding="utf-8")
+    output_dir = tmp_path / "segments"
+    align = MagicMock()
+    align.conn = None
+    constructor = MagicMock(return_value=align)
+    monkeypatch.setattr(
+        "pdbe_sifts.sifts_segments_generation.SiftsAlign", constructor
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "pdbe_sifts",
+            "segments",
+            "-i",
+            str(cif_path),
+            "-o",
+            str(output_dir),
+            "--entry",
+            "1cbs",
+            "-m",
+            str(fasta_path),
+        ],
+    )
+
+    cli.main()
+
+    assert constructor.call_args.kwargs["mapping_fasta"] == fasta_path
+    align.process_entry.assert_called_once_with("1cbs")

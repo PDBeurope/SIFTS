@@ -11,7 +11,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from pdbe_sifts.sifts_segments_generation import SiftsAlign
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -21,6 +20,7 @@ DUCKDB = DATA_DIR / "mmseqs_hits" / "hits.duckdb"
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def align_no_db(tmp_path):
@@ -35,6 +35,7 @@ def align_with_db(tmp_path):
 
 
 # ── Init tests ────────────────────────────────────────────────────────────────
+
 
 def test_init_no_db(tmp_path):
     align = SiftsAlign(str(CIF_1CBS), str(tmp_path), db_conn_str=None)
@@ -62,6 +63,7 @@ def test_init_no_connectivity(tmp_path):
 
 # ── no_used_cif_category_modified ────────────────────────────────────────────
 
+
 def test_no_categories_modified_real_cif(align_no_db):
     """1cbs.cif has only past revision dates → method returns False (do not skip)."""
     result = align_no_db.no_used_cif_category_modified(str(CIF_1CBS))
@@ -75,14 +77,18 @@ def test_no_categories_modified_real_vyc(align_no_db):
 
 # ── process_entry — early exit when categories modified ───────────────────────
 
+
 def test_process_entry_skips_when_all_categories_modified(align_no_db):
     """If no_used_cif_category_modified returns True, process_entry returns early."""
-    with patch.object(align_no_db, "no_used_cif_category_modified", return_value=True):
+    with patch.object(
+        align_no_db, "no_used_cif_category_modified", return_value=True
+    ):
         # Should not raise, just log and return
         align_no_db.process_entry("1cbs")
 
 
 # ── process_entry — full run with mocked alignment ────────────────────────────
+
 
 def test_process_entry_1cbs(tmp_path):
     """Full process_entry call with lalign36 mocked out."""
@@ -90,8 +96,13 @@ def test_process_entry_1cbs(tmp_path):
     mock_em.set_chain_accessions.return_value = True
 
     with (
-        patch("pdbe_sifts.sifts_segments_generation.helper.EntryMapping", return_value=mock_em),
-        patch("pdbe_sifts.sifts_segments_generation.generate_xref_csv.insert_mappings"),
+        patch(
+            "pdbe_sifts.sifts_segments_generation.helper.EntryMapping",
+            return_value=mock_em,
+        ),
+        patch(
+            "pdbe_sifts.sifts_segments_generation.generate_xref_csv.insert_mappings"
+        ),
     ):
         align = SiftsAlign(str(CIF_1CBS), str(tmp_path), db_conn_str=None)
         align.process_entry("1cbs")
@@ -106,8 +117,13 @@ def test_process_entry_1vyc(tmp_path):
     mock_em.set_chain_accessions.return_value = True
 
     with (
-        patch("pdbe_sifts.sifts_segments_generation.helper.EntryMapping", return_value=mock_em),
-        patch("pdbe_sifts.sifts_segments_generation.generate_xref_csv.insert_mappings"),
+        patch(
+            "pdbe_sifts.sifts_segments_generation.helper.EntryMapping",
+            return_value=mock_em,
+        ),
+        patch(
+            "pdbe_sifts.sifts_segments_generation.generate_xref_csv.insert_mappings"
+        ),
     ):
         align = SiftsAlign(str(CIF_1VYC), str(tmp_path), db_conn_str=None)
         align.process_entry("1vyc")
@@ -119,8 +135,13 @@ def test_process_entry_chain_skipped_when_accessions_fail(tmp_path):
     mock_em.set_chain_accessions.return_value = False
 
     with (
-        patch("pdbe_sifts.sifts_segments_generation.helper.EntryMapping", return_value=mock_em),
-        patch("pdbe_sifts.sifts_segments_generation.generate_xref_csv.insert_mappings"),
+        patch(
+            "pdbe_sifts.sifts_segments_generation.helper.EntryMapping",
+            return_value=mock_em,
+        ),
+        patch(
+            "pdbe_sifts.sifts_segments_generation.generate_xref_csv.insert_mappings"
+        ),
         patch.object(SiftsAlign, "remove_existing_files") as mock_remove,
     ):
         align = SiftsAlign(str(CIF_1CBS), str(tmp_path), db_conn_str=None)
@@ -130,6 +151,7 @@ def test_process_entry_chain_skipped_when_accessions_fail(tmp_path):
 
 
 # ── remove_existing_files ─────────────────────────────────────────────────────
+
 
 def test_remove_existing_files(tmp_path):
     (tmp_path / "1cbs_seg.csv.gz").touch()
@@ -144,33 +166,73 @@ def test_remove_existing_files(tmp_path):
     assert (tmp_path / "other_seg.csv.gz").exists()  # untouched
 
 
-# ── _parse_accession_mapping ──────────────────────────────────────────────────
-
-def test_parse_accession_mapping(tmp_path):
-    """A:P29373 → chain A mapped to P29373."""
-    mock_unp = MagicMock()
-    mock_unp.accession = "P29373"
-
-    with patch("pdbe_sifts.sifts_segments_generation.UNP", return_value=mock_unp):
-        align = SiftsAlign(str(CIF_1CBS), str(tmp_path), db_conn_str=None, unp_mode="A:P29373")
-        result = align._parse_accession_mapping({})
-
-    assert "A" in result
-    assert result["A"][0].accession == "P29373"
+# ── FASTA mapping ─────────────────────────────────────────────────────────────
 
 
-def test_parse_accession_mapping_obsolete_skipped(tmp_path):
-    """Obsolete UniProt accession should be silently skipped."""
-    from pdbe_sifts.base.exceptions import ObsoleteUniProtError
+def _mapping_fasta(tmp_path, content):
+    path = tmp_path / "mapping.fasta"
+    path.write_text(content, encoding="utf-8")
+    return path
 
-    with patch("pdbe_sifts.sifts_segments_generation.UNP", side_effect=ObsoleteUniProtError):
-        align = SiftsAlign(str(CIF_1CBS), str(tmp_path), db_conn_str=None, unp_mode="A:OBSOLETE")
-        result = align._parse_accession_mapping({})
 
-    assert result == {}
+def test_parse_fasta_mapping(tmp_path):
+    fasta = _mapping_fasta(tmp_path, ">1cbs|A|MYREF|Display name\nACDE\n")
+    align = SiftsAlign(str(CIF_1CBS), str(tmp_path), mapping_fasta=fasta)
+
+    result = align._parse_user_mapping({}, "1cbs")
+
+    assert result["A"][0].accession == "MYREF"
+    assert align.custom_sequences["A"].sequence == "ACDE"
+    assert align.custom_sequences["A"].longName == "Display name"
+
+
+def test_parse_fasta_mapping_filters_entry_case_insensitively(tmp_path):
+    fasta = _mapping_fasta(
+        tmp_path,
+        ">9xyz|Z|OTHER\nAAAA\n>1CBS|A|MYREF\nACDE\n",
+    )
+    align = SiftsAlign(str(CIF_1CBS), str(tmp_path), mapping_fasta=fasta)
+
+    result = align._parse_user_mapping({}, "1cbs")
+
+    assert list(result) == ["A"]
+    assert list(align.custom_sequences) == ["A"]
+
+
+def test_mapping_fasta_must_exist(tmp_path):
+    missing = tmp_path / "missing.fasta"
+
+    with pytest.raises(
+        FileNotFoundError, match="Mapping FASTA file does not exist"
+    ):
+        SiftsAlign(str(CIF_1CBS), str(tmp_path), mapping_fasta=missing)
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        ("", "file is empty"),
+        ("ACDE\n", "sequence data found before"),
+        (">1cbs|A\nACDE\n", "Invalid mapping FASTA header"),
+        (">1cbs||MYREF\nACDE\n", "non-empty fields"),
+        (">1cbs|A|MYREF\n", "empty sequence"),
+        (">9xyz|A|MYREF\nACDE\n", "no records for entry '1cbs'"),
+        (
+            ">1cbs|A|FIRST\nACDE\n>1CBS|A|SECOND\nFGHI\n",
+            "duplicate records for chain 'A'",
+        ),
+    ],
+)
+def test_parse_fasta_mapping_rejects_invalid_input(tmp_path, content, message):
+    fasta = _mapping_fasta(tmp_path, content)
+    align = SiftsAlign(str(CIF_1CBS), str(tmp_path), mapping_fasta=fasta)
+
+    with pytest.raises(ValueError, match=message):
+        align._parse_user_mapping({}, "1cbs")
 
 
 # ── _is_future_date ───────────────────────────────────────────────────────────
+
 
 def test_is_future_date_past(align_no_db):
     assert align_no_db._is_future_date("1990-01-01") is False

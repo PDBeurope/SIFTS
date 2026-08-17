@@ -10,7 +10,7 @@ import gemmi
 from funcy.debug import log_durations
 
 import pdbe_sifts.segments_generation.generate_xref_csv as generate_xref_csv
-from pdbe_sifts.base.exceptions import NotAPolyPeptide, ObsoleteUniProtError
+from pdbe_sifts.base.exceptions import NotAPolyPeptide
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.utils import SiftsAction, validate_entry_id
 from pdbe_sifts.mmcif.chem_comp import ChemCompMapping
@@ -26,7 +26,6 @@ from pdbe_sifts.segments_generation.connectivity.process_connectivity import (
 from pdbe_sifts.segments_generation.get_list_of_mappings import (
     get_curated_db_mappings,
 )
-from pdbe_sifts.unp.unp import UNP
 
 
 class SiftsAlign:
@@ -44,8 +43,8 @@ class SiftsAlign:
     Attributes:
         cif_file: Absolute path to the mmCIF file being processed.
         nf90_mode: ``True`` when the ≥ 90 % identity filter is disabled.
-        unp_mode: Raw value of the ``-m`` / ``--mapping`` argument, or
-            ``None`` if not supplied.
+        mapping_fasta: Path supplied through ``-m`` / ``--mapping``, or
+            ``None`` if no custom FASTA mapping is supplied.
         db_conn_str: Path to the DuckDB file, or ``None``.
         sifts_mapping: Internal mapping state (populated during processing).
         out_dir: Root output directory for CSV files.
@@ -66,7 +65,7 @@ class SiftsAlign:
         out_dir,
         db_conn_str=None,
         nf90_mode=False,
-        unp_mode=None,
+        mapping_fasta=None,
         connectivity_mode=True,
         tax_tsv=None,
     ):
@@ -78,14 +77,13 @@ class SiftsAlign:
                 ``{out_dir}/{entry_id}/sifts/``.
             db_conn_str: Path to a DuckDB file produced by ``sequence_match``.
                 Used to retrieve the best UniProt accession per chain.
-                Mutually exclusive with *unp_mode*.
+                May be combined with *mapping_fasta*; custom mappings override
+                database mappings for the same chain.
             nf90_mode: When ``True``, disables the ≥ 90 % identity filter and
                 keeps all alignment hits regardless of sequence identity.
-            unp_mode: Manual mapping override.  Either a comma-separated
-                ``auth_asym_id:accession`` string (e.g. ``"A:P00963,B:P00963"``)
-                or a path to a custom FASTA file whose headers follow the
-                ``>{auth_asym_id}|{sequence_id}`` convention.
-                Mutually exclusive with *db_conn_str*.
+            mapping_fasta: Optional path to a custom FASTA file whose headers
+                follow the ``>{entry_id}|{auth_asym_id}|{sequence_id}``
+                convention. A fourth display-name field is optional.
             connectivity_mode: When ``True`` (default), applies the connectivity
                 correction step that reassigns gap residues to adjacent segments
                 when a covalent peptide bond is detected.
@@ -97,7 +95,11 @@ class SiftsAlign:
         self.cif_file = str(cif_file)
 
         self.nf90_mode = nf90_mode
-        self.unp_mode = unp_mode
+        self.mapping_fasta = Path(mapping_fasta) if mapping_fasta else None
+        if self.mapping_fasta and not self.mapping_fasta.is_file():
+            raise FileNotFoundError(
+                f"Mapping FASTA file does not exist: {self.mapping_fasta}"
+            )
         self.db_conn_str = db_conn_str
         self.sifts_mapping = {}
         self.out_dir = out_dir
@@ -285,7 +287,7 @@ class SiftsAlign:
 
         Initialises every chain with an empty mapping list, then populates
         it from the DuckDB hits database (if available) and overlays any
-        user-supplied mapping from ``self.unp_mode``.
+        user-supplied mapping from ``self.mapping_fasta``.
 
         Args:
             entry_id: PDB entry identifier.
@@ -305,51 +307,37 @@ class SiftsAlign:
                     entry_id, chain_lst, self.conn, chain_to_entity
                 ),
             }
-        mappings = self._parse_user_mapping(mappings)
+        mappings = self._parse_user_mapping(mappings, entry_id)
         return mappings
 
-    def _parse_user_mapping(self, entry_mapping):
+    def _parse_user_mapping(self, entry_mapping, entry_id):
         """Overlay user-supplied mappings onto the base mapping dict.
 
-        Dispatches to ``_parse_fasta_mapping`` when ``self.unp_mode`` points
-        to a file, or to ``_parse_accession_mapping`` for a comma-separated
-        ``chain:accession`` string.  Returns *entry_mapping* unchanged when
-        ``self.unp_mode`` is ``None``.
+        Parses ``self.mapping_fasta`` when supplied and otherwise returns
+        *entry_mapping* unchanged.
 
         Args:
             entry_mapping: Base chain→SMapping dict (modified in-place via
                 dict merge).
+            entry_id: PDB entry identifier used to select FASTA records.
 
         Returns:
             Updated mapping dict with user overrides applied.
         """
-        if not self.unp_mode:
+        if not self.mapping_fasta:
             return entry_mapping
-        if Path(self.unp_mode).is_file():
-            return self._parse_fasta_mapping(entry_mapping, Path(self.unp_mode))
-        return self._parse_accession_mapping(entry_mapping)
+        self.custom_sequences = {}
+        return self._parse_fasta_mapping(
+            entry_mapping, self.mapping_fasta, entry_id
+        )
 
-    def _parse_accession_mapping(self, entry_mapping):
-        """Legacy mode: -m 'A:P00963,B:P00963' (UniProt accessions)."""
-        mapp: Mapping[str, list[helper.SMapping]] = {}
-        chains = self.unp_mode.split(",")
-        for chain in chains:
-            chain, acc = chain.split(":")
-            try:
-                unp = UNP(acc)
-                mapp.setdefault(chain, []).append(
-                    helper.SMapping(unp.accession, 0, 0)
-                )
-            except ObsoleteUniProtError:
-                logger.warning(
-                    f"Obsolete UniProt accession provided by user: {acc}. Will be ignored"
-                )
-                continue
-        return {**entry_mapping, **mapp}
-
-    def _parse_fasta_mapping(self, entry_mapping, fasta_path: Path):
-        """FASTA mode: -m sequences.fasta with headers >{entry_id}|{auth_asym_id}|{sequence_id}."""
+    def _parse_fasta_mapping(
+        self, entry_mapping, fasta_path: Path, entry_id: str
+    ):
+        """Parse strict ``entry|chain|sequence_id[|name]`` FASTA mappings."""
         mapp: dict = {}
+        record_count = 0
+        matching_count = 0
 
         def _flush(header: str, seq_parts: list):
             """Finalise one FASTA record and register it in *mapp*.
@@ -366,12 +354,29 @@ class SiftsAlign:
                 seq_parts: List of non-empty sequence lines accumulated since
                     the last header; joined to form the full sequence string.
             """
+            nonlocal record_count, matching_count
+            record_count += 1
             parts = header.split("|")
-            # parts[0] = entry_id (ignored in single-entry mode — entry already known)
-            chain_id = parts[1] if len(parts) > 1 else ""
-            accession = parts[2] if len(parts) > 2 else chain_id
-            name = parts[3] if len(parts) > 3 else ""
+            if len(parts) not in (3, 4) or any(not part for part in parts[:3]):
+                raise ValueError(
+                    f"Invalid mapping FASTA header '{header}'; expected "
+                    "entry_id|auth_asym_id|sequence_id[|name] with non-empty fields"
+                )
             sequence = "".join(seq_parts)
+            if not sequence:
+                raise ValueError(
+                    f"Mapping FASTA record '{header}' has an empty sequence"
+                )
+            record_entry_id, chain_id, accession = parts[:3]
+            if record_entry_id.lower() != entry_id.lower():
+                return
+            if chain_id in mapp:
+                raise ValueError(
+                    f"Mapping FASTA contains duplicate records for chain '{chain_id}' "
+                    f"in entry '{entry_id}'"
+                )
+            matching_count += 1
+            name = parts[3] if len(parts) == 4 else ""
             self.custom_sequences[chain_id] = CustomSequenceAccession(
                 accession, sequence, name
             )
@@ -381,7 +386,7 @@ class SiftsAlign:
 
         current_header = None
         current_seq: list[str] = []
-        with open(fasta_path) as f:
+        with open(fasta_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line.startswith(">"):
@@ -390,11 +395,23 @@ class SiftsAlign:
                     current_header = line[1:]
                     current_seq = []
                 elif line:
+                    if current_header is None:
+                        raise ValueError(
+                            "Invalid mapping FASTA: sequence data found before "
+                            "the first header"
+                        )
                     current_seq.append(line)
         if current_header is not None:
             _flush(current_header, current_seq)
 
-        logger.info(f"Loaded {len(mapp)} custom sequences from {fasta_path}")
+        if record_count == 0:
+            raise ValueError(f"Mapping FASTA file is empty: {fasta_path}")
+        if matching_count == 0:
+            raise ValueError(
+                f"Mapping FASTA contains no records for entry '{entry_id}'"
+            )
+
+        logger.info("Loaded %d custom sequences from %s", len(mapp), fasta_path)
         return {**entry_mapping, **mapp}
 
     def _is_future_date(self, date: str) -> bool:
@@ -491,7 +508,7 @@ def run():
         -o / --output-dir: Root output directory for CSV files.
         -nf90 / --nf90: Enable NF90 mode (default: ``False``).
         --no-connectivity: Disable connectivity correction (default: enabled).
-        -m / --mapping: User-defined chain→accession mapping or FASTA file.
+        -m / --mapping: Path to a custom mapping FASTA file.
         -d / --duckdb: Path to the DuckDB hits file.
         --entry: PDB entry ID override; derived from the mmCIF file if omitted.
     """
@@ -533,9 +550,10 @@ def run():
     parser.add_argument(
         "-m",
         "--mapping",
+        type=Path,
         help=(
-            "User-defined mapping. Either UniProt accessions 'A:P00963,B:P00963', "
-            "or a path to a FASTA file with headers >{entry_id}|{auth_asym_id}|{sequence_id}."
+            "Path to a custom FASTA mapping with headers "
+            ">{entry_id}|{auth_asym_id}|{sequence_id}[|{name}]."
         ),
     )
 
@@ -561,6 +579,8 @@ def run():
     # Validate: need at least one of -d or -m
     if not args.duckdb and not args.mapping:
         parser.error("At least one of -d/--duckdb or -m/--mapping is required.")
+    if args.mapping and not args.mapping.is_file():
+        parser.error(f"mapping FASTA file does not exist: {args.mapping}")
 
     cif_input = args.cif_input
     if not Path(cif_input).is_file():
@@ -580,10 +600,13 @@ def run():
         args.output_dir,
         args.duckdb,
         nf90_mode=args.nf90,
-        unp_mode=args.mapping,
+        mapping_fasta=args.mapping,
         connectivity_mode=args.connectivity,
     )
-    sifts_align.process_entry(entry_id)
+    try:
+        sifts_align.process_entry(entry_id)
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
     if sifts_align.conn:
         sifts_align.conn.close()
 

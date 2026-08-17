@@ -39,10 +39,7 @@ Produces `hits.duckdb` and `hits.tsv` — a scored table of UniProt accession ca
 # With DuckDB hits (from sequence_match step)
 pdbe_sifts segments -i 1abc.cif.gz -o ./segments -d hits.duckdb
 
-# Manual UniProt accession mapping (chain:accession)
-pdbe_sifts segments -i 1abc.cif.gz -o ./segments -m "A:P00963,B:P00963"
-
-# Custom FASTA mapping (headers: >{auth_asym_id}|{sequence_id})
+# Custom FASTA mapping (headers: >{entry_id}|{auth_asym_id}|{sequence_id})
 pdbe_sifts segments -i 1abc.cif.gz -o ./segments -m custom_seqs.fasta
 ```
 
