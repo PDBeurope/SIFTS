@@ -144,6 +144,18 @@ You can also specify a exiting fasta file using the argument `--input-fasta`. Wi
 
 This command assume the fasta header follow the UniProtKB conventions.
 
+If the FASTA is already in its final location and only the taxonomy mapping is
+needed, create it without copying or downloading the FASTA:
+
+```bash
+pdbe_sifts create_tax_file \
+  --input-fasta /my/path/to/myfile.fasta.gz \
+  --output-tax-mapping /my/path/to/taxonomy_mapping.tsv
+```
+
+The output has no header and contains one `ACCESSION<TAB>TAXID` row per
+compatible UniProtKB FASTA header.
+
 ### 1.2 — Initialise your config
 
 ```bash
@@ -239,6 +251,7 @@ This integrates the computed SIFTS annotations into the source PDBx/mmCIF file b
 | `pdbe_sifts show` | Print the fully resolved configuration |
 | `pdbe_sifts update_ncbi` | Force-update the local NCBI taxonomy database (ete4) |
 | `pdbe_sifts prepare_build_db` | Prepare FASTA and taxonomy mapping inputs for target database creation |
+| `pdbe_sifts create_tax_file` | Extract an accession-to-taxid TSV from a UniProtKB FASTA file |
 | `pdbe_sifts build_db` | Build a reference sequence database (MMseqs2 or BLASTP) from a FASTA file |
 | `pdbe_sifts fasta_build` | Extract entity sequences from mmCIF files and write a FASTA |
 | `pdbe_sifts sequence_match` | Align structure sequences against the reference DB; score and store hits in DuckDB |

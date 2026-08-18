@@ -19,6 +19,8 @@ pdbe_sifts [--log-level LEVEL] <command> [options]
 | [`init`](#init) | Copy the default config to `~/.config/pdbe_sifts/config.yaml` and initialise the NCBI taxonomy DB |
 | [`show`](#show) | Print the fully resolved configuration |
 | [`update_ncbi`](#update_ncbi) | Force-update the local NCBI taxonomy database (ete4) |
+| [`prepare_build_db`](#prepare_build_db) | Prepare FASTA and taxonomy mapping inputs for database creation |
+| [`create_tax_file`](#create_tax_file) | Extract an accession-to-taxid TSV from a UniProtKB FASTA |
 | [`build_db`](#build_db) | Build a MMseqs2 or BLAST reference sequence database from a FASTA file |
 | [`fasta_build`](#fasta_build) | Extract entity sequences from mmCIF files and write a FASTA |
 | [`sequence_match`](#sequence_match) | Align PDB sequences against the reference DB and score hits into DuckDB |
@@ -54,6 +56,34 @@ pdbe_sifts show [--config PATH]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--config PATH` | `~/.config/pdbe_sifts/config.yaml` | Path to a custom config file |
+
+---
+
+## `prepare_build_db`
+
+Prepare a FASTA and its taxonomy mapping file, downloading UniProtKB/Swiss-Prot
+when no input FASTA is supplied.
+
+```bash
+pdbe_sifts prepare_build_db --output-fasta FASTA.gz --output-tax-mapping TAX.tsv [--input-fasta FASTA] [--force]
+```
+
+## `create_tax_file`
+
+Extract taxonomy mappings from an existing plain or gzip-compressed UniProtKB
+FASTA without copying or downloading it.
+
+```bash
+pdbe_sifts create_tax_file --input-fasta FASTA[.gz] --output-tax-mapping TAX.tsv
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--input-fasta` | ✓ | Input UniProtKB `.fasta` or `.fasta.gz` file |
+| `--output-tax-mapping` | ✓ | Output TSV path |
+
+The TSV contains `ACCESSION<TAB>TAXID` rows without a header. Unsupported FASTA
+headers are skipped; the command fails if no compatible headers are found.
 
 ---
 

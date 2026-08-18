@@ -26,7 +26,7 @@ def test_setup_cache_creates_configured_directories(tmp_path):
     config_path = tmp_path / "config.yaml"
     nobackup_dir = tmp_path / "nobackup"
     config_path.write_text(
-        "user:\n" f"  nobackup_dir: {nobackup_dir.as_posix()}\n",
+        f"user:\n  nobackup_dir: {nobackup_dir.as_posix()}\n",
         encoding="utf-8",
     )
 
@@ -42,7 +42,7 @@ def test_setup_cache_no_create_only_resolves_paths(tmp_path):
     config_path = tmp_path / "config.yaml"
     nobackup_dir = tmp_path / "nobackup"
     config_path.write_text(
-        "user:\n" f"  nobackup_dir: {nobackup_dir.as_posix()}\n",
+        f"user:\n  nobackup_dir: {nobackup_dir.as_posix()}\n",
         encoding="utf-8",
     )
 
@@ -125,3 +125,34 @@ def test_segments_cli_passes_mapping_fasta(tmp_path, monkeypatch):
 
     assert constructor.call_args.kwargs["mapping_fasta"] == fasta_path
     align.process_entry.assert_called_once_with("1cbs")
+
+
+def test_create_tax_file_cli_writes_mapping_and_reports_path(
+    tmp_path, monkeypatch, capsys
+):
+    input_fasta = tmp_path / "input.fasta"
+    output_tax_mapping = tmp_path / "taxonomy" / "mapping.tsv"
+    input_fasta.write_text(
+        ">sp|P29373|RABP2_HUMAN Protein OS=Homo sapiens OX=9606 PE=1\n"
+        "MPEPTIDE\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "pdbe_sifts",
+            "create_tax_file",
+            "--input-fasta",
+            str(input_fasta),
+            "--output-tax-mapping",
+            str(output_tax_mapping),
+        ],
+    )
+
+    cli.main()
+
+    assert output_tax_mapping.read_text(encoding="utf-8") == "P29373\t9606\n"
+    assert capsys.readouterr().out == (
+        f"Taxonomy mapping written to: {output_tax_mapping}\n"
+    )

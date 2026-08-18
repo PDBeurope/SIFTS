@@ -82,6 +82,7 @@ def main():
 
     * ``init``             — write the default configuration file and download xrefs file.
     * ``prepare_build_db`` — prepare FASTA and taxonomy mapping files for build_db.
+    * ``create_tax_file``  — extract an accession-to-taxid TSV from a FASTA.
     * ``show``             — print the resolved configuration.
     * ``build_db``         — build a reference sequence database.
     * ``sequence_match``   — run alignment and scoring to produce sequence matches.
@@ -188,6 +189,24 @@ def main():
         "--force",
         action="store_true",
         help="Overwrite an existing output FASTA.",
+    )
+
+    ######### CREATE TAXONOMY MAPPING FILE
+    create_tax_file_parser = subparsers.add_parser(
+        "create_tax_file",
+        help=("Create an ACCESSION-to-taxid TSV from UniProtKB FASTA headers."),
+    )
+    create_tax_file_parser.add_argument(
+        "--input-fasta",
+        type=Path,
+        required=True,
+        help="Input UniProtKB FASTA file (.fasta or .fasta.gz).",
+    )
+    create_tax_file_parser.add_argument(
+        "--output-tax-mapping",
+        type=Path,
+        required=True,
+        help="Destination ACCESSION-to-taxid TSV path.",
     )
 
     #########  SHOW — display resolved config
@@ -593,6 +612,15 @@ def main():
             force=args.force,
         )
         print(f"FASTA written to: {fasta_path}")
+        print(f"Taxonomy mapping written to: {tax_mapping_path}")
+
+    elif args.command == "create_tax_file":
+        from pdbe_sifts.prepare_build_db import write_uniprot_tax_mapping
+
+        tax_mapping_path = write_uniprot_tax_mapping(
+            fasta_path=args.input_fasta,
+            output_tax_mapping=args.output_tax_mapping,
+        )
         print(f"Taxonomy mapping written to: {tax_mapping_path}")
 
     elif args.command == "show":
