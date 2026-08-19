@@ -22,7 +22,8 @@ The whole pipeline can work on non-UniProt or non-PDB entries. However, it will 
 
 ## Installation
 
-The notebook https://github.com/PDBeurope/SIFTS/blob/master/notebooks/quickstart.ipynb also go throught the installation.
+The [quickstart notebook](https://github.com/PDBeurope/SIFTS/blob/master/notebooks/quickstart.ipynb)
+also walks through the installation.
 
 ### System dependencies
 
@@ -34,25 +35,36 @@ The following binaries must be installed and available on `PATH`:
 | [FASTA36](https://fasta.bioch.virginia.edu/wrpearson/fasta/) (`lalign36`) | Local pairwise alignment | `conda install -c bioconda fasta3` |
 | [BLAST+](https://blast.ncbi.nlm.nih.gov/) | Optional alternative to MMseqs2 | `conda install -c bioconda blast` |
 
-### A. Install using conda (recommended)
+### A. Install a local checkout using conda (recommended)
+
 ```bash
+# Clone the repository
+git clone https://github.com/PDBeurope/SIFTS
+cd SIFTS
+
 # Create environment from file
 conda env create -f environment.yml
 
 # Activate environment
 conda activate pdbe_sifts
 
-# Install pdbe_sifts package in editable mode
+# Use the checked-out source in editable mode. This replaces the published
+# pdbe-sifts package installed by environment.yml.
 pip install -e .
-
-# Or install directly
-pip install pdbe_sifts
 ```
 
-### B. Install using uv
+### B. Install the published Python package
 
+```bash
+pip install pdbe-sifts
+```
 
-#### 1. Install uv (if not already installed)
+The external MMseqs2 and FASTA36 binaries must still be installed separately.
+BLAST+ is required only when using `--tool blastp`.
+
+### C. Install a local checkout using uv
+
+#### 1. Install uv
 
 ```bash
 # macOS/Linux
@@ -61,7 +73,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Windows
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 
-# Alternative via pip
+# Alternative
 pip install uv
 ```
 
@@ -75,14 +87,8 @@ cd SIFTS
 #### 3. Create virtual environment and install dependencies
 
 ```bash
-# Create a virtual environment and install all dependencies
+# Create .venv and uv.lock, and install this checkout in editable mode
 uv sync
-
-# This will:
-# - Create a .venv directory
-# - Install Python 3.10 if needed
-# - Install all dependencies from pyproject.toml
-# - Lock versions in uv.lock
 ```
 
 #### 4. Activate the virtual environment
@@ -95,21 +101,23 @@ source .venv/bin/activate
 .venv\Scripts\activate
 ```
 
-**Requirements:** Python ≥ 3.10 · 8 GB RAM minimum (32 GB+ recommended for large datasets)
+The external binaries listed above are not installed by `uv sync` and must be
+installed separately.
 
+**Requirements:** Python ≥ 3.10 · 16 GB RAM minimum (32 GB+ recommended for large datasets)
 
-#### 4. Manual installation
+### D. Install the external binaries manually
+
 Install BLAST+:
 ```bash
 brew install blast # MacOS
 sudo apt install ncbi-blast+ # Linux
-
-# Windows
-# Download the latest version executable and follow the installation guide
-https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/
 ```
 
-Install MMseqs2
+On Windows, download BLAST+ from the
+[NCBI distribution directory](https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/).
+
+Install MMseqs2:
 ```bash
 brew install mmseqs2 # MacOS or Linux
 
@@ -118,17 +126,19 @@ brew install mmseqs2 # MacOS or Linux
 ```
 ---
 
-Install FASTA36
+Install FASTA36 from source (Linux):
 
 ```bash
 git clone https://github.com/wrpearson/fasta36.git
-cd ~/fasta36/src
-make -f ../make/Makfile.linux64_sse2 all
+cd fasta36/src
+make -f ../make/Makefile.linux_sse2 all
+
+# lalign36 is generated in fasta36/bin; make it available on PATH
+export PATH="$(pwd)/../bin:$PATH"
 
 # Windows
-# Not supported yet (it is recommanded to use the linux subsytem from Windows.)
+# Not supported yet (use the Windows Subsystem for Linux).
 ```
-
 
 ## Quick Start
 
@@ -140,9 +150,10 @@ You first need a fasta file containing sequences and a taxonomic mapping file. F
 pdbe_sifts prepare_build_db --output-fasta /my/path/to/myfile.fasta.gz --output-tax-mapping /my/path/to/taxonomy_mapping.tsv
 ```
 
-You can also specify a exiting fasta file using the argument `--input-fasta`. Without it, the command will download by default the  UniProtKB/SwissProt fasta file.
+You can also specify an existing FASTA file using `--input-fasta`. Without it,
+the command downloads the UniProtKB/Swiss-Prot FASTA file by default.
 
-This command assume the fasta header follow the UniProtKB conventions.
+This command assumes that the FASTA headers follow UniProtKB conventions.
 
 If the FASTA is already in its final location and only the taxonomy mapping is
 needed, create it without copying or downloading the FASTA:
@@ -153,15 +164,17 @@ pdbe_sifts create_tax_file \
   --output-tax-mapping /my/path/to/taxonomy_mapping.tsv
 ```
 
-The output has no header and contains one `ACCESSION<TAB>TAXID` row per
-compatible UniProtKB FASTA header.
+Both plain and gzip-compressed FASTA files are accepted. Headers must use the
+UniProtKB `sp|...` or `tr|...` format and contain `OX=<taxid>`. The output has
+no header and contains one `ACCESSION<TAB>TAXID` row per compatible header.
 
 ### 1.2 — Initialise your config
 
 ```bash
 pdbe_sifts init
 # → creates ~/.config/pdbe_sifts/config.yaml
-# → downloads the NCBI taxonomy database (~70 MB, first run only) (this is not the two-column TSV file.)
+# → downloads the NCBI taxonomy database (~70 MB, first run only)
+# → builds the UniProt–PDB cross-reference index and CCD mapping cache
 ```
 
 Edit the config to set your paths (`base_dir`, `nobackup_dir`, `target_db` (after building it), etc.). You can also setup different alignment parameters.
@@ -174,14 +187,30 @@ Edit the config to set your paths (`base_dir`, `nobackup_dir`, `target_db` (afte
 
 ### 2 — Build a reference database
 
+If you already have a UniProtKB FASTA file, the complete path from that FASTA
+to a searchable database is:
+
 ```bash
+pdbe_sifts create_tax_file \
+  --input-fasta /my/path/to/myfile.fasta.gz \
+  --output-tax-mapping /my/path/to/taxonomy_mapping.tsv
+
 pdbe_sifts build_db \
-  -i myfile.fasta # .gz accepted with mmseqs\
+  -i /my/path/to/myfile.fasta.gz \
   -o ./my/folder/prefix \
-  -t taxonomy_mapping.tsv   # TSV: sequence_id <tab> tax_id
+  -t /my/path/to/taxonomy_mapping.tsv \
+  --tool mmseqs \
+  --threads 8
 ```
 
-This will create a database using the fasta file provided. The argument -o allow to create, in your current location, several files with the prefix given.
+`create_tax_file` requires UniProtKB headers in the format described above. For
+a custom FASTA header format, create the headerless taxonomy TSV yourself, with
+one `sequence_id<TAB>tax_id` row per sequence, and pass it directly to
+`build_db` with `-t`.
+
+`build_db` accepts a gzip-compressed FASTA when using MMseqs2. It creates
+several database files using the value of `-o` as their path prefix. MMseqs2 is
+the default backend; use `--tool blastp` to build a BLAST database instead.
 
 ### 3 — Run structure to sequence matching
 
@@ -195,13 +224,19 @@ pdbe_sifts sequence_match -i entries.txt -o ./results -d ./my/db/folder/prefix -
 
 At this step you can also provide a .csv file to faster the scoring function. This CSV file must contains per row: row_num, uniprot_accession, dataset (Swiss-Prot or TrEMBL), pdb cross-references, annotation score.
 
-This command produces `hits.duckdb` and `hits.tsv` — a scored and raw table of sequence candidates per structure entity. The files will be located in `results` in a subfolder named according to your input in the argument `-i`. In this case, it will be in `./results/mmseqs_entries/hits.duckdb` for example. The template is `./results/usedTool_inputName/`.
+This command produces `hits.duckdb` and `hits_<entry>.tsv` — scored and raw
+sequence candidates per structure entity. The files are written under
+`{output_dir}/{tool}_{input_name}/`; for example,
+`./results/mmseqs_entries/hits.duckdb`.
 
 ### 4 — Generate SIFTS segments and residue mappings
 
 ```bash
 # With DuckDB hits (from structure to sequence matching step)
-pdbe_sifts segments -i 1abc.cif.gz -o ./segments -d hits.duckdb
+pdbe_sifts segments \
+  -i 1abc.cif.gz \
+  -o ./segments \
+  -d ./results/mmseqs_1abc/hits.duckdb
 
 # Custom FASTA mapping (headers: >{structure_id}|{auth_asym_id}|{sequence_id})
 pdbe_sifts segments -i 1abc.cif.gz -o ./segments -m custom_seqs.fasta
@@ -212,7 +247,9 @@ Produces per-entry gzip-compressed CSV files under `{output_dir}/`.
 ### 5 — Load segment data into DuckDB
 
 ```bash
-pdbe_sifts db_load -i ./segments/ -d hits.duckdb
+pdbe_sifts db_load \
+  -i ./segments/ \
+  -d ./results/mmseqs_1abc/hits.duckdb
 ```
 
 Bulk-loads the segment and residue CSVs produced in step 4 into the `sifts_xref_segment` and `sifts_xref_residue` tables of the DuckDB file.
@@ -227,7 +264,7 @@ step.
 pdbe_sifts sifts2mmcif \
   -i 1abc.cif.gz \
   -o ./sifts_mmcif \
-  -d hits.duckdb
+  -d ./results/mmseqs_1abc/hits.duckdb
 ```
 
 If not please use:
@@ -247,7 +284,7 @@ This integrates the computed SIFTS annotations into the source PDBx/mmCIF file b
 
 | Command | Description |
 |---------|-------------|
-| `pdbe_sifts init` | Copy default config to `~/.config/pdbe_sifts/config.yaml` and init NCBI taxonomy DB |
+| `pdbe_sifts init` | Create the config and initialise the taxonomy, UniProt–PDB, and CCD caches |
 | `pdbe_sifts show` | Print the fully resolved configuration |
 | `pdbe_sifts update_ncbi` | Force-update the local NCBI taxonomy database (ete4) |
 | `pdbe_sifts prepare_build_db` | Prepare FASTA and taxonomy mapping inputs for target database creation |
@@ -305,7 +342,7 @@ SiftsSequenceMatch(
     tool="mmseqs",           # or "blastp"
     threads=8,
 ).process()
-# → writes hits.duckdb and hits_<entry>.tsv to out_dir
+# → writes hits.duckdb and hits_<entry>.tsv under out_dir/mmseqs_1abc/
 ```
 
 ### `SiftsAlign` — Generate per-entry segment and residue mappings
@@ -374,6 +411,7 @@ After running `db_load`, results are available in DuckDB tables `sifts_xref_segm
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `PDBE_SIFTS_CONFIG` | platform config directory | Custom path to the user configuration file |
 | `SIFTS_LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `SIFTS_N_PROC` | auto | Number of internal threads per worker (lalign36 jobs). Override manually to cap CPU use. |
 | `SIFTS_NO_CACHE_ALL` | unset | If set (any value), disables the UniProt pickle cache and always fetches from the REST API. |

@@ -12,21 +12,76 @@ The following external binaries must be installed and available on `PATH` before
 
 ## Python package
 
-=== "conda (recommended)"
+=== "Local checkout with conda (recommended)"
 
     ```bash
+    git clone https://github.com/PDBeurope/SIFTS
+    cd SIFTS
     conda env create -f environment.yml
     conda activate pdbe_sifts
+
+    # Replace the published package installed by environment.yml with
+    # this checkout in editable mode.
     pip install -e .
     ```
 
-=== "pip"
+=== "Published package"
 
     ```bash
-    pip install pdbe_sifts
+    pip install pdbe-sifts
     ```
 
+=== "Local checkout with uv"
+
+    ```bash
+    git clone https://github.com/PDBeurope/SIFTS
+    cd SIFTS
+    uv sync
+    source .venv/bin/activate  # macOS/Linux
+    ```
+
+    `uv sync` creates `.venv` and `uv.lock`, installs the dependencies,
+    and installs the checkout in editable mode.
+
+The external binaries listed above are not installed by `pip` or `uv`. BLAST+
+is optional unless `--tool blastp` is used.
+
 **Requirements:** Python ≥ 3.10 · 16 GB RAM minimum (32 GB+ recommended for large datasets)
+
+## Manual installation of external binaries
+
+BLAST+:
+
+```bash
+brew install blast          # macOS
+sudo apt install ncbi-blast+ # Debian/Ubuntu
+```
+
+MMseqs2:
+
+```bash
+brew install mmseqs2        # macOS or Linux with Homebrew
+```
+
+FASTA36 from source (Linux):
+
+```bash
+git clone https://github.com/wrpearson/fasta36.git
+cd fasta36/src
+make -f ../make/Makefile.linux_sse2 all
+export PATH="$(pwd)/../bin:$PATH"
+```
+
+## Verify the installation
+
+```bash
+pdbe_sifts --version
+command -v mmseqs
+command -v lalign36
+
+# Required only when using --tool blastp
+command -v makeblastdb
+```
 
 ## Post-install setup
 
@@ -36,7 +91,9 @@ The following external binaries must be installed and available on `PATH` before
 pdbe_sifts init
 ```
 
-This copies the built-in config template to `~/.config/pdbe_sifts/config.yaml` and downloads the NCBI taxonomy database (~70 MB, first run only).
+This copies the built-in config template to
+`~/.config/pdbe_sifts/config.yaml`, initialises the NCBI taxonomy database,
+builds the UniProt–PDB DuckDB index, and generates the CCD mapping cache.
 
 ### 2. Edit the config
 
