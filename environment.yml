@@ -28,3 +28,4 @@ dependencies:
     - duckdb
     - platformdirs
     - python-dateutil
+    - pdbe-sifts
