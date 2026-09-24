@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Connectivity checking and alignment processing for mmCIF structures."""
 
-import regex as re
+import re
+
 from gemmi import cif as gemmi_cif
 
 from pdbe_sifts.base.log import logger
