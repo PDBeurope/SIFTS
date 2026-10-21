@@ -42,15 +42,12 @@ The following binaries must be installed and available on `PATH`:
 git clone https://github.com/PDBeurope/SIFTS
 cd SIFTS
 
-# Create environment from file
+# Create environment from file. This also installs the checked-out source
+# in editable mode.
 conda env create -f environment.yml
 
 # Activate environment
 conda activate pdbe_sifts
-
-# Use the checked-out source in editable mode. This replaces the published
-# pdbe-sifts package installed by environment.yml.
-pip install -e .
 ```
 
 ### B. Install the published Python package

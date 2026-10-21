@@ -19,11 +19,9 @@ The following external binaries must be installed and available on `PATH` before
     cd SIFTS
     conda env create -f environment.yml
     conda activate pdbe_sifts
-
-    # Replace the published package installed by environment.yml with
-    # this checkout in editable mode.
-    pip install -e .
     ```
+
+    `environment.yml` installs this checkout in editable mode.
 
 === "Published package"
 
