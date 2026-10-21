@@ -172,12 +172,12 @@ no header and contains one `ACCESSION<TAB>TAXID` row per compatible header.
 
 ```bash
 pdbe_sifts init
-# → creates ~/.config/pdbe_sifts/config.yaml
+# → creates ~/.sifts/config.yaml
 # → downloads the NCBI taxonomy database (~70 MB, first run only)
 # → builds the UniProt–PDB cross-reference index and CCD mapping cache
 ```
 
-Edit the config to set your paths (`base_dir`, `nobackup_dir`, `target_db` (after building it), etc.). You can also setup different alignment parameters.
+By default, `init` sets `base_dir` to the current working directory, `nobackup_dir` to `<base_dir>/cache` and `target_db` to `<base_dir>/database.db`. Override them with `--base-dir`, `--nobackup-dir` and `--target-db`, or edit the config afterwards. You can also setup different alignment parameters.
 
 `base_dir`: path to where you want the results to be saved
 
@@ -411,7 +411,7 @@ After running `db_load`, results are available in DuckDB tables `sifts_xref_segm
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PDBE_SIFTS_CONFIG` | platform config directory | Custom path to the user configuration file |
+| `PDBE_SIFTS_CONFIG` | `~/.sifts/config.yaml` | Custom path to the user configuration file |
 | `SIFTS_LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `SIFTS_N_PROC` | auto | Number of internal threads per worker (lalign36 jobs). Override manually to cap CPU use. |
 | `SIFTS_NO_CACHE_ALL` | unset | If set (any value), disables the UniProt pickle cache and always fetches from the REST API. |
