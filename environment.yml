@@ -3,29 +3,30 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - python>=3.10,<3.13
-  - pip
-  - ipython
-  - setuptools
-  - bioconda::mmseqs2
-  - bioconda::blast
-  - bioconda::fasta3
-  - numpy
-  - biopython
-  - scikit-learn
-  - conda-forge::ete4
+  - python>=3.10,<3.14
+  - pip=26.2.2
+  - ipython=9.17.1
+  - setuptools=84.2.1
+  - bioconda::mmseqs2=18.8cc5c
+  - bioconda::blast=2.17.0
+  - bioconda::fasta3=36.3.8
+  - bioconda::pymmseqs=1.2.0
+  - numpy=2.5.4
+  - biopython=1.88
+  - scikit-learn=1.9.1
+  - conda-forge::ete4=4.4.0
+  - pandas=3.0.6
+  - lxml=6.1.3
+  - tqdm=4.70.1
+  - requests=2.34.2
+  - pyyaml=6.0.3
+  - coloredlogs=15.0.1
+  - humanfriendly=10.0
+  - funcy=2.1
+  - gemmi=0.7.5
+  - omegaconf=2.4.0
+  - python-dateutil=2.9.0.post0
   - pip:
-    - tqdm
-    - funcy
-    - lxml
-    - requests
-    - pandas
-    - pymmseqs
-    - coloredlogs
-    - pyyaml
-    - omegaconf
-    - gemmi
-    - duckdb
-    - platformdirs
-    - python-dateutil
-    - pdbe-sifts
+    # duckdb 2.x is not yet available on conda-forge
+    - duckdb==2.0.0
+    - -e .
