@@ -92,18 +92,18 @@ pdbe_sifts init
 ```
 
 This copies the built-in config template to
-`~/.config/pdbe_sifts/config.yaml`, initialises the NCBI taxonomy database,
+`~/.sifts/config.yaml`, initialises the NCBI taxonomy database,
 builds the UniProt–PDB DuckDB index, and generates the CCD mapping cache.
 
 ### 2. Edit the config
 
-Open `~/.config/pdbe_sifts/config.yaml` and set the following fields:
+Open `~/.sifts/config.yaml` and check the following fields:
 
-| Field | Description |
-|-------|-------------|
-| `user.base_dir` | Working directory for all pipeline outputs |
-| `user.nobackup_dir` | Large-file cache directory (UniProt, CCD files) |
-| `user.target_db` | Path to the pre-built reference database (after running `build_db`) |
+| Field | Default set by `init` | Description |
+|-------|-----------------------|-------------|
+| `user.base_dir` | Current working directory | Working directory for all pipeline outputs |
+| `user.nobackup_dir` | `<base_dir>/cache` | Large-file cache directory (UniProt, CCD files) |
+| `user.target_db` | `<base_dir>/database.db` | Path to the reference database built by `build_db` |
 
 ### 3. Verify the resolved configuration
 

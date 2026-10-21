@@ -6,12 +6,12 @@ This page walks through the complete SIFTS pipeline in six steps using the `pdbe
 
 ```bash
 pdbe_sifts init
-# → creates ~/.config/pdbe_sifts/config.yaml
+# → creates ~/.sifts/config.yaml
 # → downloads the NCBI taxonomy database (~70 MB, first run only)
 # → builds the UniProt–PDB cross-reference index and CCD mapping cache
 ```
 
-Edit the config to set your paths (`base_dir`, `nobackup_dir`, `target_db` after building it, etc.).
+By default, `init` sets `base_dir` to the current working directory, `nobackup_dir` to `<base_dir>/cache` and `target_db` to `<base_dir>/database.db`. Override them with `--base-dir`, `--nobackup-dir` and `--target-db`, or edit the config afterwards.
 
 ## Step 2 — Build a reference database
 

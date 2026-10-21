@@ -60,18 +60,32 @@ def _update_init_config(
     nobackup_dir: str | None = None,
     target_db: str | None = None,
 ) -> None:
-    """Patch user-facing path settings in an init-generated config."""
+    """Patch user-facing path settings in an init-generated config.
+
+    Explicit arguments always win. Otherwise, values already present in the
+    config are kept, and unset ones default to the current working directory
+    for ``base_dir``, ``<base_dir>/cache`` for ``nobackup_dir`` and
+    ``<base_dir>/database.db`` for ``target_db``.
+    """
     from omegaconf import OmegaConf
 
-    updates = {
-        "user.base_dir": base_dir,
-        "user.nobackup_dir": nobackup_dir,
-        "user.target_db": target_db,
-    }
+    def _pick(value: str | None, current: str | None) -> str | None:
+        if value is not None and (stripped := str(value).strip()):
+            return stripped
+        return current or None
+
     cfg = OmegaConf.load(config_path)
+    base = _pick(base_dir, cfg.user.base_dir)
+    base_path = Path(base).expanduser().absolute() if base else Path.cwd()
+    updates = {
+        "user.base_dir": str(base_path),
+        "user.nobackup_dir": _pick(nobackup_dir, cfg.user.nobackup_dir)
+        or str(base_path / "cache"),
+        "user.target_db": _pick(target_db, cfg.user.target_db)
+        or str(base_path / "database.db"),
+    }
     for key, value in updates.items():
-        if value is not None and str(value).strip():
-            OmegaConf.update(cfg, key, str(value), merge=True)
+        OmegaConf.update(cfg, key, value, merge=True)
     OmegaConf.save(cfg, config_path)
 
 
@@ -124,7 +138,7 @@ def main():
     init_parser = subparsers.add_parser(
         "init",
         help=(
-            "Copy the config template to ~/.config/pdbe_sifts/config.yaml, "
+            "Copy the config template to ~/.sifts/config.yaml, "
             "download the SIFTS uniprot_pdb.tsv.gz flatfile, and build a local "
             "DuckDB index (uniprot_pdb.duckdb) used to populate pdb_cross_references "
             "during sequence matching."
@@ -136,7 +150,7 @@ def main():
         default=None,
         help=(
             "Custom destination path. Defaults to PDBE_SIFTS_CONFIG when set, "
-            "otherwise ~/.config/pdbe_sifts/config.yaml."
+            "otherwise ~/.sifts/config.yaml."
         ),
     )
     init_parser.add_argument(
@@ -145,17 +159,26 @@ def main():
     init_parser.add_argument(
         "--base-dir",
         default=None,
-        help="Path where PDBe-SIFTS result files should be written.",
+        help=(
+            "Path where PDBe-SIFTS result files should be written. "
+            "Defaults to the current working directory."
+        ),
     )
     init_parser.add_argument(
         "--nobackup-dir",
         default=None,
-        help="Path for large cache and temporary files.",
+        help=(
+            "Path for large cache and temporary files. "
+            "Defaults to <base-dir>/cache."
+        ),
     )
     init_parser.add_argument(
         "--target-db",
         default=None,
-        help="Optional path to the search database used by later commands.",
+        help=(
+            "Path to the search database used by later commands. "
+            "Defaults to <base-dir>/database.db."
+        ),
     )
 
     ######### PREPARE BUILD DATABASE INPUTS

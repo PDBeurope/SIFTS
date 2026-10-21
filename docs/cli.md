@@ -35,7 +35,7 @@ pdbe_sifts [--log-level LEVEL] <command> [options]
 
 ## `init`
 
-Copy the built-in config template to the user config directory, initialise the
+Copy the built-in config template to `~/.sifts/`, initialise the
 NCBI taxonomy database, download the SIFTS UniProt–PDB cross-reference file,
 build its local DuckDB index, and generate the CCD mapping cache.
 
@@ -45,11 +45,11 @@ pdbe_sifts init [--dest PATH] [--force] [--base-dir PATH] [--nobackup-dir PATH] 
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--dest PATH` | `PDBE_SIFTS_CONFIG` or `~/.config/pdbe_sifts/config.yaml` | Custom destination path for the config file |
+| `--dest PATH` | `PDBE_SIFTS_CONFIG` or `~/.sifts/config.yaml` | Custom destination path for the config file |
 | `--force` | `False` | Overwrite an existing config file |
-| `--base-dir PATH` | unset | Directory for PDBe-SIFTS result files |
-| `--nobackup-dir PATH` | unset | Directory for large cache and temporary files |
-| `--target-db PATH` | unset | Reference search database used by later commands |
+| `--base-dir PATH` | current working directory | Directory for PDBe-SIFTS result files |
+| `--nobackup-dir PATH` | `<base-dir>/cache` | Directory for large cache and temporary files |
+| `--target-db PATH` | `<base-dir>/database.db` | Reference search database used by later commands |
 
 ---
 
@@ -63,7 +63,7 @@ pdbe_sifts show [--config PATH]
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--config PATH` | `~/.config/pdbe_sifts/config.yaml` | Path to a custom config file |
+| `--config PATH` | `~/.sifts/config.yaml` | Path to a custom config file |
 
 ---
 
@@ -298,7 +298,7 @@ pdbe_sifts seq2seq -i CIF [-e ENTITY_ID] [-c CHAIN_ID] [--sample-fasta FASTA]
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PDBE_SIFTS_CONFIG` | platform config directory | Custom path to the user configuration file |
+| `PDBE_SIFTS_CONFIG` | `~/.sifts/config.yaml` | Custom path to the user configuration file |
 | `SIFTS_LOG_LEVEL` | `INFO` | Logging verbosity (overridden by `--log-level`) |
 | `SIFTS_N_PROC` | auto | Number of internal threads per worker |
 | `SIFTS_NO_CACHE_ALL` | unset | If set, disables the UniProt pickle cache |
