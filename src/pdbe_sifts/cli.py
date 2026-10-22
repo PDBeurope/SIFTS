@@ -643,8 +643,10 @@ def main():
         print(f"Taxonomy mapping written to: {tax_mapping_path}")
 
     elif args.command == "show":
+        from omegaconf import OmegaConf
+
         cfg = load_config(args.config)
-        print(cfg)
+        print(OmegaConf.to_yaml(cfg, resolve=True), end="")
 
     elif args.command == "sequence_match":
         from pdbe_sifts.base.paths import (
