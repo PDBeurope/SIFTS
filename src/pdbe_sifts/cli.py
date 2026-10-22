@@ -636,8 +636,8 @@ def main():
             output_tax_mapping=args.output_tax_mapping,
             force=args.force,
         )
-        print(f"FASTA written to: {fasta_path}")
-        print(f"Taxonomy mapping written to: {tax_mapping_path}")
+        logger.info(f"FASTA written to: {fasta_path}")
+        logger.info(f"Taxonomy mapping written to: {tax_mapping_path}")
 
     elif args.command == "create_tax_file":
         from pdbe_sifts.prepare_build_db import write_uniprot_tax_mapping
@@ -646,7 +646,7 @@ def main():
             fasta_path=args.input_fasta,
             output_tax_mapping=args.output_tax_mapping,
         )
-        print(f"Taxonomy mapping written to: {tax_mapping_path}")
+        logger.info(f"Taxonomy mapping written to: {tax_mapping_path}")
 
     elif args.command == "show":
         from omegaconf import OmegaConf
@@ -703,7 +703,7 @@ def main():
             threads=args.threads,
             batch_size=args.batch_size,
         ).build()
-        print(f"FASTA written to: {fasta_path}")
+        logger.info(f"FASTA written to: {fasta_path}")
 
     elif args.command == "segments":
         from gemmi import cif as gcif
