@@ -68,9 +68,7 @@ class ExportSIFTSTommCIF:
         self.duckdb_file = duckdb_file
         self.sifts_csv_base = sifts_csv_dir
         self.conn = (
-            duckdb.connect(self.duckdb_file, read_only=True)
-            if duckdb_file
-            else None
+            duckdb.connect(self.duckdb_file, read_only=True) if duckdb_file else None
         )
         self.track_changes = track_changes
         self.prev_run_dir = prev_run_dir
@@ -95,15 +93,13 @@ class ExportSIFTSTommCIF:
             output_size = outfile.stat().st_size
             if output_size < input_size:
                 logger.warning(
-                    "Check output file- it's smaller than input) for "
+                    "Check output file - it's smaller than input) for "
                     f"{outfile} opsize vs insize --> {output_size} vs {input_size}"
                 )
                 comm_utils.check_output_mmcif(infile, outfile)
 
         else:
-            raise EntryFailedException(
-                f"Output {outfile} file not found for {outfile}"
-            )
+            raise EntryFailedException(f"Output {outfile} file not found for {outfile}")
 
     def _check_clean_mmcif(self, outfile):
         """Check that the output clean mmcif file has no null values in primary keys."""
@@ -121,9 +117,7 @@ class ExportSIFTSTommCIF:
         for cat in category_list:
             cols = required_fields[cat]
             for col in cols:
-                if any(
-                    cif.is_null(x) for x in block.find_values(f"{cat}.{col}")
-                ):
+                if any(cif.is_null(x) for x in block.find_values(f"{cat}.{col}")):
                     raise Exception(
                         f"Data error invalid value (? or .) for required item: {cat}.{col}"
                     )
@@ -141,9 +135,7 @@ class ExportSIFTSTommCIF:
         logger.debug("Checking sifts mmcif output is not empty")
         if sifts_only_cif.exists():
             if sifts_only_cif.stat().st_size <= 40:
-                raise EntryFailedException(
-                    f"Empty sifts output file {sifts_only_cif}"
-                )
+                raise EntryFailedException(f"Empty sifts output file {sifts_only_cif}")
         else:
             raise EntryFailedException(
                 f"file not found sifts mmcif file {sifts_only_cif}"
@@ -191,9 +183,7 @@ class ExportSIFTSTommCIF:
             my_seq_id = cat["seq_id"]
             my_mon_id = cat["mon_id"]
             my_observed = cat["auth_seq_num"]
-            my_observed = [
-                "y" if item is not None else "n" for item in my_observed
-            ]
+            my_observed = ["y" if item is not None else "n" for item in my_observed]
             my_obs_res = comm_utils.get_obs(my_ch, my_seq_id, my_observed)
             hetero = cat["hetero"]
             my_mh_id = comm_utils.get_mh_id(my_seq_id, my_mon_id, hetero)
@@ -266,9 +256,7 @@ class ExportSIFTSTommCIF:
             otherwise.
         """
         if category_data and len(NEW_MMCIF_CAT[category]) == len(category_data):
-            data = dict(
-                zip(NEW_MMCIF_CAT[category], category_data, strict=False)
-            )
+            data = dict(zip(NEW_MMCIF_CAT[category], category_data, strict=False))
             d_block.set_mmcif_category(category, data)
             return True
         return False
@@ -297,8 +285,7 @@ class ExportSIFTSTommCIF:
             new_seg_data, new_seg_list = read_sifts_segments(self.d_block)
             if self.prev_run_dir:
                 old_sifts_cif = (
-                    Path(self.prev_run_dir)
-                    / f"{self.entry_id}_sifts_only.cif.gz"
+                    Path(self.prev_run_dir) / f"{self.entry_id}_sifts_only.cif.gz"
                 )
             else:
                 old_sifts_cif = self.sifts_only_cif
@@ -353,22 +340,16 @@ class ExportSIFTSTommCIF:
         validate_entry_id(entry_id)
         out = Path(self.output_dir)
         out.mkdir(parents=True, exist_ok=True)
-        self.sifts_updated_cif = safe_join(
-            out, f"{entry_id}_sifts_updated.cif.gz"
-        )
+        self.sifts_updated_cif = safe_join(out, f"{entry_id}_sifts_updated.cif.gz")
         self.sifts_only_cif = safe_join(out, f"{entry_id}_sifts_only.cif.gz")
 
         if self.sifts_csv_base:
             seg_cursor = None
-            sifts_seg_csv = safe_join(
-                self.sifts_csv_base, f"{entry_id}_seg.csv.gz"
-            )
+            sifts_seg_csv = safe_join(self.sifts_csv_base, f"{entry_id}_seg.csv.gz")
             if not sifts_seg_csv.exists():
                 logger.error(f"{sifts_seg_csv} does not exist")
 
-            sifts_res_csv = safe_join(
-                self.sifts_csv_base, f"{entry_id}_res.csv.gz"
-            )
+            sifts_res_csv = safe_join(self.sifts_csv_base, f"{entry_id}_res.csv.gz")
             if not sifts_res_csv.exists():
                 logger.error(f"{sifts_res_csv} does not exist")
         else:
@@ -387,14 +368,12 @@ class ExportSIFTSTommCIF:
 
         self.d_block = cif.read(str(orig_updated_cif)).sole_block()
 
-        self.UpdateFlag, self.d_block, self.UnpDataFlag = (
-            self._process_cif_file(
-                self.d_block,
-                sifts_segments,
-                sifts_seg_inst,
-                sifts_res_csv,
-                entry_id,
-            )
+        self.UpdateFlag, self.d_block, self.UnpDataFlag = self._process_cif_file(
+            self.d_block,
+            sifts_segments,
+            sifts_seg_inst,
+            sifts_res_csv,
+            entry_id,
         )
 
         self.entry_id = entry_id
@@ -413,9 +392,7 @@ class ExportSIFTSTommCIF:
             data = self.d_block.get_mmcif_category(f"_{cat}")
             if not data:
                 if cat == "_pdbx_sifts_unp_segments":
-                    raise NoSegmentsError(
-                        "No segments written. This shouldn't happen"
-                    )
+                    raise NoSegmentsError("No segments written. This shouldn't happen")
                 logger.warning(f"Category _{cat} not written out")
                 continue
             block.set_mmcif_category(f"_{cat}.", data)

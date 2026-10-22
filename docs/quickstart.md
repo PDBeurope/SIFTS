@@ -11,7 +11,7 @@ pdbe_sifts init
 # → builds the UniProt–PDB cross-reference index and CCD mapping cache
 ```
 
-By default, `init` sets `base_dir` to the current working directory, `nobackup_dir` to `<base_dir>/cache` and `target_db` to `<base_dir>/sp.db`. Override them with `--base-dir`, `--nobackup-dir` and `--target-db`, or edit the config afterwards.
+By default, `init` sets `base_dir` to the current working directory, `nobackup_dir` to `<base_dir>/cache` and `target_db` to `<base_dir>/database/sp.db`. Override them with `--base-dir`, `--nobackup-dir` and `--target-db`, or edit the config afterwards.
 
 ## Step 2 — Build a reference database
 
@@ -25,7 +25,6 @@ pdbe_sifts create_tax_file \
 
 pdbe_sifts build_db \
   -i uniprot_sprot.fasta.gz \
-  -o ./my_db/target_db \
   -t taxonomy_mapping.tsv \
   --tool mmseqs \
   --threads 8
@@ -39,10 +38,10 @@ pdbe_sifts build_db \
 
 ```bash
 # Single CIF entry
-pdbe_sifts sequence_match -i 1abc.cif -o ./results -d ./my_db/target_db
+pdbe_sifts sequence_match -i 1abc.cif -o ./results
 
 # Batch (one mmCIF path per line)
-pdbe_sifts sequence_match -i entries.txt -o ./results -d ./my_db/target_db --threads 8
+pdbe_sifts sequence_match -i entries.txt -o ./results --threads 8
 ```
 
 Produces `hits.duckdb` and `hits_<entry>.tsv` under

@@ -63,7 +63,7 @@ def _update_init_config(
     Explicit arguments always win. Otherwise, values already present in the
     config are kept, and unset ones default to the current working directory
     for ``base_dir``, ``<base_dir>/cache`` for ``nobackup_dir`` and
-    ``<base_dir>/sp.db`` for ``target_db``.
+    ``<base_dir>/database/sp.db`` for ``target_db``.
     """
     from omegaconf import OmegaConf
 
@@ -80,7 +80,7 @@ def _update_init_config(
         "user.nobackup_dir": _pick(nobackup_dir, cfg.user.nobackup_dir)
         or str(base_path / "cache"),
         "user.target_db": _pick(target_db, cfg.user.target_db)
-        or str(base_path / "sp.db"),
+        or str(base_path / "database" / "sp.db"),
     }
     for key, value in updates.items():
         OmegaConf.update(cfg, key, value, merge=True)
@@ -174,7 +174,7 @@ def main():
         default=None,
         help=(
             "Path to the search database used by later commands. "
-            "Defaults to <base-dir>/sp.db."
+            "Defaults to <base-dir>/database/sp.db."
         ),
     )
 
@@ -254,8 +254,12 @@ def main():
     targetbuild_parser.add_argument(
         "-o",
         "--output-path",
-        required=True,
-        help="Path where the target database files will be saved.",
+        required=False,
+        default=None,
+        help=(
+            "Path prefix for the target database files. "
+            "Defaults to user.target_db from the resolved config."
+        ),
     )
     targetbuild_parser.add_argument(
         "-t",
@@ -668,11 +672,18 @@ def main():
         gb_m.process()
 
     elif args.command == "build_db":
+        from pdbe_sifts.base.paths import get_conf_user_target_db
         from pdbe_sifts.sequence_match.target_database import TargetDb
 
+        output_path = args.output_path or get_conf_user_target_db()
+        if not output_path:
+            parser.error(
+                "build_db: no --output-path given and user.target_db is not set; "
+                "run `pdbe_sifts init` or pass -o."
+            )
         db_b = TargetDb(
             input_path=args.input_file,
-            output_path=args.output_path,
+            output_path=output_path,
             tax_mapping_file=args.tax_mapping_file,
             tool=args.tool,
             threads=args.threads,
