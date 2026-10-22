@@ -18,9 +18,7 @@ def _mapping_fasta_path(value: str) -> Path:
     """Return an existing mapping FASTA path for argparse."""
     path = Path(value)
     if not path.is_file():
-        raise argparse.ArgumentTypeError(
-            f"mapping FASTA file does not exist: {value}"
-        )
+        raise argparse.ArgumentTypeError(f"mapping FASTA file does not exist: {value}")
     return path
 
 
@@ -168,8 +166,7 @@ def main():
         "--nobackup-dir",
         default=None,
         help=(
-            "Path for large cache and temporary files. "
-            "Defaults to <base-dir>/cache."
+            "Path for large cache and temporary files. Defaults to <base-dir>/cache."
         ),
     )
     init_parser.add_argument(
@@ -496,9 +493,7 @@ def main():
         required=True,
         help="Output directory where SIFTS mmCIF files will be written.",
     )
-    _sifts2mmcif_source = sifts2mmcif_parser.add_mutually_exclusive_group(
-        required=True
-    )
+    _sifts2mmcif_source = sifts2mmcif_parser.add_mutually_exclusive_group(required=True)
     _sifts2mmcif_source.add_argument(
         "-s",
         "--sifts-csv-dir",
@@ -580,8 +575,9 @@ def main():
             nobackup_dir=args.nobackup_dir,
             target_db=args.target_db,
         )
-        tsv_path = config_path.parent / "uniprot_pdb.tsv.gz"
-        db_path = config_path.parent / "uniprot_pdb.duckdb"
+        cfg = load_config(config_path)
+        tsv_path = Path(cfg.user.base_dir) / "uniprot_pdb.tsv.gz"
+        db_path = Path(cfg.user.base_dir) / "uniprot_pdb.duckdb"
         try:
             from pdbe_sifts.base.utils import (
                 build_uniprot_pdb_duckdb,
