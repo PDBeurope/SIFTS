@@ -177,7 +177,7 @@ pdbe_sifts init
 # → builds the UniProt–PDB cross-reference index and CCD mapping cache
 ```
 
-By default, `init` sets `base_dir` to the current working directory, `nobackup_dir` to `<base_dir>/cache` and `target_db` to `<base_dir>/sp.db`. Override them with `--base-dir`, `--nobackup-dir` and `--target-db`, or edit the config afterwards. You can also setup different alignment parameters.
+By default, `init` sets `base_dir` to the current working directory, `nobackup_dir` to `<base_dir>/cache` and `target_db` to `<base_dir>/database/sp.db`. Override them with `--base-dir`, `--nobackup-dir` and `--target-db`, or edit the config afterwards. You can also setup different alignment parameters.
 
 `base_dir`: path to where you want the results to be saved
 
@@ -197,7 +197,6 @@ pdbe_sifts create_tax_file \
 
 pdbe_sifts build_db \
   -i /my/path/to/myfile.fasta.gz \
-  -o ./my/folder/prefix \
   -t /my/path/to/taxonomy_mapping.tsv \
   --tool mmseqs \
   --threads 8
@@ -209,7 +208,8 @@ one `sequence_id<TAB>tax_id` row per sequence, and pass it directly to
 `build_db` with `-t`.
 
 `build_db` accepts a gzip-compressed FASTA when using MMseqs2. It creates
-several database files using the value of `-o` as their path prefix. MMseqs2 is
+several database files using `user.target_db` (by default
+`<base_dir>/database/sp.db`) as their path prefix; pass `-o` to override it. MMseqs2 is
 the default backend; use `--tool blastp` to build a BLAST database instead.
 
 ### 3 — Run structure to sequence matching

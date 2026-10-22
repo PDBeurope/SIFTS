@@ -49,7 +49,7 @@ pdbe_sifts init [--dest PATH] [--force] [--base-dir PATH] [--nobackup-dir PATH] 
 | `--force` | `False` | Overwrite an existing config file |
 | `--base-dir PATH` | current working directory | Directory for PDBe-SIFTS result files |
 | `--nobackup-dir PATH` | `<base-dir>/cache` | Directory for large cache and temporary files |
-| `--target-db PATH` | `<base-dir>/sp.db` | Reference search database used by later commands |
+| `--target-db PATH` | `<base-dir>/database/sp.db` | Reference search database used by later commands |
 
 ---
 
@@ -111,7 +111,6 @@ pdbe_sifts create_tax_file \
 
 pdbe_sifts build_db \
   -i FASTA.gz \
-  -o OUTPUT_PATH \
   -t TAX.tsv \
   --tool mmseqs \
   --threads 8
@@ -127,13 +126,13 @@ yourself instead of using `create_tax_file`.
 Build an indexed reference sequence database from a FASTA file.
 
 ```bash
-pdbe_sifts build_db -i FASTA -o OUTPUT_PATH -t TAX_FILE [--tool TOOL] [--threads N]
+pdbe_sifts build_db -i FASTA -t TAX_FILE [-o OUTPUT_PATH] [--tool TOOL] [--threads N]
 ```
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
 | `-i`, `--input-file` | ✓ | — | Input FASTA file |
-| `-o`, `--output-path` | ✓ | — | Output path for database files |
+| `-o`, `--output-path` | | config `target_db` | Path prefix for database files |
 | `-t`, `--tax-mapping-file` | ✓ | — | TSV file mapping sequence IDs to NCBI taxon IDs |
 | `--tool` | | `mmseqs` | Search back-end: `mmseqs` or `blastp` |
 | `--threads` | | `1` | Number of CPU threads |

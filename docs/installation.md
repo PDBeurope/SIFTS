@@ -103,7 +103,7 @@ Open `~/.sifts/config.yaml` and check the following fields:
 |-------|-----------------------|-------------|
 | `user.base_dir` | Current working directory | Working directory for all pipeline outputs |
 | `user.nobackup_dir` | `<base_dir>/cache` | Large-file cache directory (UniProt, CCD files) |
-| `user.target_db` | `<base_dir>/sp.db` | Path to the reference database built by `build_db` |
+| `user.target_db` | `<base_dir>/database/sp.db` | Path to the reference database built by `build_db` |
 
 ### 3. Verify the resolved configuration
 
