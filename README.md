@@ -22,7 +22,7 @@ The whole pipeline can work on non-UniProt or non-PDB entries. However, it will 
 
 ## Installation
 
-The [quickstart notebook](https://github.com/PDBeurope/SIFTS/blob/master/notebooks/quickstart.ipynb)
+The [quickstart notebook](https://github.com/PDBeurope/SIFTS/blob/master/docs/quickstart.ipynb)
 also walks through the installation.
 
 ### System dependencies
