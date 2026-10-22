@@ -63,7 +63,7 @@ def _update_init_config(
     Explicit arguments always win. Otherwise, values already present in the
     config are kept, and unset ones default to the current working directory
     for ``base_dir``, ``<base_dir>/cache`` for ``nobackup_dir`` and
-    ``<base_dir>/database.db`` for ``target_db``.
+    ``<base_dir>/sp.db`` for ``target_db``.
     """
     from omegaconf import OmegaConf
 
@@ -80,7 +80,7 @@ def _update_init_config(
         "user.nobackup_dir": _pick(nobackup_dir, cfg.user.nobackup_dir)
         or str(base_path / "cache"),
         "user.target_db": _pick(target_db, cfg.user.target_db)
-        or str(base_path / "database.db"),
+        or str(base_path / "sp.db"),
     }
     for key, value in updates.items():
         OmegaConf.update(cfg, key, value, merge=True)
@@ -174,7 +174,7 @@ def main():
         default=None,
         help=(
             "Path to the search database used by later commands. "
-            "Defaults to <base-dir>/database.db."
+            "Defaults to <base-dir>/sp.db."
         ),
     )
 
