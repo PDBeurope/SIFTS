@@ -7,6 +7,8 @@ from pathlib import Path
 
 from omegaconf import DictConfig, OmegaConf
 
+from pdbe_sifts.base.log import logger
+
 _USER_CONFIG_DIR = Path.home() / ".sifts"
 _USER_CONFIG_FILE = _USER_CONFIG_DIR / "config.yaml"
 _UNIPROT_PDB_TSV_FILE = _USER_CONFIG_DIR / "uniprot_pdb.tsv.gz"
@@ -31,13 +33,12 @@ def init_config(dest: Path | None = None) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
 
     if target.exists():
-        print(f"Config already exists at: {target}")
-        print("Use --force to overwrite.")
+        logger.warning(f"Config already exists at: {target}")
+        logger.warning("Use --force to overwrite.")
         return target
 
     shutil.copy(get_template_path(), target)
-    print(f"Config template copied to: {target}")
-    print("Please edit it before running the pipeline.")
+    logger.info(f"Default config copied to: {target}")
     return target
 
 
@@ -85,9 +86,7 @@ def load_config(user_config: str | Path | None = None) -> DictConfig:
                 f"PDBE_SIFTS_CONFIG points to missing file: {config_path}"
             )
         if config_path is None:
-            config_path = (
-                _USER_CONFIG_FILE if _USER_CONFIG_FILE.exists() else None
-            )
+            config_path = _USER_CONFIG_FILE if _USER_CONFIG_FILE.exists() else None
 
     if config_path is not None:
         if not config_path.exists():
