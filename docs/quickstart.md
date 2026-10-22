@@ -11,7 +11,7 @@ pdbe_sifts init
 # → builds the UniProt–PDB cross-reference index and CCD mapping cache
 ```
 
-By default, `init` sets `base_dir` to the current working directory, `nobackup_dir` to `<base_dir>/cache` and `target_db` to `<base_dir>/database.db`. Override them with `--base-dir`, `--nobackup-dir` and `--target-db`, or edit the config afterwards.
+By default, `init` sets `base_dir` to the current working directory, `nobackup_dir` to `<base_dir>/cache` and `target_db` to `<base_dir>/sp.db`. Override them with `--base-dir`, `--nobackup-dir` and `--target-db`, or edit the config afterwards.
 
 ## Step 2 — Build a reference database
 

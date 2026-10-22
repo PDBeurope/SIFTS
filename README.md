@@ -177,7 +177,7 @@ pdbe_sifts init
 # → builds the UniProt–PDB cross-reference index and CCD mapping cache
 ```
 
-By default, `init` sets `base_dir` to the current working directory, `nobackup_dir` to `<base_dir>/cache` and `target_db` to `<base_dir>/database.db`. Override them with `--base-dir`, `--nobackup-dir` and `--target-db`, or edit the config afterwards. You can also setup different alignment parameters.
+By default, `init` sets `base_dir` to the current working directory, `nobackup_dir` to `<base_dir>/cache` and `target_db` to `<base_dir>/sp.db`. Override them with `--base-dir`, `--nobackup-dir` and `--target-db`, or edit the config afterwards. You can also setup different alignment parameters.
 
 `base_dir`: path to where you want the results to be saved
 
@@ -256,7 +256,7 @@ Bulk-loads the segment and residue CSVs produced in step 4 into the `sifts_xref_
 
 ### 6 — Annotate mmCIF files with residue level mappings and SIFTS data
 
-If you run the `db_load` command, you can use the command below because the `-d` argument requires two tables created by the db_load 
+If you run the `db_load` command, you can use the command below because the `-d` argument requires two tables created by the db_load
 step.
 
 ```bash

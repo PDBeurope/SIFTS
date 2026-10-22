@@ -49,7 +49,7 @@ pdbe_sifts init [--dest PATH] [--force] [--base-dir PATH] [--nobackup-dir PATH] 
 | `--force` | `False` | Overwrite an existing config file |
 | `--base-dir PATH` | current working directory | Directory for PDBe-SIFTS result files |
 | `--nobackup-dir PATH` | `<base-dir>/cache` | Directory for large cache and temporary files |
-| `--target-db PATH` | `<base-dir>/database.db` | Reference search database used by later commands |
+| `--target-db PATH` | `<base-dir>/sp.db` | Reference search database used by later commands |
 
 ---
 
