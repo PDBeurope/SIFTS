@@ -106,13 +106,15 @@ def main():
     * ``sifts2mmcif``         — inject SIFTS mappings back into a mmCIF file.
     * ``seq2seq``             — align canonical deposited sequence vs coordinate sequence.
     """
+    pdbe_sifts_version = _get_pdbe_sifts_version()
     parser = argparse.ArgumentParser(
-        prog="pdbe_sifts", description="PDBe SIFTS mapping pipeline"
+        prog="pdbe_sifts",
+        description=f"PDBe SIFTS mapping pipeline (version {pdbe_sifts_version})",
     )
     parser.add_argument(
         "--version",
         action="version",
-        version=f"pdbe_sifts {_get_pdbe_sifts_version()}",
+        version=f"pdbe_sifts {pdbe_sifts_version}",
     )
 
     # Global flag: applies to every subcommand.
