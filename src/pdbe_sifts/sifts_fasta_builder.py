@@ -10,6 +10,7 @@ Supports three input types:
 """
 
 import argparse
+import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -187,7 +188,12 @@ class FastaBuilder:
             batch = file_paths[i : i + self.batch_size]
             results = []
 
-            with ProcessPoolExecutor(max_workers=self.threads) as pool:
+            # Native libraries may leave threads running in this process, so
+            # fork() could deadlock the workers; spawn starts them clean.
+            with ProcessPoolExecutor(
+                max_workers=self.threads,
+                mp_context=multiprocessing.get_context("spawn"),
+            ) as pool:
                 futures = {
                     pool.submit(self._process_single_cif, fp): fp
                     for fp in batch
