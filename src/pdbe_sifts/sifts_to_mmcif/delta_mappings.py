@@ -13,8 +13,6 @@ from pdbe_sifts.base.utils import get_next_release_date
 from pdbe_sifts.sifts_to_mmcif.def_mmcif_cat import MAPPED_DB
 
 
-
-
 def read_sifts_segments(block):
     """
     Read the segments information from sifts mmcif block
@@ -88,7 +86,9 @@ def get_delta_csv_suffix(csv_dir, entry_id):
     # find only this entry's delta mapping files; other files in csv_dir are kept
     all_file = sorted(
         glob.glob(
-            os.path.join(glob.escape(str(csv_dir)), f"{entry_id}_delta_*.csv.gz")
+            os.path.join(
+                glob.escape(str(csv_dir)), f"{entry_id}_delta_*.csv.gz"
+            )
         ),
         key=os.path.getctime,
     )

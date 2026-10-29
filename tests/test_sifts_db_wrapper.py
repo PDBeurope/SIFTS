@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import duckdb
 import pytest
+
 from pdbe_sifts.database.sifts_db_wrapper import (
     SiftsDB,
     residue_to_dict,

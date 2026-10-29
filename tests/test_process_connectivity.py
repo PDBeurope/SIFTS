@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+
 from pdbe_sifts.segments_generation.connectivity.process_connectivity import (
     ConnectivityCheck,
     compute_atom_distance,

@@ -3,6 +3,7 @@ from importlib.metadata import PackageNotFoundError
 from unittest.mock import MagicMock
 
 import pytest
+
 from pdbe_sifts import cli
 
 

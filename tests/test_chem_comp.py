@@ -1,6 +1,7 @@
 """Tests for pdbe_sifts.mmcif.chem_comp.ChemCompMapping."""
 
 import pytest
+
 from pdbe_sifts.mmcif.chem_comp import STANDARD_AA, ChemCompMapping
 
 
