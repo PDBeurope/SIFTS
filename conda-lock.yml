@@ -13,7 +13,7 @@
 # To update a single package to the latest version compatible with the version constraints in the source:
 #     conda-lock lock  --lockfile conda-lock.yml --update PACKAGE
 # To re-solve the entire environment, e.g. after changing a version constraint in the source file:
-#     conda-lock -f environment.yml -f pyproject.toml --lockfile conda-lock.yml
+#     conda-lock -f pyproject.toml --lockfile conda-lock.yml
 version: 1
 metadata:
   content_hash:
@@ -28,7 +28,6 @@ metadata:
   - linux-64
   - osx-arm64
   sources:
-  - environment.yml
   - pyproject.toml
 package:
 - name: _openmp_mutex

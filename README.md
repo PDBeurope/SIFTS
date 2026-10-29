@@ -22,120 +22,67 @@ The whole pipeline can work on non-UniProt or non-PDB entries. However, it will 
 
 ## Installation
 
-The [quickstart notebook](https://github.com/PDBeurope/SIFTS/blob/master/docs/quickstart.ipynb)
-also walks through the installation.
+**Requirements:** Python ≥ 3.10 · 16 GB RAM minimum (32 GB+ recommended for large datasets)
 
-### System dependencies
+Besides the Python package, the pipeline calls these external tools, which
+must be on `PATH`:
 
-The following binaries must be installed and available on `PATH`:
+| Tool | Purpose |
+|------|---------|
+| [MMseqs2](https://github.com/soedinglab/MMseqs2) (`mmseqs`) | Fast global sequence search |
+| [FASTA36](https://fasta.bioch.virginia.edu/wrpearson/fasta/) (`lalign36`) | Local pairwise alignment |
+| [BLAST+](https://blast.ncbi.nlm.nih.gov/) (`blastp`, `makeblastdb`) | Optional alternative to MMseqs2, used with `--tool blastp` |
 
-| Tool | Purpose | Install |
-|------|---------|---------|
-| [MMseqs2](https://github.com/soedinglab/MMseqs2) | Fast global sequence search | `conda install -c conda-forge mmseqs2` |
-| [FASTA36](https://fasta.bioch.virginia.edu/wrpearson/fasta/) (`lalign36`) | Local pairwise alignment | `conda install -c bioconda fasta3` |
-| [BLAST+](https://blast.ncbi.nlm.nih.gov/) | Optional alternative to MMseqs2 | `conda install -c bioconda blast` |
-
-### A. Install a local checkout using conda (recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/PDBeurope/SIFTS
-cd SIFTS
-
-# Create environment from file. This also installs the checked-out source
-# in editable mode.
-conda env create -f environment.yml
-
-# Activate environment
-conda activate pdbe_sifts
-```
-
-### B. Install the published Python package
+The simplest way to get everything is a
+[micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html)
+environment with the tools from conda-forge and bioconda:
 
 ```bash
+micromamba create -n sifts -c conda-forge -c bioconda python=3.13 pip mmseqs2 fasta3 blast
+micromamba activate sifts
 pip install pdbe-sifts
 ```
 
-The external MMseqs2 and FASTA36 binaries must still be installed separately.
-BLAST+ is required only when using `--tool blastp`.
+`conda` and `mamba` accept the same arguments if you already use one of them.
+If you install the tools another way (see the
+[installation guide](docs/installation.md)), `pip install pdbe-sifts` is all
+that remains. Windows is not supported; use the Windows Subsystem for Linux.
 
-### C. Install a local checkout using uv
+## Development setup
 
-#### 1. Install uv
-
-```bash
-# macOS/Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-# Alternative
-pip install uv
-```
-
-#### 2. Clone the repository
+The development environment is pinned in `conda-lock.yml` for linux-64 and
+osx-arm64. It contains the runtime dependencies, the external tools, and the
+test, lint and docs tooling.
 
 ```bash
 git clone https://github.com/PDBeurope/SIFTS
 cd SIFTS
+
+micromamba create -n sifts-dev -f conda-lock.yml --category "main dev docs"
+micromamba activate sifts-dev
+
+pip install --no-deps --no-build-isolation -e .
+pre-commit install
 ```
 
-#### 3. Create virtual environment and install dependencies
+Run the tests and preview the docs:
 
 ```bash
-# Create .venv and uv.lock, and install this checkout in editable mode
-uv sync
+pytest
+mkdocs serve
 ```
 
-#### 4. Activate the virtual environment
+To change a dependency, edit `pyproject.toml` (the Python packages are
+listed under `[project]`, the conda-only tools and Python version under
+`[tool.conda-lock.dependencies]`), then refresh the lock file:
 
 ```bash
-# macOS/Linux
-source .venv/bin/activate
-
-# Windows
-.venv\Scripts\activate
+conda-lock lock --micromamba -f pyproject.toml -e dev -e docs \
+  --pypi_to_conda_lookup_file https://raw.githubusercontent.com/conda-forge/conda-forge-bot-data/main/mappings/pypi/grayskull_pypi_mapping.json
 ```
 
-The external binaries listed above are not installed by `uv sync` and must be
-installed separately.
-
-**Requirements:** Python ≥ 3.10 · 16 GB RAM minimum (32 GB+ recommended for large datasets)
-
-### D. Install the external binaries manually
-
-Install BLAST+:
-```bash
-brew install blast # MacOS
-sudo apt install ncbi-blast+ # Linux
-```
-
-On Windows, download BLAST+ from the
-[NCBI distribution directory](https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/).
-
-Install MMseqs2:
-```bash
-brew install mmseqs2 # MacOS or Linux
-
-# Windows
-# Not supported yet (it is recommanded to use the linux subsytem from Windows.)
-```
----
-
-Install FASTA36 from source (Linux):
-
-```bash
-git clone https://github.com/wrpearson/fasta36.git
-cd fasta36/src
-make -f ../make/Makefile.linux_sse2 all
-
-# lalign36 is generated in fasta36/bin; make it available on PATH
-export PATH="$(pwd)/../bin:$PATH"
-
-# Windows
-# Not supported yet (use the Windows Subsystem for Linux).
-```
+The `conda-lock` pre-commit hook runs the same command, so a commit that
+changes `pyproject.toml` without updating `conda-lock.yml` fails.
 
 ## Quick Start
 
