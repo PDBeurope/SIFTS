@@ -4,14 +4,13 @@ Description: Keeps track of change in mappings in sifts when compared to last ru
 """
 
 import csv
+import glob
 import gzip
 import os
 
 from pdbe_sifts.base.log import logger
 from pdbe_sifts.base.utils import get_next_release_date
 from pdbe_sifts.sifts_to_mmcif.def_mmcif_cat import MAPPED_DB
-
-
 
 
 def read_sifts_segments(block):
@@ -76,21 +75,21 @@ def read_sifts_segments(block):
     return data, rows
 
 
-def get_delta_csv_suffix(csv_dir):
+def get_delta_csv_suffix(csv_dir, entry_id):
     """
     Program keeps changes from last 10(+1) releases.
     This function gets the suffix for each release and
-    remove the oldest delta csv file  if more than 10.
+    remove the oldest delta csv file of ``entry_id`` if more than 10.
     """
     my_cutoff = 10
     suff = str(get_next_release_date()).split("-", 1)[1]
-    # file all the files with delta mappings
+    # find only this entry's delta mapping files; other files in csv_dir are kept
     all_file = sorted(
-        [
-            os.path.join(csv_dir, f)
-            for f in os.listdir(csv_dir)
-            if f.endswith(".csv.gz")
-        ],
+        glob.glob(
+            os.path.join(
+                glob.escape(str(csv_dir)), f"{entry_id}_delta_*.csv.gz"
+            )
+        ),
         key=os.path.getctime,
     )
     if len(all_file) >= my_cutoff:

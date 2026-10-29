@@ -12,6 +12,7 @@ Covers:
 
 import duckdb
 import pytest
+
 from pdbe_sifts.base.utils import (
     safe_join,
     validate_entry_id,
@@ -248,9 +249,9 @@ class TestSqlInjectionParser:
         # The escaped path (/tmp/it''s/…) must appear literally in the SQL
         assert "it''s" in sql, "Single quote was not doubled in the SQL path"
         # The raw unescaped path must NOT appear
-        assert "it's" not in sql.replace(
-            "it''s", ""
-        ), "Unescaped single quote found in SQL path"
+        assert "it's" not in sql.replace("it''s", ""), (
+            "Unescaped single quote found in SQL path"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -415,6 +416,6 @@ class TestUnpRestrictedUnpickler:
 
         unp_module.UNP(acc)
 
-        assert (
-            not json_path.exists()
-        ), ".json file was NOT deleted — reverse migration code is missing"
+        assert not json_path.exists(), (
+            ".json file was NOT deleted — reverse migration code is missing"
+        )

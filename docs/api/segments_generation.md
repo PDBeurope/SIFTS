@@ -73,6 +73,4 @@ and write the segment / residue CSV files consumed by the rest of the pipeline.
 
 ## Mapping queries
 
-::: pdbe_sifts.segments_generation.get_list_of_mappings.get_selection_queries
-
 ::: pdbe_sifts.segments_generation.get_list_of_mappings.get_curated_db_mappings

@@ -1,0 +1,13 @@
+name: Set up the development environment
+description: Create the locked sifts-dev environment with micromamba.
+
+runs:
+  using: composite
+  steps:
+    - uses: mamba-org/setup-micromamba@v3
+      with:
+        micromamba-version: "2.10.0-0"
+        environment-file: conda-lock.yml
+        environment-name: sifts-dev
+        create-args: --category main dev docs
+        cache-environment: true

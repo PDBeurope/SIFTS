@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdbe_sifts"
-version = "1.0"
+version = "1.1.0"
 description = "Python package to run SIFTS from EMBL-EBI locally."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,23 +19,22 @@ authors = [
 ]
 
 dependencies = [
-    "tqdm",
-    "biopython",
-    "funcy",
-    "lxml",
-    "requests",
-    "pandas",
-    "pymmseqs",
-    "coloredlogs",
-    "pyyaml",
-    "scikit-learn",
-    "ete4",
-    "omegaconf",
-    "gemmi",
-    "duckdb",
-    "platformdirs",
-    "python-dateutil",
-    "numpy",
+    "tqdm>=4.66",
+    "biopython>=1.84",
+    "funcy>=2.0",
+    "lxml>=5.2",
+    "requests>=2.31",
+    "pandas>=2.2",
+    "pymmseqs>=1.2",
+    "coloredlogs>=15.0",
+    "pyyaml>=6.0",
+    "scikit-learn>=1.5",
+    "ete4>=4.1",
+    "omegaconf>=2.3,<3",
+    "gemmi>=0.7",
+    "duckdb>=1.1",
+    "python-dateutil>=2.9",
+    "numpy>=1.26",
 ]
 
 classifiers = [
@@ -45,6 +44,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Operating System :: OS Independent",
 ]
@@ -65,12 +65,13 @@ pdbe_sifts = ["data/*.csv", "data/*.pkl.gz", "data/*.yaml"]
 pdbe_sifts = "pdbe_sifts.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-mock>=3", "ruff>=0.4", "pre-commit>=3.0"]
+dev = ["pytest>=8", "pytest-mock>=3", "ruff>=0.4", "pre-commit>=3.0", "ipython>=8"]
 docs = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
-    "mkdocstrings[python]>=0.25",
+    "mkdocstrings-python>=1.0",
     "mkdocs-autorefs>=1.0",
+    "mkdocs-jupyter>=0.25",
 ]
 
 [tool.pytest.ini_options]
@@ -107,3 +108,20 @@ ignore = [
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.conda-lock]
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64", "osx-arm64"]
+
+[tool.conda-lock.dependencies]
+python = ">=3.10,<3.14"
+# Tools the pipeline calls on PATH; not installable with pip
+mmseqs2 = "*"
+# conda sorts 36.3.8 above 36.3.8i, and 36.3.8 has no osx-arm64 build, so pin
+# the later upstream release
+fasta3 = "==36.3.8i"
+blast = "*"
+# Build tools for the editable install
+pip = "*"
+setuptools = ">=68"
+wheel = "*"

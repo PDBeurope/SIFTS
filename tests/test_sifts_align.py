@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from pdbe_sifts.sifts_segments_generation import SiftsAlign
 
 DATA_DIR = Path(__file__).parent / "data"
