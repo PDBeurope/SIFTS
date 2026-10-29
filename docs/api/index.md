@@ -22,8 +22,6 @@ All pipeline stages can be driven directly from Python without going through the
 | [`SequenceMatchParser`](sequence_match.md) | `pdbe_sifts.sequence_match.sequence_match_parser` | Parse and score raw alignment hits |
 | [`EntryMapping`](segments_generation.md) | `pdbe_sifts.segments_generation.alignment.helper` | Per-entry segment/residue alignment orchestrator |
 | [`ConnectivityCheck`](segments_generation.md) | `pdbe_sifts.segments_generation.connectivity.process_connectivity` | Check and refine segment connectivity |
-| [`BatchSegmentGeneration`](batch.md) | `pdbe_sifts.batch_segment_generation` | Run segment generation over many entries |
-| [`TaxonomyFix`](batch.md) | `pdbe_sifts.taxonomy_fix_pkl` | Resolve taxonomy IDs from bundled pickle |
 
 ## Typical usage pattern
 
