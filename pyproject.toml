@@ -71,6 +71,7 @@ docs = [
     "mkdocs-material>=9.5",
     "mkdocstrings-python>=1.0",
     "mkdocs-autorefs>=1.0",
+    "mkdocs-jupyter>=0.25",
 ]
 
 [tool.pytest.ini_options]

@@ -7,6 +7,10 @@ build/
 .env
 .venv/
 site/
+.cache/
+cache/
+database/
+output/
 
 # pre-commit cache (local, not shared)
 .pre-commit-cache/
@@ -23,8 +27,3 @@ notebooks/.ipynb_checkpoints/
 
 # macOS
 .DS_Store
-
-# temp files
-/cache
-/database
-/output

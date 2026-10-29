@@ -32,6 +32,7 @@ theme:
 plugins:
   - search
   - autorefs
+  - mkdocs-jupyter
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -54,7 +55,7 @@ plugins:
 nav:
   - Home: index.md
   - Installation: installation.md
-  - Quick Start: quickstart.md
+  - Quick Start: quickstart.ipynb
   - CLI Reference: cli.md
   - API Reference:
       - Overview: api/index.md
@@ -69,7 +70,6 @@ nav:
           - mmCIF parsing: api/mmcif.md
           - Sequence match: api/sequence_match.md
           - Segments generation: api/segments_generation.md
-          - Batch & taxonomy: api/batch.md
           - UniProt client: api/unp.md
           - Base utilities: api/base.md
   - Changelog: changelog.md
