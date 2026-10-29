@@ -2,6 +2,7 @@ from importlib import reload
 from pathlib import Path
 
 import pytest
+
 from pdbe_sifts.config import init_config, load_config, set_unp_pdb_xrefs_path
 
 

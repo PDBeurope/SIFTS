@@ -86,7 +86,9 @@ def load_config(user_config: str | Path | None = None) -> DictConfig:
                 f"PDBE_SIFTS_CONFIG points to missing file: {config_path}"
             )
         if config_path is None:
-            config_path = _USER_CONFIG_FILE if _USER_CONFIG_FILE.exists() else None
+            config_path = (
+                _USER_CONFIG_FILE if _USER_CONFIG_FILE.exists() else None
+            )
 
     if config_path is not None:
         if not config_path.exists():
