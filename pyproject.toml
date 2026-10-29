@@ -65,11 +65,11 @@ pdbe_sifts = ["data/*.csv", "data/*.pkl.gz", "data/*.yaml"]
 pdbe_sifts = "pdbe_sifts.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-mock>=3", "ruff>=0.4", "pre-commit>=3.0"]
+dev = ["pytest>=8", "pytest-mock>=3", "ruff>=0.4", "pre-commit>=3.0", "ipython>=8"]
 docs = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
-    "mkdocstrings[python]>=0.25",
+    "mkdocstrings-python>=1.0",
     "mkdocs-autorefs>=1.0",
 ]
 
@@ -107,3 +107,20 @@ ignore = [
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.conda-lock]
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64", "osx-arm64"]
+
+[tool.conda-lock.dependencies]
+python = ">=3.10,<3.14"
+# Tools the pipeline calls on PATH; not installable with pip
+mmseqs2 = "*"
+# conda sorts 36.3.8 above 36.3.8i, and 36.3.8 has no osx-arm64 build, so pin
+# the later upstream release
+fasta3 = "==36.3.8i"
+blast = "*"
+# Build tools for the editable install
+pip = "*"
+setuptools = ">=68"
+wheel = "*"
