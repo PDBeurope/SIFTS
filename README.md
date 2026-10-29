@@ -45,8 +45,10 @@ pip install pdbe-sifts
 
 `conda` and `mamba` accept the same arguments if you already use one of them.
 If you install the tools another way (see the
-[installation guide](docs/installation.md)), `pip install pdbe-sifts` is all
+[installation guide](https://github.com/PDBeurope/SIFTS/blob/master/docs/installation.md)), `pip install pdbe-sifts` is all
 that remains. Windows is not supported; use the Windows Subsystem for Linux.
+
+---
 
 ## Development setup
 
@@ -84,11 +86,13 @@ conda-lock lock --micromamba -f pyproject.toml -e dev -e docs \
 The `conda-lock` pre-commit hook runs the same command, so a commit that
 changes `pyproject.toml` without updating `conda-lock.yml` fails.
 
+---
+
 ## Quick Start
 
-### 1.1 — Initialise your required files to run PDBe-SIFTS
+### 1.1 — Prepare the input files
 
-You first need a fasta file containing sequences and a taxonomic mapping file. For that you can use the command:
+You first need a FASTA file containing sequences and a taxonomic mapping file. For that you can use the command:
 
 ```bash
 pdbe_sifts prepare_build_db --output-fasta /my/path/to/myfile.fasta.gz --output-tax-mapping /my/path/to/taxonomy_mapping.tsv
@@ -123,22 +127,15 @@ pdbe_sifts init
 
 By default, `init` sets `base_dir` to the current working directory, `nobackup_dir` to `<base_dir>/cache` and `target_db` to `<base_dir>/database/sp.db`. Override them with `--base-dir`, `--nobackup-dir` and `--target-db`, or edit the config afterwards. You can also setup different alignment parameters.
 
-`base_dir`: path to where you want the results to be saved
-
-`nobackup_dir`:path to where you want the tmp files to be saved
-
-`target_db`: path to the database created using build_db
+- `base_dir`: where results are saved
+- `nobackup_dir`: where temporary and cache files are saved
+- `target_db`: path prefix of the database created by `build_db`
 
 ### 2 — Build a reference database
 
-If you already have a UniProtKB FASTA file, the complete path from that FASTA
-to a searchable database is:
+Using the FASTA and taxonomy mapping from step 1.1:
 
 ```bash
-pdbe_sifts create_tax_file \
-  --input-fasta /my/path/to/myfile.fasta.gz \
-  --output-tax-mapping /my/path/to/taxonomy_mapping.tsv
-
 pdbe_sifts build_db \
   -i /my/path/to/myfile.fasta.gz \
   -t /my/path/to/taxonomy_mapping.tsv \
@@ -146,27 +143,32 @@ pdbe_sifts build_db \
   --threads 8
 ```
 
-`create_tax_file` requires UniProtKB headers in the format described above. For
-a custom FASTA header format, create the headerless taxonomy TSV yourself, with
+For a custom FASTA header format, create the headerless taxonomy TSV yourself, with
 one `sequence_id<TAB>tax_id` row per sequence, and pass it directly to
 `build_db` with `-t`.
 
 `build_db` accepts a gzip-compressed FASTA when using MMseqs2. It creates
 several database files using `user.target_db` (by default
-`<base_dir>/database/sp.db`) as their path prefix; pass `-o` to override it. MMseqs2 is
-the default backend; use `--tool blastp` to build a BLAST database instead.
+`<base_dir>/database/sp.db`) as their path prefix; pass `-o` to override it.
+MMseqs2 is the default backend; use `--tool blastp` to build a BLAST database
+instead.
 
 ### 3 — Run structure to sequence matching
 
 ```bash
 # Single CIF entry
-pdbe_sifts sequence_match -i 1abc.cif -o ./results -d ./my/db/folder/prefix
+pdbe_sifts sequence_match -i 1abc.cif -o ./results
 
 # Batch (one mmCIF path per line)
-pdbe_sifts sequence_match -i entries.txt -o ./results -d ./my/db/folder/prefix --threads 8
+pdbe_sifts sequence_match -i entries.txt -o ./results --threads 8
 ```
 
-At this step you can also provide a .csv file to faster the scoring function. This CSV file must contains per row: row_num, uniprot_accession, dataset (Swiss-Prot or TrEMBL), pdb cross-references, annotation score.
+`-o` and `-d` (the reference database) default to `user.base_dir` and
+`user.target_db` from the config.
+
+To speed up scoring, pass a CSV of UniProt annotations with `--unp-csv-file`.
+Each row must contain: row_num, uniprot_accession, dataset (Swiss-Prot or
+TrEMBL), PDB cross-references, annotation score.
 
 This command produces `hits.duckdb` and `hits_<entry>.tsv` — scored and raw
 sequence candidates per structure entity. The files are written under
@@ -346,6 +348,7 @@ Per entry, under `{output_dir}`:
 | `{entry}_seg.csv.gz` | CSV (gzip) | One row per contiguous aligned range (structure ↔ sequence positions, identity, conflicts, chimera flag) |
 | `{entry}_res.csv.gz` | CSV (gzip) | One row per mapped structure residue (auth seq id, sequence position, one-letter codes, observed flag) |
 | `{entry}_nf90_seg.csv.gz` | CSV (gzip) | NF90 variant of the segment file (written when applicable) |
+| `{entry}_delta.csv.gz` | CSV (gzip) | UniProt mapping changes compared with the previous segment file in the same directory (written when the mapping changes) |
 
 After running `db_load`, results are available in DuckDB tables `sifts_xref_segment` and `sifts_xref_residue`.
 
@@ -368,10 +371,13 @@ After running `db_load`, results are available in DuckDB tables `sifts_xref_segm
 ```
 src/pdbe_sifts/
 ├── cli.py                         # CLI entry point (pdbe_sifts command)
-├── sifts_sequence_match.py       # Global mapping pipeline (SiftsSequenceMatch)
+├── prepare_build_db.py            # FASTA download and taxonomy mapping for build_db
+├── sifts_sequence_match.py        # Global mapping pipeline (SiftsSequenceMatch)
 ├── sifts_segments_generation.py   # Single-entry segment generation (SiftsAlign)
 ├── sifts_fasta_builder.py         # Extract sequences from mmCIF → FASTA (FastaBuilder)
 ├── sifts_database_loader.py       # Standalone bulk-loader script (wraps SiftsDB)
+├── seq2seq.py                     # Canonical vs coordinate sequence alignment (seq2seq)
+├── taxonomy_fix_pkl.py            # Taxonomy ID corrections from a bundled pickle
 ├── config/                        # OmegaConf configuration loading — defines load_config()
 ├── base/
 │   ├── paths.py                   # All configuration getters (imports load_config() from config/)
@@ -385,9 +391,10 @@ src/pdbe_sifts/
 │   ├── target_database.py         # Build MMseqs2 / BLAST reference database (TargetDb)
 │   ├── mmseqs_search.py           # MMseqs2 easy-search wrapper
 │   ├── blastp.py                  # BLASTP wrapper
-│   └── sequence_match_parser.py  # Parse TSV hits, score, store in DuckDB
+│   └── sequence_match_parser.py   # Parse TSV hits, score, store in DuckDB
 ├── segments_generation/
-│   └── alignment/                 # lalign36 wrapper, isoform alignment, residue mapping
+│   ├── alignment/                 # lalign36 wrapper, isoform alignment, residue mapping
+│   └── connectivity/              # CCD parsing and residue connectivity checks
 ├── sifts_to_mmcif/                # Inject SIFTS data back into mmCIF files
 ├── unp/
 │   └── unp.py                     # UniProt REST client, pickle cache, isoform handling
