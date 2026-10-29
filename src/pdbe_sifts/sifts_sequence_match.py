@@ -160,7 +160,7 @@ class SiftsSequenceMatch:
         """Run the complete mapping pipeline.
 
         Creates (or recreates) a result directory named
-        ``{out_dir}/{tool}_{entry_name}_{date}/`` and writes all outputs
+        ``{out_dir}/{tool}_{entry_name}/`` and writes all outputs
         there: the generated FASTA, the raw hits TSV, and hits.duckdb.
         """
         logger.info(f"Processing [{self.input_file}]")
