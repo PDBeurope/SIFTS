@@ -8,6 +8,7 @@ and computes adjusted, taxonomy-based, dataset, and SIFTS scores.
 """
 
 import argparse
+import multiprocessing
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -514,7 +515,12 @@ class SequenceMatchParser:
         DB_UPDATE_BATCH_SIZE = 5000
         all_updates = []
 
-        with ProcessPoolExecutor(max_workers=self.max_workers) as pool:
+        # Native libraries may leave threads running in this process, so
+        # fork() could deadlock the workers; spawn starts them clean.
+        with ProcessPoolExecutor(
+            max_workers=self.max_workers,
+            mp_context=multiprocessing.get_context("spawn"),
+        ) as pool:
             # Submit all tasks
             futures = {
                 pool.submit(score_taxonomy_pair, pair): pair for pair in pairs
