@@ -1,6 +1,7 @@
 """Tests for pdbe_sifts.base.exceptions."""
 
 import pytest
+
 from pdbe_sifts.base.exceptions import (
     AccessionNotFound,
     BatchRunException,

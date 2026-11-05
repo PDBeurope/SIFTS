@@ -22,7 +22,7 @@ The whole pipeline can work on non-UniProt or non-PDB entries. However, it will 
 
 ## Installation
 
-The [quickstart notebook](https://github.com/PDBeurope/SIFTS/blob/master/notebooks/quickstart.ipynb)
+The [quickstart notebook](https://github.com/PDBeurope/SIFTS/blob/master/docs/quickstart.ipynb)
 also walks through the installation.
 
 ### System dependencies
@@ -42,15 +42,12 @@ The following binaries must be installed and available on `PATH`:
 git clone https://github.com/PDBeurope/SIFTS
 cd SIFTS
 
-# Create environment from file
+# Create environment from file. This also installs the checked-out source
+# in editable mode.
 conda env create -f environment.yml
 
 # Activate environment
 conda activate pdbe_sifts
-
-# Use the checked-out source in editable mode. This replaces the published
-# pdbe-sifts package installed by environment.yml.
-pip install -e .
 ```
 
 ### B. Install the published Python package
@@ -172,12 +169,12 @@ no header and contains one `ACCESSION<TAB>TAXID` row per compatible header.
 
 ```bash
 pdbe_sifts init
-# → creates ~/.config/pdbe_sifts/config.yaml
+# → creates ~/.sifts/config.yaml
 # → downloads the NCBI taxonomy database (~70 MB, first run only)
 # → builds the UniProt–PDB cross-reference index and CCD mapping cache
 ```
 
-Edit the config to set your paths (`base_dir`, `nobackup_dir`, `target_db` (after building it), etc.). You can also setup different alignment parameters.
+By default, `init` sets `base_dir` to the current working directory, `nobackup_dir` to `<base_dir>/cache` and `target_db` to `<base_dir>/database/sp.db`. Override them with `--base-dir`, `--nobackup-dir` and `--target-db`, or edit the config afterwards. You can also setup different alignment parameters.
 
 `base_dir`: path to where you want the results to be saved
 
@@ -197,7 +194,6 @@ pdbe_sifts create_tax_file \
 
 pdbe_sifts build_db \
   -i /my/path/to/myfile.fasta.gz \
-  -o ./my/folder/prefix \
   -t /my/path/to/taxonomy_mapping.tsv \
   --tool mmseqs \
   --threads 8
@@ -209,7 +205,8 @@ one `sequence_id<TAB>tax_id` row per sequence, and pass it directly to
 `build_db` with `-t`.
 
 `build_db` accepts a gzip-compressed FASTA when using MMseqs2. It creates
-several database files using the value of `-o` as their path prefix. MMseqs2 is
+several database files using `user.target_db` (by default
+`<base_dir>/database/sp.db`) as their path prefix; pass `-o` to override it. MMseqs2 is
 the default backend; use `--tool blastp` to build a BLAST database instead.
 
 ### 3 — Run structure to sequence matching
@@ -256,7 +253,7 @@ Bulk-loads the segment and residue CSVs produced in step 4 into the `sifts_xref_
 
 ### 6 — Annotate mmCIF files with residue level mappings and SIFTS data
 
-If you run the `db_load` command, you can use the command below because the `-d` argument requires two tables created by the db_load 
+If you run the `db_load` command, you can use the command below because the `-d` argument requires two tables created by the db_load
 step.
 
 ```bash
@@ -411,7 +408,7 @@ After running `db_load`, results are available in DuckDB tables `sifts_xref_segm
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PDBE_SIFTS_CONFIG` | platform config directory | Custom path to the user configuration file |
+| `PDBE_SIFTS_CONFIG` | `~/.sifts/config.yaml` | Custom path to the user configuration file |
 | `SIFTS_LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `SIFTS_N_PROC` | auto | Number of internal threads per worker (lalign36 jobs). Override manually to cap CPU use. |
 | `SIFTS_NO_CACHE_ALL` | unset | If set (any value), disables the UniProt pickle cache and always fetches from the REST API. |

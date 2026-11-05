@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+
 from pdbe_sifts.mmcif.chem_comp import ChemCompMapping
 from pdbe_sifts.mmcif.mmcif_helper import mmCIF
 

@@ -13,6 +13,7 @@ import gemmi
 import requests
 
 from pdbe_sifts.base import utils
+from pdbe_sifts.base.log import logger
 
 
 def parse_ccd_file(ccd_cif_file, ccd_mapping_file):
@@ -23,7 +24,7 @@ def parse_ccd_file(ccd_cif_file, ccd_mapping_file):
         ccd_mapping_file: Output path for three_to_one_letter_mapping.csv.
     """
     # Open output three_to_one_letter_mapping.csv file for writing
-    print(f"Writing the three_to_one_mapping.csv: {ccd_mapping_file}")
+    logger.info(f"Writing the three_to_one_mapping.csv: {ccd_mapping_file}")
     with open(ccd_mapping_file, "w", newline="") as f:
         writer = csv.writer(f)
         # Read PDBe CCD CIF file
@@ -167,7 +168,7 @@ def main():
         if not ccd_file.exists():
             utils.download_file_from_url(args.ccd_url, ccd_file)
         else:
-            print(f"Using existing ccd file: {ccd_file}")
+            logger.info(f"Using existing ccd file: {ccd_file}")
 
     output_path = Path(args.output_path)
     output_path.mkdir(parents=True, exist_ok=True)

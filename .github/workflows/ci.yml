@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # A login shell activates the environment created by setup-micromamba.
+    shell: bash -el {0}
+
+jobs:
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # ruff and pre-commit come from the locked environment, and the
+      # conda-lock hook needs micromamba on PATH.
+      - uses: ./.github/actions/setup-env
+
+      - name: Cache pre-commit hook environments
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files --show-diff-on-failure
+
+  test:
+    name: tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-latest runs on Apple silicon, so this covers both platforms
+        # in conda-lock.yml.
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-env
+
+      - name: Install pdbe_sifts in editable mode
+        run: pip install --no-deps --no-build-isolation -e .
+
+      - name: Check the command-line tools
+        run: |
+          pdbe_sifts --version
+          command -v mmseqs
+          command -v lalign36
+
+      - name: Run tests
+        run: pytest
+
+      - name: Build documentation
+        if: runner.os == 'Linux'
+        run: mkdocs build

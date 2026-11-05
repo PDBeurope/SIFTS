@@ -3,6 +3,7 @@ from importlib.metadata import PackageNotFoundError
 from unittest.mock import MagicMock
 
 import pytest
+
 from pdbe_sifts import cli
 
 
@@ -128,7 +129,7 @@ def test_segments_cli_passes_mapping_fasta(tmp_path, monkeypatch):
 
 
 def test_create_tax_file_cli_writes_mapping_and_reports_path(
-    tmp_path, monkeypatch, capsys
+    tmp_path, monkeypatch, caplog
 ):
     input_fasta = tmp_path / "input.fasta"
     output_tax_mapping = tmp_path / "taxonomy" / "mapping.tsv"
@@ -153,6 +154,6 @@ def test_create_tax_file_cli_writes_mapping_and_reports_path(
     cli.main()
 
     assert output_tax_mapping.read_text(encoding="utf-8") == "P29373\t9606\n"
-    assert capsys.readouterr().out == (
-        f"Taxonomy mapping written to: {output_tax_mapping}\n"
+    assert (
+        f"Taxonomy mapping written to: {output_tax_mapping}" in caplog.messages
     )

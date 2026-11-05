@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+
 from pdbe_sifts.mmcif import extract_entities
 
 DATA_DIR = Path(__file__).parent / "data" / "cif"

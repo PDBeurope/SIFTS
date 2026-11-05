@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import duckdb
 import pytest
+
 from pdbe_sifts.sequence_match.sequence_match_parser import SequenceMatchParser
 
 _STUB_ACCESSIONS = [

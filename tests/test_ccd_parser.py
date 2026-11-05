@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
 from pdbe_sifts.segments_generation.connectivity.ccd_parser import (
     CcdFile,
     ccd_dict_builder,

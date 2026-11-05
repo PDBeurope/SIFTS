@@ -7,6 +7,10 @@ build/
 .env
 .venv/
 site/
+.cache/
+cache/
+database/
+output/
 
 # pre-commit cache (local, not shared)
 .pre-commit-cache/

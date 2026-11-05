@@ -1,6 +1,7 @@
 import gzip
 
 import pytest
+
 from pdbe_sifts.prepare_build_db import (
     parse_uniprot_tax_header,
     prepare_build_db,
