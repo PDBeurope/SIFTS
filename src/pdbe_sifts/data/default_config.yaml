@@ -1,11 +1,13 @@
 user:
-  # Directory where PDBe-SIFTS writes final results.
+  # Directory where PDBe-SIFTS writes final results. `pdbe_sifts init`
+  # defaults it to the current working directory.
   base_dir: null
   # Directory for large cache and temporary files. Prefer a fast scratch or
-  # nobackup filesystem when available.
+  # nobackup filesystem when available. `pdbe_sifts init` defaults it to
+  # <base_dir>/cache.
   nobackup_dir: null
   # Search database path used by later build_db / sequence_match workflows.
-  # This can stay null during init and be filled after the DB is built.
+  # `pdbe_sifts init` defaults it to <base_dir>/database/sp.db.
   target_db: null
   # Local UniProt-to-PDB cross-reference DuckDB. Set automatically by
   # `pdbe_sifts init`.
@@ -23,9 +25,9 @@ location:
 
 
 cache:
-  base: ${location.nobackup_dir}/sifts_data_cache/
-  uniprot: ${cache.base}/uniprot/
-  ccd: ${cache.base}/ccd/
+  base: ${location.nobackup_dir}/sifts_data_cache
+  uniprot: ${cache.base}/uniprot
+  ccd: ${cache.base}/ccd
   three_to_one: ${cache.base}/three_to_one_letter_mapping.csv
 
 
@@ -42,7 +44,7 @@ alignment:
     db_load_mode: 0         # int, 0–3      (2 = memory-mapped, fastest for repeated searches)
     prefilter_mode: 0       # use 1 for single query search (during the search)
     index_subset: 0         # use 2 for single query search (during build db)
-    
+
 
   blastp:
     evalue: 10.0            # float         (e-value cut-off for saving hits)

@@ -1,54 +1,40 @@
 # Installation
 
-## System dependencies
+## Requirements
 
-The following external binaries must be installed and available on `PATH` before running the pipeline:
+Python ≥ 3.10 · 16 GB RAM minimum (32 GB+ recommended for large datasets)
 
-| Tool | Purpose | Recommended install |
-|------|---------|---------------------|
-| [MMseqs2](https://github.com/soedinglab/MMseqs2) | Fast global sequence search | `conda install -c conda-forge mmseqs2` |
-| [FASTA36](https://fasta.bioch.virginia.edu/wrpearson/fasta/) (`lalign36`) | Local pairwise alignment | `conda install -c bioconda fasta3` |
-| [BLAST+](https://blast.ncbi.nlm.nih.gov/) (`blastp`, `makeblastdb`) | Optional alternative to MMseqs2 | `conda install -c bioconda blast` |
+Besides the Python package, the pipeline calls these external binaries, which
+must be available on `PATH`:
 
-## Python package
+| Tool | Purpose |
+|------|---------|
+| [MMseqs2](https://github.com/soedinglab/MMseqs2) (`mmseqs`) | Fast global sequence search |
+| [FASTA36](https://fasta.bioch.virginia.edu/wrpearson/fasta/) (`lalign36`) | Local pairwise alignment |
+| [BLAST+](https://blast.ncbi.nlm.nih.gov/) (`blastp`, `makeblastdb`) | Optional alternative to MMseqs2, used with `--tool blastp` |
 
-=== "Local checkout with conda (recommended)"
+Windows is not supported; use the Windows Subsystem for Linux.
 
-    ```bash
-    git clone https://github.com/PDBeurope/SIFTS
-    cd SIFTS
-    conda env create -f environment.yml
-    conda activate pdbe_sifts
+## Install with micromamba (recommended)
 
-    # Replace the published package installed by environment.yml with
-    # this checkout in editable mode.
-    pip install -e .
-    ```
+Create an environment with the tools from conda-forge and bioconda, then
+install the package into it:
 
-=== "Published package"
+```bash
+micromamba create -n sifts -c conda-forge -c bioconda python=3.13 pip mmseqs2 fasta3 blast
+micromamba activate sifts
+pip install pdbe-sifts
+```
 
-    ```bash
-    pip install pdbe-sifts
-    ```
+`conda` and `mamba` accept the same arguments if you already use one of them.
 
-=== "Local checkout with uv"
+To work on a local checkout instead, follow the
+[development setup](https://github.com/PDBeurope/SIFTS#development-setup) in
+the README.
 
-    ```bash
-    git clone https://github.com/PDBeurope/SIFTS
-    cd SIFTS
-    uv sync
-    source .venv/bin/activate  # macOS/Linux
-    ```
+## Install without micromamba
 
-    `uv sync` creates `.venv` and `uv.lock`, installs the dependencies,
-    and installs the checkout in editable mode.
-
-The external binaries listed above are not installed by `pip` or `uv`. BLAST+
-is optional unless `--tool blastp` is used.
-
-**Requirements:** Python ≥ 3.10 · 16 GB RAM minimum (32 GB+ recommended for large datasets)
-
-## Manual installation of external binaries
+Install the binaries yourself, then run `pip install pdbe-sifts`.
 
 BLAST+:
 
@@ -92,18 +78,18 @@ pdbe_sifts init
 ```
 
 This copies the built-in config template to
-`~/.config/pdbe_sifts/config.yaml`, initialises the NCBI taxonomy database,
+`~/.sifts/config.yaml`, initialises the NCBI taxonomy database,
 builds the UniProt–PDB DuckDB index, and generates the CCD mapping cache.
 
 ### 2. Edit the config
 
-Open `~/.config/pdbe_sifts/config.yaml` and set the following fields:
+Open `~/.sifts/config.yaml` and check the following fields:
 
-| Field | Description |
-|-------|-------------|
-| `user.base_dir` | Working directory for all pipeline outputs |
-| `user.nobackup_dir` | Large-file cache directory (UniProt, CCD files) |
-| `user.target_db` | Path to the pre-built reference database (after running `build_db`) |
+| Field | Default set by `init` | Description |
+|-------|-----------------------|-------------|
+| `user.base_dir` | Current working directory | Working directory for all pipeline outputs |
+| `user.nobackup_dir` | `<base_dir>/cache` | Large-file cache directory (UniProt, CCD files) |
+| `user.target_db` | `<base_dir>/database/sp.db` | Path to the reference database built by `build_db` |
 
 ### 3. Verify the resolved configuration
 

@@ -5,6 +5,7 @@ Description: Main program to write sifts annotations in mmCIF file
 
 import argparse
 import gzip
+import io
 import shutil
 import tempfile
 from pathlib import Path
@@ -31,6 +32,15 @@ from pdbe_sifts.sifts_to_mmcif.read_sifts_csv import (
     get_unp_segments,
     get_unpres_mapping,
 )
+
+
+def _uncompressed_size(path):
+    """Return the size in bytes of ``path``, decompressing it first if gzipped."""
+    path = Path(path)
+    if path.suffix != ".gz":
+        return path.stat().st_size
+    with gzip.open(path, "rb") as f:
+        return f.seek(0, io.SEEK_END)
 
 
 class ExportSIFTSTommCIF:
@@ -91,11 +101,12 @@ class ExportSIFTSTommCIF:
         logger.debug("Checking if the output file is more/equal to input file")
 
         if outfile.exists():
-            input_size = infile.stat().st_size
-            output_size = outfile.stat().st_size
+            # Compare uncompressed sizes; input may be plain CIF, output is gzipped
+            input_size = _uncompressed_size(infile)
+            output_size = _uncompressed_size(outfile)
             if output_size < input_size:
                 logger.warning(
-                    "Check output file- it's smaller than input) for "
+                    "Check output file - it's smaller than input) for "
                     f"{outfile} opsize vs insize --> {output_size} vs {input_size}"
                 )
                 comm_utils.check_output_mmcif(infile, outfile)
@@ -289,7 +300,7 @@ class ExportSIFTSTommCIF:
         self.sifts_delta_csv = None
         if self.track_changes and self.UnpDataFlag:
             base_sifts_dir = Path(self.sifts_updated_cif).parent
-            delta_suff = get_delta_csv_suffix(base_sifts_dir)
+            delta_suff = get_delta_csv_suffix(base_sifts_dir, self.entry_id)
             self.sifts_delta_csv = Path(
                 base_sifts_dir,
                 f"{self.entry_id}_delta_{delta_suff}.csv.gz",
@@ -412,7 +423,7 @@ class ExportSIFTSTommCIF:
         for cat in cat_to_copy:
             data = self.d_block.get_mmcif_category(f"_{cat}")
             if not data:
-                if cat == "_pdbx_sifts_unp_segments":
+                if cat == "pdbx_sifts_unp_segments":
                     raise NoSegmentsError(
                         "No segments written. This shouldn't happen"
                     )

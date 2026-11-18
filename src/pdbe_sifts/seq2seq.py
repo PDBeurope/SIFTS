@@ -468,7 +468,7 @@ def cli_run(
     else:
         results = run_all(input_cif, sample_fasta=sample_fasta)
         if not results:
-            print("No polypeptide entity/chain pairs found in CIF.")
+            logger.warning("No polypeptide entity/chain pairs found in CIF.")
             return
 
     _print_results(results)

@@ -67,6 +67,7 @@ class TargetDb(ToolDatabase):
 
     def _process(self) -> None:
         """Run the appropriate database creation tool based on the configuration."""
+        Path(self.output_path).parent.mkdir(parents=True, exist_ok=True)
         match self.tool:
             case "mmseqs":
                 self.target_db = createdb(

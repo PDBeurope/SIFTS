@@ -59,7 +59,6 @@ class Entity:
             mmcif: mmCIF object containing parsed data
             pdbid: 4-character PDB identifier
             entity_id: Entity identifier
-            sequence: Primary sequence in one-letter code
             parent: Reference to parent Entry object (optional)
         """
         self.mmcif = mmcif

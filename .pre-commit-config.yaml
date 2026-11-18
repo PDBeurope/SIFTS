@@ -1,7 +1,22 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.4
+  - repo: local
     hooks:
-      - id: ruff          # linter (+ auto-fix)
-        args: [--fix]
-      - id: ruff-format   # formatter (équivalent black)
+      - id: conda-lock
+        name: conda-lock.yml in sync with pyproject.toml
+        entry: >-
+          conda-lock lock --micromamba -f pyproject.toml -e dev -e docs --check-input-hash
+          --pypi_to_conda_lookup_file https://raw.githubusercontent.com/conda-forge/conda-forge-bot-data/main/mappings/pypi/grayskull_pypi_mapping.json
+        language: python
+        additional_dependencies: ["conda-lock==4.0.3"]
+        files: ^(pyproject\.toml|conda-lock\.yml)$
+        pass_filenames: false
+      - id: ruff
+        name: ruff check
+        entry: ruff check --fix
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff format
+        entry: ruff format
+        language: system
+        types_or: [python, pyi]

@@ -9,7 +9,6 @@ from gemmi import cif
 from pdbe_sifts.base.log import logger
 
 
-
 def add_mmcif_cat(cif_cat_obj, my_cat_name, my_cat_val):
     """
     Add mmcif category to mmcif given the [item names],[item values]
@@ -273,9 +272,9 @@ def check_output_mmcif(file1, file2):
                 set(b_cat_table.keys())
             )
             for key in common:
-                assert (
-                    a_cat_table[key] == b_cat_table[key]
-                ), f"{key} for {cat} differs"
+                assert a_cat_table[key] == b_cat_table[key], (
+                    f"{key} for {cat} differs"
+                )
         else:
             assert a_cat_table and b_cat_table and a_cat_table == b_cat_table
 
